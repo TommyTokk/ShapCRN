@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbml xmlns="http://www.sbml.org/sbml/level3/version1/core" level="3" version="1">
+    <model id="ReazioniChimiche" name="Modello di esempio con reazioni chimiche">
+
+        <!-- Definizione delle unità -->
+        <listOfUnitDefinitions>
+            <unitDefinition id="volume">
+                <listOfUnits>
+                    <unit kind="litre" exponent="1" scale="0" multiplier="1" />
+                </listOfUnits>
+            </unitDefinition>
+            <unitDefinition id="substance">
+                <listOfUnits>
+                    <unit kind="mole" exponent="1" scale="-3" multiplier="1" />
+                </listOfUnits>
+            </unitDefinition>
+            <unitDefinition id="time">
+                <listOfUnits>
+                    <unit kind="second" exponent="1" scale="0" multiplier="1" />
+                </listOfUnits>
+            </unitDefinition>
+        </listOfUnitDefinitions>
+
+        <!-- Definizione dei compartimenti -->
+        <listOfCompartments>
+            <compartment id="citoplasma" name="Citoplasma cellulare" spatialDimensions="3" size="1"
+                constant="true" units="volume" />
+        </listOfCompartments>
+
+        <!-- Definizione delle specie chimiche -->
+        <listOfSpecies>
+            <species id="A" name="Substrato A" compartment="citoplasma" initialConcentration="10"
+                hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"
+                substanceUnits="substance" />
+            <species id="B" name="Substrato B" compartment="citoplasma" initialConcentration="5"
+                hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"
+                substanceUnits="substance" />
+            <species id="C" name="Prodotto C" compartment="citoplasma" initialConcentration="0"
+                hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"
+                substanceUnits="substance" />
+            <species id="E" name="Enzima" compartment="citoplasma" initialConcentration="2"
+                hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"
+                substanceUnits="substance" />
+            <species id="EA" name="Complesso Enzima-Substrato" compartment="citoplasma"
+                initialConcentration="0" hasOnlySubstanceUnits="false" boundaryCondition="false"
+                constant="false" substanceUnits="substance" />
+        </listOfSpecies>
+
+        <!-- Definizione dei parametri -->
+        <listOfParameters>
+            <parameter id="k1" value="1.5" constant="true" units="time" />
+            <parameter id="k2" value="0.5" constant="true" units="time" />
+            <parameter id="k3" value="2.0" constant="true" units="time" />
+            <parameter id="Ka" value="0.8" constant="true" />
+            <parameter id="Vmax" value="5.0" constant="true" units="substance" />
+        </listOfParameters>
+
+        <!-- Definizione delle reazioni chimiche -->
+        <listOfReactions>
+            <!-- Reazione 1: A + E <-> EA (usando tag espliciti) -->
+            <reaction id="r1" name="Formazione del complesso Enzima-Substrato" reversible="true"
+                fast="false">
+                <listOfReactants>
+                    <speciesReference species="A" stoichiometry="1" constant="true" />
+                    <speciesReference species="E" stoichiometry="1" constant="true" />
+                </listOfReactants>
+                <listOfProducts>
+                    <speciesReference species="EA" stoichiometry="1" constant="true" />
+                </listOfProducts>
+                <kineticLaw>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <apply>
+                            <minus />
+                            <apply>
+                                <times />
+                                <ci> k1 </ci>
+                                <ci> A </ci>
+                                <ci> E </ci>
+                            </apply>
+                            <apply>
+                                <times />
+                                <ci> k2 </ci>
+                                <ci> EA </ci>
+                            </apply>
+                        </apply>
+                    </math>
+                </kineticLaw>
+            </reaction>
+
+            <!-- Reazione 2: EA -> E + C (usando tag espliciti) -->
+            <reaction id="r2" name="Conversione del substrato e rilascio del prodotto"
+                reversible="false" fast="false">
+                <listOfReactants>
+                    <speciesReference species="EA" stoichiometry="1" constant="true" />
+                </listOfReactants>
+                <listOfProducts>
+                    <speciesReference species="E" stoichiometry="1" constant="true" />
+                    <speciesReference species="C" stoichiometry="1" constant="true" />
+                </listOfProducts>
+                <kineticLaw>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <apply>
+                            <times />
+                            <ci> k3 </ci>
+                            <ci> EA </ci>
+                        </apply>
+                    </math>
+                </kineticLaw>
+            </reaction>
+
+            <!-- Reazione 3: B -> C (usando formula matematica di Michaelis-Menten) -->
+            <reaction id="r3" name="Conversione di B in C" reversible="false" fast="false">
+                <listOfReactants>
+                    <speciesReference species="B" stoichiometry="1" constant="true" />
+                </listOfReactants>
+                <listOfProducts>
+                    <speciesReference species="C" stoichiometry="1" constant="true" />
+                </listOfProducts>
+                <kineticLaw>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <apply>
+                            <divide />
+                            <apply>
+                                <times />
+                                <ci> Vmax </ci>
+                                <ci> B </ci>
+                            </apply>
+                            <apply>
+                                <plus />
+                                <ci> Ka </ci>
+                                <ci> B </ci>
+                            </apply>
+                        </apply>
+                    </math>
+                    <listOfLocalParameters>
+                        <localParameter id="local_Vmax" value="5.0" />
+                        <localParameter id="local_Ka" value="0.8" />
+                    </listOfLocalParameters>
+                </kineticLaw>
+            </reaction>
+        </listOfReactions>
+
+        <!-- Definizione di regole matematiche aggiuntive -->
+        <listOfRules>
+            <!-- Conservazione della massa enzima totale -->
+            <algebraicRule>
+                <math xmlns="http://www.w3.org/1998/Math/MathML">
+                    <apply>
+                        <minus />
+                        <apply>
+                            <plus />
+                            <ci> E </ci>
+                            <ci> EA </ci>
+                        </apply>
+                        <cn> 2 </cn>
+                    </apply>
+                </math>
+            </algebraicRule>
+        </listOfRules>
+
+    </model>
+</sbml>
