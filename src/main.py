@@ -8,12 +8,12 @@ def main():
 
     species_list = ut.get_list_of_species(model)
 
-    species_dict_list = []
+    reactions_list = ut.get_list_of_reactions(model)
 
-    for specie in species_list:
-        species_dict_list.append(ut.specie_to_dict(specie))
+    r_dict = ut.get_reactants_dict(reactions_list, ut.species_dict(species_list))
+    p_dict = ut.get_products_dict(reactions_list, ut.species_dict(species_list))
 
-    print (species_dict_list)
+    ut.dict_pretty_print(p_dict)
 
 if __name__ == '__main__':
     main()
