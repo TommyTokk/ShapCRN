@@ -143,19 +143,15 @@
         <!-- Definizione di regole matematiche aggiuntive -->
         <listOfRules>
             <!-- Conservazione della massa enzima totale -->
-            <algebraicRule>
+            <assignmentRule variable="E">
                 <math xmlns="http://www.w3.org/1998/Math/MathML">
                     <apply>
                         <minus />
-                        <apply>
-                            <plus />
-                            <ci> E </ci>
-                            <ci> EA </ci>
-                        </apply>
                         <cn> 2 </cn>
+                        <ci> EA </ci>
                     </apply>
                 </math>
-            </algebraicRule>
+            </assignmentRule>
         </listOfRules>
 
     </model>

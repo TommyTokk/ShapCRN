@@ -1,19 +1,27 @@
-import utils as ut
+import sbml_utils as ut
+import simulation_utils as sim_ut
+import numpy as np
 
 def main():
-
     file_path = ut.parse_args()[0]
 
-    model = ut.load_model(file_path)
-
-    species_list = ut.get_list_of_species(model)
-
-    reactions_list = ut.get_list_of_reactions(model)
-
-    r_dict = ut.get_reactants_dict(reactions_list, ut.species_dict(species_list))
-    p_dict = ut.get_products_dict(reactions_list, ut.species_dict(species_list))
-
-    ut.dict_pretty_print(p_dict)
+    try:
+        rr = sim_ut.load_roadrunner_model(file_path=file_path)
+        
+        sbml_model = ut.load_model(file_path)
+        species_list = ut.get_list_of_species(sbml_model)
+        species_ids = ut.get_list_of_species_ids(species_list)
+        
+        print(f"Specie nel modello: {species_ids}")
+        
+        result = sim_ut.simulate(rr)
+        
+        sim_ut.plot_results(result, species_ids)
+        
+    except Exception as e:
+        print(f"Erorr during the simulation: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     main()
