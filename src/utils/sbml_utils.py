@@ -30,7 +30,7 @@ def dict_pretty_print(dict_obj):
     Args:
         dict_obj: Dictionary to be printed
     """
-    # Usa json.dumps una sola volta sul dizionario originale
+
     json_formatted_str = json.dumps(dict_obj, indent=2)
     print(json_formatted_str)
 
@@ -132,7 +132,6 @@ def get_reaction_components(list_of_reactions, species_dict, component_type='rea
     
     return result_dict
 
-# Funzioni originali che ora utilizzano la funzione unificata
 def get_reactants_dict(list_of_reactions, species_dict):
     """
     Creates a dictionary containing all the information about the reactants of the model.
@@ -160,33 +159,64 @@ def get_products_dict(list_of_reactions, species_dict):
     return get_reaction_components(list_of_reactions, species_dict, 'products')
             
 
-def reactions_to_dict(list_of_reactions, reactants_dict, products_dict):
+def reactions_to_dict(list_of_reactions_obj):
+    """
+    Convert a list of Reaction objects to a JSON-serializable dictionary.
+    
+    Args:
+        list_of_reactions_obj: List of Reaction objects
+        
+    Returns:
+        dict: Dictionary representation of the reactions list
+    """
     reactions_dict = {}
-
-    for reaction in list_of_reactions:
-        reaction_id = reaction.getId()
-        kineticLaw_obj = reaction.getKineticLaw()
-        reactions_dict[reaction_id] = {
-            'name': reaction.getName(),
-            'reactants': reactants_dict[reaction_id]['reactants'],
-            'products': products_dict[reaction_id]['products'],
-            'kinetic_formula': formulaToL3String(kineticLaw_obj.getMath()),
-            'local_parameters':[]
-        }
-
-        for local_parameter in kineticLaw_obj.getListOfLocalParameters():
-            lp_id = local_parameter.getId()
-            lp_value = local_parameter.getValue()
-
-            reactions_dict[reaction_id]['local_parameters'].append({
-                'id': lp_id,
-                'value': lp_value
-            })
-
+    
+    if not list_of_reactions_obj:
+        return reactions_dict
+    
+    for reaction in list_of_reactions_obj:
+        
+        reaction_id = reaction.id
+        
+        reaction_data = reaction.to_dict()
+        
+        reactions_dict[reaction_id] = reaction_data
+    
     return reactions_dict
+
+
+def print_reactions_as_json(reactions_list):
+    """
+    Print a list of Reaction objects in JSON format.
+    
+    Args:
+        reactions_list: List of Reaction objects to print
+    """
+    reactions_dict = reactions_to_dict(reactions_list)
+    
+
+    dict_pretty_print(reactions_dict)
+
 # ============
 # REACTIONS
 # ============
+
+# ============
+# GENERAL
+# ============
+def get_functions_list(sbml_model):
+
+    functions_formulas = []
+
+    for fd in sbml_model.getListOfFunctionDefinitions():
+    #     functions_formulas.append(formulaToL3String(fd.getMath()))
+
+    # return functions_formulas
+        print("===========================")
+        for i in range(fd.getNumArguments()):
+            print(formulaToL3String(fd.getArgument(i)))
+
+        print("===========================")
 
 
 

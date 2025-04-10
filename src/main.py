@@ -8,6 +8,7 @@ from src.utils import sbml_utils as ut
 from src.utils import simulation_utils as sim_ut
 from src.classes.species import Species
 from src.classes.reaction import Reaction
+from src.classes.function import Function
 
 def main():
     file_path = ut.parse_args()[0]
@@ -30,9 +31,21 @@ def main():
             reactions.append(reaction)
         
         # Simulazione (se necessario)
-        rr = sim_ut.load_roadrunner_model(file_path=file_path)
-        result = sim_ut.simulate(rr)
-        sim_ut.plot_results(result, list(species_dict.keys()))
+        # rr = sim_ut.load_roadrunner_model(file_path=file_path)
+        # result = sim_ut.simulate(rr)
+        # sim_ut.plot_results(result, list(species_dict.keys()))
+
+        functions = []
+        for sbml_fundef in sbml_model.getListOfFunctionDefinitions():
+            fun_def = Function.from_sbml(sbml_fundef)
+            functions.append(fun_def)
+
+        for f in functions:
+            print("================")
+            ut.dict_pretty_print(f.to_dict())
+            print("================")
+
+        
         
     except Exception as e:
         print(f"Errore durante l'esecuzione: {e}")

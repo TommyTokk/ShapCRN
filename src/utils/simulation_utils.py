@@ -14,7 +14,6 @@ def plot_results(simulation_data, species_names):
     """
     import matplotlib.pyplot as plt
     
-    # Estrai il tempo (prima colonna)
     time = simulation_data[:, 0]
     
 
