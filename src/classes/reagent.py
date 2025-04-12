@@ -40,3 +40,10 @@ class Reagent(ReactionComponent):
             species=species_dict[species_id],
             stoichiometry=sbml_reactant.getStoichiometry()
         )
+    
+
+    def get_species(self):
+        return self.species
+    
+    def get_stoichiometry(self):
+        return self.stoichiometry

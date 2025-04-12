@@ -28,6 +28,6 @@ class ReactionComponent:
     def to_dict(self):
         """Convert component to dictionary representation."""
         return {
-            'species': self.species.to_dict(),
+            'species': self.species,
             'stoichiometry': self.stoichiometry
         }
