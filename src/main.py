@@ -2,12 +2,14 @@ import os
 import sys
 import networkx as nx
 import matplotlib.pyplot as plt
+import roadrunner
 
 # Aggiungi il percorso della cartella src al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils import sbml_utils as ut
 from src.utils import simulation_utils as sim_ut
+from src.utils import net_utils as nu
 
 from SBML_batch import PetriNets
 
@@ -35,9 +37,23 @@ def main():
 
         reactions_list = ut.get_list_of_reactions(sbml_model, species_dict)
 
-        N = sim_ut.get_network_from_sbml(reactions_list, species_list)
+        N = nu.get_network_from_sbml(reactions_list, species_list)
 
-        print(N["A"])
+        #N = nu.knockout_reaction_node(N, "re34")
+
+        rr = sim_ut.load_roadrunner_model(model_dir_path)
+
+        rr.getIntegrator().setValue('relative_tolerance', 1e-6)
+        rr.getIntegrator().setValue('absolute_tolerance', 1e-8)
+
+        doc = nu.network_to_sbml(N, rr, sbml_model)
+
+        print(doc.getSBML())
+
+        res = sim_ut.simulate(doc)
+
+        sim_ut.plot_results(res, species_list)
+        
 
 
 
