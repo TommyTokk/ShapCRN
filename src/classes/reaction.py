@@ -89,3 +89,21 @@ class Reaction:
             reversible=sbml_reaction.getReversible(),
             kinetic_law=kinetic_law
         )
+    
+    def get_id(self):
+        return self.id
+    
+    def get_name(self):
+        return self.name
+    
+    def get_reagents(self):
+        return self.reagents
+    
+    def get_products(self):
+        return self.products
+    
+    def get_reversible(self):
+        return self.reversible
+    
+    def get_kinetic_law(self):
+        return self.kinetic_law

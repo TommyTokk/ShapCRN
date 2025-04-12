@@ -2,6 +2,12 @@ import sys
 from libsbml import *
 import json
 
+from src.classes.species import Species
+from src.classes.reaction import Reaction
+from src.classes.function import Function
+from src.classes.reagent import Reagent
+from src.classes.product import Product
+
 def parse_args():
 
     args = []
@@ -40,150 +46,131 @@ def dict_pretty_print(dict_obj):
 # ============
 
 def get_list_of_species(SBML_model):
+    """
+    Get a list of Species objects from the SBML model.
     
-    return SBML_model.getListOfSpecies()
-
-
-
-def get_list_of_species_ids(species_list):
+    Args:
+        SBML_model: SBML model object
+        
+    Returns:
+        list: List of Species objects
+    """
+    species_list = []
     
-    species_ids = []
+    for sbml_species in SBML_model.getListOfSpecies():
+        species = Species.from_sbml(sbml_species)
+        species_list.append(species)
+
+    return species_list
+
+def get_species_dict(species_list):
+    """
+    Create a dictionary of Species objects indexed by ID.
+    
+    Args:
+        species_list: List of Species objects
+        
+    Returns:
+        dict: Dictionary of Species objects with species IDs as keys
+    """
+    dict = {}
 
     for s in species_list:
-        species_ids.append(s.getId())
+        dict[s.get_id()] = s.to_dict()
 
-    return species_ids
+    return dict
 
-def specie_to_dict(specie_obj):
-    specie_dict = {}
-    specie_dict['name'] = specie_obj.getName()
-    specie_dict['compartment'] = specie_obj.getCompartment()
-    specie_dict['stoichiometry'] = ""
+def species_dict_list(species_list):
+    """
+    Convert a list of Species objects to a list of dictionaries.
+    
+    Args:
+        species_list: List of Species objects
+        
+    Returns:
+        list: List of dictionaries, each representing a species
+    """
+    return [s.to_dict() for s in species_list]
 
-    return specie_dict
+# ============
+# REACTIONS
+# ============
 
-def species_dict(species_list):
+def get_list_of_reactions(SBML_model, species_dict):
+    """
+    Get a list of Reaction objects from the SBML model.
+    
+    Args:
+        SBML_model: SBML model object
+        species_dict: Dictionary of Species objects indexed by ID
+        
+    Returns:
+        list: List of Reaction objects
+    """
+    reactions = []
+    for sbml_reaction in SBML_model.getListOfReactions():
+        reaction = Reaction.from_sbml(sbml_reaction, species_dict)
+        reactions.append(reaction)
+
+    return reactions
+
+def get_reactants_dict(reaction_objects):
+    """
+    Creates a dictionary containing all the information about the reactants from a list of Reaction objects.
+    
+    Args:
+        reaction_objects: A list of Reaction objects
+        
+    Returns:
+        dict: Dictionary with reactions's id as key and reactions's reagents obj as value
+    """
+
     dict = {}
-    for specie in species_list:
-        specie_id = specie.getId()
-        dict[specie_id] = specie_to_dict(specie)
+
+    for r_obj in reaction_objects:
+        dict[r_obj.get_id()] = r_obj.get_reagents()
 
     return dict
 
 
 
-
-# ============
-# SPECIES
-# ============
-
-
-# ============
-# REACTIONS
-# ============
-def get_list_of_reactions(SBML_model):
-    return SBML_model.getListOfReactions()
-
-def get_reaction_components(list_of_reactions, species_dict, component_type='reactants'):
+def get_products_dict(reaction_objects):
     """
-    Creates a dictionary containing information about reactants or products of a model.
+    Creates a dictionary containing all the information about the products from a list of Reaction objects.
     
     Args:
-        list_of_reactions: A list of reactions of type libsbml.ListOfReactions
-        species_dict: A dictionary containing the information of the model's species.
-            This dictionary should be created using the species_dict() function.
-        component_type: String indicating the type of components to get ('reactants' or 'products')
-        
-    Returns:
-        dict: Dictionary with reaction information and their components
-        
-    See Also:
-        species_dict(species_list): Function to create a dictionary of species information
-        that is required as input for this function.
-    """
-    # Check if component type is valid
-    if component_type not in ['reactants', 'products']:
-        raise ValueError("component_type must be either 'reactants' or 'products'")
-    
-    # Determine which method to call based on the component_type
-    get_components = (lambda r: r.getListOfReactants()) if component_type == 'reactants' else \
-                    (lambda r: r.getListOfProducts())
-    
-    result_dict = {}
-    
-    for reaction in list_of_reactions:
-        reaction_id = reaction.getId()
-        result_dict[reaction_id] = {
-            component_type: []
-        }
-        
-        
-        for component in get_components(reaction):
-            species_id = component.getSpecies()
-            if species_id in species_dict:
-                
-                species_info = species_dict[species_id].copy()
-                species_info['stoichiometry'] = component.getStoichiometry()
-                
-                result_dict[reaction_id][component_type].append({
-                    's_id': species_id,
-                    'info': species_info
-                })
-    
-    return result_dict
-
-def get_reactants_dict(list_of_reactions, species_dict):
-    """
-    Creates a dictionary containing all the information about the reactants of the model.
-    
-    Args:
-        list_of_reactions: A list of reactions of type libsbml.ListOfReactions
-        species_dict: A dictionary containing the information of the model's species.
-        
-    Returns:
-        dict: Dictionary with reaction information and their reactants
-    """
-    return get_reaction_components(list_of_reactions, species_dict, 'reactants')
-
-def get_products_dict(list_of_reactions, species_dict):
-    """
-    Creates a dictionary containing all the information about the products of the model.
-    
-    Args:
-        list_of_reactions: A list of reactions of type libsbml.ListOfReactions
-        species_dict: A dictionary containing the information of the model's species.
+        reaction_objects: A list of Reaction objects
         
     Returns:
         dict: Dictionary with reaction information and their products
     """
-    return get_reaction_components(list_of_reactions, species_dict, 'products')
-            
+    dict = {}
 
-def reactions_to_dict(list_of_reactions_obj):
+    for r_obj in reaction_objects:
+        dict[r_obj.get_id()] = r_obj.get_products()
+
+    return dict
+
+def reactions_to_dict(reaction_list):
     """
     Convert a list of Reaction objects to a JSON-serializable dictionary.
     
     Args:
-        list_of_reactions_obj: List of Reaction objects
+        reaction_list: List of Reaction objects
         
     Returns:
         dict: Dictionary representation of the reactions list
     """
     reactions_dict = {}
     
-    if not list_of_reactions_obj:
+    if not reaction_list:
         return reactions_dict
     
-    for reaction in list_of_reactions_obj:
-        
-        reaction_id = reaction.id
-        
-        reaction_data = reaction.to_dict()
-        
-        reactions_dict[reaction_id] = reaction_data
+    for reaction in reaction_list:
+        reaction_id = reaction.getId()
+        reactions_dict[reaction_id] = reaction.to_dict()
     
     return reactions_dict
-
 
 def print_reactions_as_json(reactions_list):
     """
@@ -193,30 +180,43 @@ def print_reactions_as_json(reactions_list):
         reactions_list: List of Reaction objects to print
     """
     reactions_dict = reactions_to_dict(reactions_list)
-    
-
     dict_pretty_print(reactions_dict)
 
 # ============
-# REACTIONS
+# FUNCTIONS
 # ============
 
+def get_functions_list(SBML_model):
+    """
+    Get a list of Function objects from the SBML model.
+    
+    Args:
+        SBML_model: SBML model object
+        
+    Returns:
+        list: List of Function objects
+    """
+    functions_list = []
+    
+    for sbml_func in SBML_model.getListOfFunctionDefinitions():
+        function = Function.from_sbml(sbml_func)
+        functions_list.append(function)
+    
+    return functions_list
+
+def print_functions_as_json(functions_list):
+    """
+    Print a list of Function objects in JSON format.
+    
+    Args:
+        functions_list: List of Function objects
+    """
+    functions_dict = {func.getId(): func.to_dict() for func in functions_list}
+    dict_pretty_print(functions_dict)
+
 # ============
-# GENERAL
+# FUNCTIONS
 # ============
-def get_functions_list(sbml_model):
-
-    functions_formulas = []
-
-    for fd in sbml_model.getListOfFunctionDefinitions():
-    #     functions_formulas.append(formulaToL3String(fd.getMath()))
-
-    # return functions_formulas
-        print("===========================")
-        for i in range(fd.getNumArguments()):
-            print(formulaToL3String(fd.getArgument(i)))
-
-        print("===========================")
 
 
 

@@ -1,52 +1,46 @@
 import os
 import sys
+import networkx as nx
+import matplotlib.pyplot as plt
 
 # Aggiungi il percorso della cartella src al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils import sbml_utils as ut
 from src.utils import simulation_utils as sim_ut
-from src.classes.species import Species
-from src.classes.reaction import Reaction
-from src.classes.function import Function
+
+from SBML_batch import PetriNets
+
+
 
 def main():
-    file_path = ut.parse_args()[0]
+    model_dir_path = sys.argv[1]
+
+    # Estrai il percorso della directory e il nome del file
+    dir_path = os.path.dirname(model_dir_path)
+    file_name = os.path.basename(model_dir_path)
+
+    # Se dir_path è vuoto, imposta la directory corrente
+    if dir_path == "":
+        dir_path = "."  # "." rappresenta la directory corrente
+
+    print(f"Directory path: {dir_path}")
+    print(f"File name: {file_name}")
 
     try:
-        # Carica il modello SBML
-        sbml_model = ut.load_model(file_path)
-        
-        # Crea gli oggetti Species
-        species_dict = {}
-        for sbml_species in sbml_model.getListOfSpecies():
-            species = Species.from_sbml(sbml_species)
-            species_dict[species.id] = species
+        sbml_model = ut.load_model(model_dir_path)
+        species_list = ut.get_list_of_species(sbml_model)
 
-        
-        # Crea gli oggetti Reaction
-        reactions = []
-        for sbml_reaction in sbml_model.getListOfReactions():
-            reaction = Reaction.from_sbml(sbml_reaction, species_dict)
-            reactions.append(reaction)
-        
-        # Simulazione (se necessario)
-        # rr = sim_ut.load_roadrunner_model(file_path=file_path)
-        # result = sim_ut.simulate(rr)
-        # sim_ut.plot_results(result, list(species_dict.keys()))
+        species_dict = ut.get_species_dict(species_list)
 
-        functions = []
-        for sbml_fundef in sbml_model.getListOfFunctionDefinitions():
-            fun_def = Function.from_sbml(sbml_fundef)
-            functions.append(fun_def)
+        reactions_list = ut.get_list_of_reactions(sbml_model, species_dict)
 
-        for f in functions:
-            print("================")
-            ut.dict_pretty_print(f.to_dict())
-            print("================")
+        N = sim_ut.get_network_from_sbml(reactions_list, species_list)
 
-        
-        
+        print(N["A"])
+
+
+
     except Exception as e:
         print(f"Errore durante l'esecuzione: {e}")
         import traceback

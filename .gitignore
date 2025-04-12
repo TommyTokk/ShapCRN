@@ -172,3 +172,5 @@ cover/
 *.log
 local_settings.py
 db.s
+
+*.json

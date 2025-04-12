@@ -87,11 +87,11 @@
                 </kineticLaw>
             </reaction>
 
-            <!-- Reazione 2: EA -> E + C (usando tag espliciti) -->
+            <!-- Reazione 2: 2EA -> E + C (usando tag espliciti) -->
             <reaction id="r2" name="Conversione del substrato e rilascio del prodotto"
                 reversible="false" fast="false">
                 <listOfReactants>
-                    <speciesReference species="EA" stoichiometry="1" constant="true" />
+                    <speciesReference species="EA" stoichiometry="2" constant="true" />
                 </listOfReactants>
                 <listOfProducts>
                     <speciesReference species="E" stoichiometry="1" constant="true" />
@@ -102,6 +102,7 @@
                         <apply>
                             <times />
                             <ci> k3 </ci>
+                            <ci> EA </ci>
                             <ci> EA </ci>
                         </apply>
                     </math>
