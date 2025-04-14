@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbml xmlns="http://www.sbml.org/sbml/level3/version1/core" level="3" version="1">
+    <model id="ReazioniChimiche" name="Modello di esempio con reazioni chimiche">
+
+        <!-- Definizione delle unità -->
+        <listOfUnitDefinitions>
+            <unitDefinition id="molarity">
+                <listOfUnits>
+                    <unit kind="mole" exponent="1" scale="0" multiplier="1"/>
+                    <unit kind="litre" exponent="-1" scale="0" multiplier="1"/>
+                </listOfUnits>
+            </unitDefinition>
+            <unitDefinition id="per_second">
+                <listOfUnits>
+                    <unit kind="second" exponent="-1" scale="0" multiplier="1"/>
+                </listOfUnits>
+            </unitDefinition>
+        </listOfUnitDefinitions>
+
+        <!-- Aggiungo la definizione della funzione -->
+        <listOfFunctionDefinitions>
+            <functionDefinition id="reazione_r2_func">
+                <math xmlns="http://www.w3.org/1998/Math/MathML">
+                    <lambda>
+                        <bvar><ci> EA </ci></bvar>
+                        <bvar><ci> k_param </ci></bvar>
+                        <apply>
+                            <times />
+                            <ci> k_param </ci>
+                            <ci> EA </ci>
+                            <ci> EA </ci>
+                        </apply>
+                    </lambda>
+                </math>
+            </functionDefinition>
+        </listOfFunctionDefinitions>
+
+        <!-- Definizione dei compartimenti -->
+        <listOfCompartments>
+            <compartment id="cell" spatialDimensions="3" size="1" constant="true" units="litre"/>
+        </listOfCompartments>
+
+        <!-- Definizione delle specie chimiche -->
+        <listOfSpecies>
+            <species id="A" compartment="cell" initialConcentration="10" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" substanceUnits="mole"/>
+            <species id="E" compartment="cell" initialConcentration="5" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" substanceUnits="mole"/>
+            <species id="EA" compartment="cell" initialConcentration="0" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" substanceUnits="mole"/>
+            <species id="B" compartment="cell" initialConcentration="0" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" substanceUnits="mole"/>
+            <species id="C" compartment="cell" initialConcentration="0" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" substanceUnits="mole"/>
+        </listOfSpecies>
+
+        <!-- Definizione dei parametri -->
+        <listOfParameters>
+            <parameter id="k1" value="0.5" constant="true" units="per_second"/>
+            <parameter id="k2" value="0.1" constant="true" units="per_second"/> 
+            <parameter id="k3" value="0.3" constant="true" units="per_second"/>
+        </listOfParameters>
+
+        <!-- Definizione delle reazioni chimiche -->
+        <listOfReactions>
+            <!-- Reazione 1: Formazione del complesso enzima-substrato -->
+            <reaction id="r1" name="Formazione del complesso enzima-substrato" reversible="false" fast="false">
+                <listOfReactants>
+                    <speciesReference species="A" stoichiometry="1" constant="true" />
+                    <speciesReference species="E" stoichiometry="1" constant="true" />
+                </listOfReactants>
+                <listOfProducts>
+                    <speciesReference species="EA" stoichiometry="1" constant="true" />
+                </listOfProducts>
+                <kineticLaw>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <apply>
+                            <times />
+                            <ci> k1 </ci>
+                            <ci> A </ci>
+                            <ci> E </ci>
+                        </apply>
+                    </math>
+                </kineticLaw>
+            </reaction>
+            
+            <!-- Reazione 2: modificata per usare la funzione definita -->
+            <reaction id="r2" name="Conversione del substrato e rilascio del prodotto"
+                reversible="false" fast="false">
+                <listOfReactants>
+                    <speciesReference species="EA" stoichiometry="2" constant="true" />
+                </listOfReactants>
+                <listOfProducts>
+                    <speciesReference species="E" stoichiometry="1" constant="true" />
+                    <speciesReference species="C" stoichiometry="1" constant="true" />
+                </listOfProducts>
+                <kineticLaw>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <apply>
+                            <ci> reazione_r2_func </ci>
+                            <ci> EA </ci>
+                            <ci> k3 </ci>
+                        </apply>
+                    </math>
+                </kineticLaw>
+            </reaction>
+            
+            <!-- Reazione 3: Produzione di B -->
+            <reaction id="r3" name="Produzione di B" reversible="false" fast="false">
+                <listOfReactants>
+                    <speciesReference species="EA" stoichiometry="1" constant="true" />
+                </listOfReactants>
+                <listOfProducts>
+                    <speciesReference species="E" stoichiometry="1" constant="true" />
+                    <speciesReference species="B" stoichiometry="1" constant="true" />
+                </listOfProducts>
+                <kineticLaw>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <apply>
+                            <times />
+                            <ci> k2 </ci>
+                            <ci> EA </ci>
+                        </apply>
+                    </math>
+                </kineticLaw>
+            </reaction>
+        </listOfReactions>
+
+    </model>
+</sbml>

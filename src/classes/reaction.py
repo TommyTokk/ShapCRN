@@ -99,11 +99,143 @@ class Reaction:
     def get_reagents(self):
         return self.reagents
     
+    def get_reagents_ids(self):
+        res = []
+
+        for reagents in self.get_reagents():
+            res.append(reagents.get_species()['id'])
+
+        return res
+    
     def get_products(self):
         return self.products
+    
+    def get_products_ids(self):
+        res = []
+
+        for product in self.get_products():
+            res.append(product.get_species()['id'])
+
+        return res
     
     def get_reversible(self):
         return self.reversible
     
     def get_kinetic_law(self):
         return self.kinetic_law
+    
+    def set_id(self, id):
+        """
+        Imposta l'ID della reazione.
+        
+        Args:
+            id (str): Il nuovo ID della reazione
+        """
+        self.id = id
+    
+    def set_name(self, name):
+        """
+        Imposta il nome della reazione.
+        
+        Args:
+            name (str): Il nuovo nome della reazione
+        """
+        self.name = name
+    
+    def set_reagents(self, reagents):
+        """
+        Imposta la lista dei reagenti.
+        
+        Args:
+            reagents (list): Lista di oggetti Reagent
+        """
+        if not isinstance(reagents, list):
+            raise TypeError("Il parametro reagents deve essere una lista")
+        self.reagents = reagents
+    
+    def set_products(self, products):
+        """
+        Imposta la lista dei prodotti.
+        
+        Args:
+            products (list): Lista di oggetti Product
+        """
+        if not isinstance(products, list):
+            raise TypeError("Il parametro products deve essere una lista")
+        self.products = products
+    
+    def add_reagent(self, reagent):
+        """
+        Aggiunge un reagente alla reazione.
+        
+        Args:
+            reagent (Reagent): Reagente da aggiungere
+        """
+        from .reagent import Reagent
+        if not isinstance(reagent, Reagent):
+            raise TypeError("Il parametro deve essere un oggetto di tipo Reagent")
+        self.reagents.append(reagent)
+    
+    def add_product(self, product):
+        """
+        Aggiunge un prodotto alla reazione.
+        
+        Args:
+            product (Product): Prodotto da aggiungere
+        """
+        from .product import Product
+        if not isinstance(product, Product):
+            raise TypeError("Il parametro deve essere un oggetto di tipo Product")
+        self.products.append(product)
+    
+    def remove_reagent(self, reagent_id):
+        """
+        Rimuove un reagente dalla reazione in base all'ID.
+        
+        Args:
+            reagent_id (str): ID del reagente da rimuovere
+        
+        Returns:
+            bool: True se il reagente è stato rimosso, False altrimenti
+        """
+        for i, r in enumerate(self.reagents):
+            if r.get_species()['id'] == reagent_id:
+                del self.reagents[i]
+                return True
+        return False
+    
+    def remove_product(self, product_id):
+        """
+        Rimuove un prodotto dalla reazione in base all'ID.
+        
+        Args:
+            product_id (str): ID del prodotto da rimuovere
+        
+        Returns:
+            bool: True se il prodotto è stato rimosso, False altrimenti
+        """
+        for i, p in enumerate(self.products):
+            if p.get_species()['id'] == product_id:
+                del self.products[i]
+                return True
+        return False
+    
+    def set_reversible(self, reversible):
+        """
+        Imposta se la reazione è reversibile.
+        
+        Args:
+            reversible (bool): True se la reazione è reversibile, False altrimenti
+        """
+        self.reversible = bool(reversible)
+    
+    def set_kinetic_law(self, kinetic_law):
+        """
+        Imposta la legge cinetica della reazione.
+        
+        Args:
+            kinetic_law (str): Espressione matematica della legge cinetica
+        """
+        self.kinetic_law = kinetic_law
+
+

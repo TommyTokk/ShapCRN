@@ -31,29 +31,37 @@ def main():
 
     try:
         sbml_model = ut.load_model(model_dir_path)
-        species_list = ut.get_list_of_species(sbml_model)
-
-        species_dict = ut.get_species_dict(species_list)
-
-        reactions_list = ut.get_list_of_reactions(sbml_model, species_dict)
-
-        N = nu.get_network_from_sbml(reactions_list, species_list)
-
-        #N = nu.knockout_reaction_node(N, "re34")
-
+        
         rr = sim_ut.load_roadrunner_model(model_dir_path)
 
         rr.getIntegrator().setValue('relative_tolerance', 1e-6)
         rr.getIntegrator().setValue('absolute_tolerance', 1e-8)
 
-        doc = nu.network_to_sbml(N, rr, sbml_model)
+        species_list = ut.get_list_of_species(sbml_model)
+        species_dict = ut.get_species_dict(species_list)
+        reaction_list = ut.get_list_of_reactions(sbml_model, species_dict)
 
-        print(doc.getSBML())
+        N = nu.get_network_from_sbml(reaction_list, species_list)
 
-        res = sim_ut.simulate(doc)
 
-        sim_ut.plot_results(res, species_list)
+        res = rr.simulate()
+
+        sim_ut.plot_results(res, [s.get_name() for s in species_list])
+        N, rr = nu.knockout_reaction_node(N, "r1", rr)
         
+        nu.plot_network(N)
+
+        rr.getIntegrator().setValue('relative_tolerance', 1e-6)
+        rr.getIntegrator().setValue('absolute_tolerance', 1e-8)
+
+        res = rr.simulate()
+
+        sim_ut.plot_results(res, [s.get_name() for s in species_list])
+
+        # for node, data in N.nodes(data=True):
+        #     if(data.get('type') == 'reaction'):
+        #         r = data.get('reaction')
+        #         ut.dict_pretty_print(r.to_dict())
 
 
 
