@@ -174,3 +174,9 @@ local_settings.py
 db.s
 
 *.json
+
+imgs/*
+
+models/*
+
+.DS_Store
