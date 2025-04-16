@@ -69,6 +69,7 @@ def network_to_sbml(net, rr_model, sbml):
 
 
 def inhibit_reaction_from_network(network, target_reaction_id, sbml_model):
+    # #TODO: Test if the model changes are correct
     """
     Removes the target reaction node and all its edges, and updates the SBML model
     
@@ -98,6 +99,7 @@ def inhibit_reaction_from_network(network, target_reaction_id, sbml_model):
 
 
 def inhibit_species_from_network(network, target_species_id, sbml_model):
+    # #TODO: Test if the model changes are correct
     """
     Removes all the input edges to the specified species node and updates the SBML model
     

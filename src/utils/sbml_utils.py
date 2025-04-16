@@ -13,11 +13,14 @@ def parse_args():
     Parse command line arguments.
     
     Returns:
-        list: [model_path, operation_type (optional), target_id (optional)]
+        list: [model_path, operation_type (optional), target_id (optional), save_output (optional)]
         
         operation_type:
             1 - Inhibit a species
             2 - Inhibit a reaction
+        
+        save_output:
+            True/False - Whether to save the output files
     """
     import argparse
     
@@ -32,6 +35,8 @@ def parse_args():
                         help='Operation to perform:\n1 - Inhibit a species\n2 - Inhibit a reaction')
     parser.add_argument('-tn', '--target_id', type=str,
                         help='ID of the target species or reaction to inhibit')
+    parser.add_argument('-so', '--save_output', action='store_true',
+                        help='Save modified SBML models (default: False)')
     
     parsed_args = parser.parse_args()
     
@@ -51,6 +56,9 @@ def parse_args():
     elif parsed_args.target_id is not None:
         # If target_id is specified but operation is not
         parser.error("Error: When using --target_id/-tn, you must also specify --operation/-op")
+    
+    # Add save_output flag at the end of the list
+    args.append(parsed_args.save_output)
     
     return args
 
@@ -138,7 +146,23 @@ def inhibit_species(sbml_model, target_species_id):
     Returns:
         Model: Updated SBML model with the inhibited species
     """
-    
+    if True:
+        #list of rules to remove
+        rules_to_be_removed = []
+
+        #For each Rules in the model, pin the rules to remove
+        for rule in sbml_model.getListOfRules():
+            #TODO: Check if some rules has as target the specified specie
+            #if rule.isAssignment():
+            if rule.getVariable() == target_species_id:
+                print(rule.getVariable())
+                rules_to_be_removed.append(rule)
+
+        #Removing the rules
+        for rule in rules_to_be_removed:
+            sbml_model.getListOfRules().remove(rule.getId())
+
+
     # For each reaction in the model
     for reaction in sbml_model.getListOfReactions():
         # If the reaction has products

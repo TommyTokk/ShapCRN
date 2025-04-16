@@ -29,7 +29,7 @@ def load_roadrunner_model(sbml_model):
     return rr_model
 
 
-def plot_results(simulation_data, species_names, img_dir_path="./imgs", img_name="simulation"):
+def plot_results(simulation_data, img_dir_path="./imgs", img_name="simulation"):
     """
     Visualize the simulation results and save the plot to a file.
     
@@ -41,6 +41,8 @@ def plot_results(simulation_data, species_names, img_dir_path="./imgs", img_name
     """
     import matplotlib.pyplot as plt
     import os
+
+    species_names = simulation_data.colnames[1:]
     
     # Create directory if it doesn't exist
     os.makedirs(img_dir_path, exist_ok=True)
