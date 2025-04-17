@@ -147,20 +147,18 @@ def inhibit_species(sbml_model, target_species_id):
         Model: Updated SBML model with the inhibited species
     """
     if True:
-        #list of rules to remove
-        rules_to_be_removed = []
-
         #For each Rules in the model, pin the rules to remove
         for rule in sbml_model.getListOfRules():
-            #TODO: Check if some rules has as target the specified specie
+            #TODO: Ask if it's too destructive as approach
             #if rule.isAssignment():
-            if rule.getVariable() == target_species_id:
-                print(rule.getVariable())
-                rules_to_be_removed.append(rule)
-
-        #Removing the rules
-        for rule in rules_to_be_removed:
-            sbml_model.getListOfRules().remove(rule.getId())
+            if rule.getVariable() == target_species_id:#Found the updating rule
+                #Set the math of the target_species costant to 0.0
+                #Create the new ASTNode as REAL
+                zero_ast = ASTNode(AST_REAL)
+                #Set the value of the node
+                zero_ast.setValue(0.0)
+                #Change the math of the node
+                rule.setMath(zero_ast)
 
 
     # For each reaction in the model
@@ -185,8 +183,9 @@ def inhibit_species(sbml_model, target_species_id):
     for species in sbml_model.getListOfSpecies():
         if species.getId() == target_species_id:
             result = species.setInitialConcentration(0.0)
+            print(f"result:{result}")
             if result:
-                print(f"Error setting concentration for {species.getId()}")
+                exit(f"Error setting concentration for {species.getId()}")
     
     return sbml_model
 

@@ -90,14 +90,14 @@ def main():
                     print("Modified SBML not saved (use -so flag to save)")
                 
                 # Seconda simulazione - modello modificato
-                print(f"Simulating model after {operation_name}:")
+                #print(f"Simulating model after {operation_name}:")
                 # Usa il contenuto XML direttamente invece del percorso del file
                 rr_modified = sim_ut.load_roadrunner_model(xml_string)
                 #rr_modified.setIntegrator('gillespie')
                 res_modified = sim_ut.simulate(rr_modified)
                 sim_ut.plot_results(res_modified, "./imgs", output_filename)
             else:
-                print(f"Error: Failed to convert modified model to XML")
+                exit(f"Error: Failed to convert modified model to XML")
 
             # list_of_reaction = ut.get_list_of_reactions(sbml_model, ut.get_species_dict(species))
             # N = nu.get_network_from_sbml(list_of_reaction, species)

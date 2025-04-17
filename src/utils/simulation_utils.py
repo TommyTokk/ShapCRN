@@ -54,7 +54,7 @@ def plot_results(simulation_data, img_dir_path="./imgs", img_name="simulation"):
     # Combine directory path and filename
     img_file_path = os.path.join(img_dir_path, img_name)
     
-    time = simulation_data[:, 0]
+    time = simulation_data[:,0]
     
     plt.figure(figsize=(10, 6))
     
