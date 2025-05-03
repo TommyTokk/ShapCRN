@@ -8,59 +8,9 @@ from src.classes.function import Function
 from src.classes.reagent import Reagent
 from src.classes.product import Product
 
-def parse_args():
-    """
-    Parse command line arguments.
-    
-    Returns:
-        list: [model_path, operation_type (optional), target_id (optional), save_output (optional)]
-        
-        operation_type:
-            1 - Inhibit a species
-            2 - Inhibit a reaction
-        
-        save_output:
-            True/False - Whether to save the output files
-    """
-    import argparse
-    
-    parser = argparse.ArgumentParser(
-        description='Process SBML models and perform operations such as species or reaction inhibition.',
-        formatter_class=argparse.RawTextHelpFormatter
-    )
-    
-    parser.add_argument('-f', '--file', type=str, required=True, 
-                        help='Path to the SBML model file')
-    parser.add_argument('-op', '--operation', type=int, choices=[1, 2],
-                        help='Operation to perform:\n1 - Inhibit a species\n2 - Inhibit a reaction')
-    parser.add_argument('-tn', '--target_id', type=str,
-                        help='ID of the target species or reaction to inhibit')
-    parser.add_argument('-so', '--save_output', action='store_true',
-                        help='Save modified SBML models (default: False)')
-    
-    parsed_args = parser.parse_args()
-    
-    # Convert to the expected return format
-    args = [parsed_args.file]
-    
-    # Add operation_type if provided
-    if parsed_args.operation is not None:
-        args.append(parsed_args.operation)
-        
-        # If operation is specified but target_id is not
-        if parsed_args.target_id is None:
-            parser.error("Error: When using --operation/-op, you must also specify --target_id/-tn")
-        
-        # Add target_id
-        args.append(parsed_args.target_id)
-    elif parsed_args.target_id is not None:
-        # If target_id is specified but operation is not
-        parser.error("Error: When using --target_id/-tn, you must also specify --operation/-op")
-    
-    # Add save_output flag at the end of the list
-    args.append(parsed_args.save_output)
-    
-    return args
+from src.utils.utils import print_log
+
+
 
 def load_model(model_file_path):
     
@@ -83,6 +33,25 @@ def dict_pretty_print(dict_obj):
     json_formatted_str = json.dumps(dict_obj, indent=2)
     print(json_formatted_str)
 
+def save_file(file_name, operation_name, model,save_output = False , log_file = None):
+    # Generate output filename
+    base_name, extension = os.path.splitext(file_name)
+    output_filename = f"{base_name}_{operation_name}{extension}"
+    output_path = os.path.join("models", output_filename)
+    
+    # Get the XML representation of the modified model
+    xml_string = get_sbml_as_xml(model, log_file)
+    if xml_string:
+        # Save the model only if save_output is True
+        if save_output:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            with open(output_path, 'w') as f:
+                f.write(xml_string)
+            print_log(log_file, f"Modified SBML saved to: {output_path}")
+        else:
+            print_log(log_file, "Modified SBML not saved (use -so flag to save)")
+
+    return (xml_string, output_filename)
 
 # ============
 # SPECIES
@@ -135,7 +104,7 @@ def species_dict_list(species_list):
     """
     return [s.to_dict() for s in species_list]
 
-def inhibit_species(sbml_model, target_species_id):
+def inhibit_species(sbml_model, target_species_id, log_file = None):
     """
     Removes a species from the products of reactions and sets its initial concentration to 0.
     
@@ -146,27 +115,27 @@ def inhibit_species(sbml_model, target_species_id):
     Returns:
         Model: Updated SBML model with the inhibited species
     """
-    if True:
-        #For each Rules in the model, pin the rules to remove
-        for rule in sbml_model.getListOfRules():
-            #TODO: Ask if it's too destructive as approach
-            #if rule.isAssignment():
-            if rule.getVariable() == target_species_id:#Found the updating rule
-                #Set the math of the target_species costant to 0.0
-                #Create the new ASTNode as REAL
-                zero_ast = ASTNode(AST_REAL)
-                #Set the value of the node
-                zero_ast.setValue(0.0)
-                #Change the math of the node
-                rule.setMath(zero_ast)
+    
+    #For each Rules in the model, pin the rules to remove
+    for rule in sbml_model.getListOfRules():
+        #TODO: Ask if it's a correct approach to set the math to 0
+        #if rule.isAssignment():
+        if rule.getVariable() == target_species_id:#Found the updating rule
+            #Set the math of the target_species costant to 0.0
+            #Create the new ASTNode as REAL
+            zero_ast = ASTNode(AST_REAL)
+            #Set the value of the node
+            zero_ast.setValue(0.0)
+            #Change the math of the node
+            rule.setMath(zero_ast)
 
+    reactions_to_inhibit = []
 
     # For each reaction in the model
     for reaction in sbml_model.getListOfReactions():
         # If the reaction has products
         if reaction.getNumProducts() > 0:
             # Identify the products to remove
-            #This method avoid to get the data structure error for modifying while ciclying on it
             products_to_remove = []
             
             # Collect the IDs of products to remove
@@ -178,16 +147,44 @@ def inhibit_species(sbml_model, target_species_id):
             # Remove the identified products
             for product_id in products_to_remove:
                 reaction.removeProduct(product_id)
+
+        #Collecting all the reaction that has only the target_species as product
+        if reaction.getNumProducts() == 0:
+            reactions_to_inhibit.append(reaction.getId())
+
+    #TODO: Ask for wich approach is better
+    # V1: Only removes the species from the products list without inhibiting the reaction 
+    #       (iff the species was the only product)
+    # V2: After removing the species from the product list, if the species was the only product,
+    #       also inhibit the reaction  
+    #     - In this case libroadrunner could also be used  
+
+    if True:#False to exec V1, True to exec V2
+        for reaction in reactions_to_inhibit:
+            sbml_model = inhibit_reaction(sbml_model, reaction)
     
     # Set the initial concentration to 0.0
     for species in sbml_model.getListOfSpecies():
         if species.getId() == target_species_id:
             result = species.setInitialConcentration(0.0)
-            print(f"result:{result}")
-            if result:
+            print_log(log_file, f"result:{result}")
+            if result == LIBSBML_OPERATION_FAILED:
                 exit(f"Error setting concentration for {species.getId()}")
     
     return sbml_model
+
+
+# def inhibit_species_rr(rr_model, target_species_id, log_file = None):
+#     """
+#     Remove the species from the model, using libroadrunner
+
+#     Args:
+#         - rr_model: roadrunner model
+#         - target_species_id: Id of the target species
+#         - log_file: log file for debug print
+#     """
+
+#     rr_model.removeSpecies(target_species_id, True)
 
 # ============
 # REACTIONS
@@ -279,7 +276,7 @@ def print_reactions_as_json(reactions_list):
     reactions_dict = reactions_to_dict(reactions_list)
     dict_pretty_print(reactions_dict)
 
-def inhibit_reaction(sbml_model, target_reaction_id):
+def inhibit_reaction(sbml_model, target_reaction_id, log_file = None):
     """
     Remove a reaction from the SBML model and return the updated model.
     
@@ -295,16 +292,37 @@ def inhibit_reaction(sbml_model, target_reaction_id):
     
     if reaction is not None:
         # Remove a reaction from the model
-        result = sbml_model.removeReaction(target_reaction_id)
+        #result = sbml_model.removeReaction(target_reaction_id)
+        #Create the new ASTNode as REAL
+        zero_ast = ASTNode(AST_REAL)
+        #Set the value of the node
+        zero_ast.setValue(0.0)
+
+        #Set the kineticLaw of the reaction to 0
+        result = reaction.getKineticLaw().setMath(zero_ast)
         
-        if result:
-            print(f"Successfully removed reaction {target_reaction_id}")
+        if result == LIBSBML_OPERATION_SUCCESS:
+            print_log(log_file, f"Successfully removed reaction {target_reaction_id}")
         else:
-            print(f"Error removing reaction {target_reaction_id}: error code {result}")
+            print_log(log_file, f"Error removing reaction {target_reaction_id}: error code {result}")
     else:
-        print(f"Reaction {target_reaction_id} not found in the model")
+        print_log(log_file, f"Reaction {target_reaction_id} not found in the model")
 
     return sbml_model
+
+def inhibit_reaction_rr(rr_model, target_reaction_id, log_file = None):
+    #TODO: Ask which of the two methods is better
+    """
+    Set the kineticLaw of a reaction to 0, inhibiting it
+    
+    Args:
+        rr_model: roadrunner model object
+        target_reaction_id: ID of the reaction to remove
+        
+    Returns:
+    """
+
+    rr_model.setKineticLaw(target_reaction_id, "0", True)
 
 # ============
 # FUNCTIONS
@@ -342,7 +360,7 @@ def print_functions_as_json(functions_list):
 # FUNCTIONS
 # ============
 
-def save_sbml_model(model, file_path):
+def save_sbml_model(model, file_path, log_file):
     """
     Save an SBML model to a file. The model can be a libsbml.Model, a string (XML),
     or a libsbml.SBMLDocument.
@@ -373,13 +391,13 @@ def save_sbml_model(model, file_path):
         success = writeSBMLToFile(model, file_path)
     
     if success:
-        print(f"Successfully saved SBML to: {file_path}")
+        print_log(log_file, f"Successfully saved SBML to: {file_path}")
     else:
-        print(f"Error: Failed to write SBML file to {file_path}")
+        print_log(log_file, f"Error: Failed to write SBML file to {file_path}")
         
     return success
 
-def get_sbml_as_xml(model):
+def get_sbml_as_xml(model, log_file = None):
     """
     Converts an SBML model to its XML string representation.
     
@@ -408,7 +426,7 @@ def get_sbml_as_xml(model):
     if xml_string:
         return xml_string
     else:
-        print("Error: Failed to convert SBML to XML string")
+        print_log(log_file, "Error: Failed to convert SBML to XML string")
         return None
 
 

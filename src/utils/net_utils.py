@@ -25,8 +25,6 @@ def get_network_from_sbml(list_of_reactions, list_of_species):
     s_list = []
     r_list = []
 
-    # #TODO: Change to include the species obj as value of the node
-
     #Creates the species dict for nodes
     for s in list_of_species:
         DG.add_node(s.get_id(), species = s, label = s.get_id(), type = "species")
@@ -34,8 +32,6 @@ def get_network_from_sbml(list_of_reactions, list_of_species):
         # s_dict['label'] = (s.get_id(), s.get_initial_concentration())
         # s_list.append((s.get_id(), s))
 
-
-    # #TODO: Change to include the reaction obj as value of the node
     #Creates the reaction dict for nodes
     for r in list_of_reactions:
         DG.add_node(r.get_id(), reaction=r, label = r.get_id(), type = "reaction")

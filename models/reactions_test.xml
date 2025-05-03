@@ -53,6 +53,9 @@
             <parameter id="k3" value="2.0" constant="true" units="time" />
             <parameter id="Ka" value="0.8" constant="true" />
             <parameter id="Vmax" value="5.0" constant="true" units="substance" />
+            <parameter id="E_total" value="2" constant="true" />
+            <parameter id="A_total" value="10" constant="true" />
+            <parameter id="B_total" value="5" constant="true" />
         </listOfParameters>
 
         <!-- Definizione delle reazioni chimiche -->
@@ -140,20 +143,6 @@
                 </kineticLaw>
             </reaction>
         </listOfReactions>
-
-        <!-- Definizione di regole matematiche aggiuntive -->
-        <listOfRules>
-            <!-- Conservazione della massa enzima totale -->
-            <assignmentRule variable="E">
-                <math xmlns="http://www.w3.org/1998/Math/MathML">
-                    <apply>
-                        <minus />
-                        <cn> 2 </cn>
-                        <ci> EA </ci>
-                    </apply>
-                </math>
-            </assignmentRule>
-        </listOfRules>
 
     </model>
 </sbml>
