@@ -2,65 +2,54 @@ import datetime
 
 def parse_args():
     """
-    Parse command line arguments.
+    Parse command line arguments using a subcommand structure.
     
     Returns:
-        list: [model_path, operation_type (optional), target_id (optional), save_output (optional), log_file(optional)]
-        
-        operation_type:
-            1 - Inhibit a species
-            2 - Inhibit a reaction
-        
-        save_output:
-            True/False - Whether to save the output files
-
-        log_file:
-            True/False - Whether to save the information prints in a log file
+        argparse.Namespace: Object containing all parsed arguments
     """
     import argparse
     
+    # Create main parser
     parser = argparse.ArgumentParser(
-        description='Process SBML models and perform operations such as species or reaction inhibition.',
+        description='SBML model analysis and manipulation tool',
         formatter_class=argparse.RawTextHelpFormatter
     )
     
-    parser.add_argument('-f', '--file', type=str, required=True, 
-                        help='Path to the SBML model file')
-    parser.add_argument('-op', '--operation', type=int, choices=[1, 2],
-                        help='Operation to perform:\n1 - Inhibit a species\n2 - Inhibit a reaction')
-    parser.add_argument('-tn', '--target_id', type=str, required=True,
-                        help='ID of the target species or reaction to inhibit')
-    parser.add_argument('-so', '--save_output', action='store_true',
-                        help='Save modified SBML models (default: False)')
-    parser.add_argument('-lf', '--log_file', type=str,
-                        help='Save the outputs on the specified log file')
+    # Create subparsers for different commands
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    subparsers.required = True
     
-    parsed_args = parser.parse_args()
+    # === SIMULATE command ===
+    simulate_parser = subparsers.add_parser('simulate', help='Simulate an SBML model')
+    simulate_parser.add_argument('input_path', help='Path to the SBML model file')
+    simulate_parser.add_argument('-t', '--time', type=float, default=10, 
+                                help='Simulation end time (default: 10)')
+    simulate_parser.add_argument('-i', '--integrator', choices=['cvode', 'gillespie', 'rk4'], 
+                                help='Integrator to use')
+    simulate_parser.add_argument('-o', '--output', default='./imgs',
+                                help='Output directory for plots (default: ./imgs)')
     
-    # Convert to the expected return format
-    args = [parsed_args.file]
+    # === INHIBIT_SPECIES command ===
+    inhibit_species_parser = subparsers.add_parser('inhibit_species', 
+                                                  help='Inhibit a species in the model')
+    inhibit_species_parser.add_argument('input_path', help='Path to the SBML model file')
+    inhibit_species_parser.add_argument('species_id', help='ID of the species to inhibit')
+    inhibit_species_parser.add_argument('-o', '--output', default='./imgs',
+                                       help='Output directory for plots (default: ./imgs)')
     
-    # Add operation_type if provided
-    if parsed_args.operation is not None:
-        args.append(parsed_args.operation)
-        
-        # If operation is specified but target_id is not
-        if parsed_args.target_id is None:
-            parser.error("Error: When using --operation/-op, you must also specify --target_id/-tn")
-        
-        # Add target_id
-        args.append(parsed_args.target_id)
-    elif parsed_args.target_id is not None:
-        # If target_id is specified but operation is not
-        parser.error("Error: When using --target_id/-tn, you must also specify --operation/-op")
+    # === INHIBIT_REACTION command ===
+    inhibit_reaction_parser = subparsers.add_parser('inhibit_reaction', 
+                                                   help='Inhibit a reaction in the model')
+    inhibit_reaction_parser.add_argument('input_path', help='Path to the SBML model file')
+    inhibit_reaction_parser.add_argument('reaction_id', help='ID of the reaction to inhibit')
+    inhibit_reaction_parser.add_argument('-o', '--output', default='./imgs',
+                                       help='Output directory for plots (default: ./imgs)')
     
-    # Add save_output flag at the end of the list
-    args.append(parsed_args.save_output)
+    # Common arguments for all commands
+    for subparser in [simulate_parser, inhibit_species_parser, inhibit_reaction_parser]:
+        subparser.add_argument('-l', '--log', help='Path to log file')
     
-    # Add log_file to the list (may be None if not provided)
-    args.append(parsed_args.log_file)
-    
-    return args
+    return parser.parse_args()
 
 def print_log(log_file, string):
     current_date = datetime.datetime.now()

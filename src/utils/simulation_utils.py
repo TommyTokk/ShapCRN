@@ -8,7 +8,7 @@ import math
 from src.utils.utils import print_log
 
 
-def load_roadrunner_model(sbml_model):
+def load_roadrunner_model(sbml_model, integrator = None, log_file=None):
     """
     Loads a SBML model into a RoadRunner instance and configures the integrator settings.
     
@@ -27,10 +27,16 @@ def load_roadrunner_model(sbml_model):
     else:
         # Assume it's a string representation or file path
         rr_model = rr.RoadRunner(sbml_model)
-    
+
     # Configure integrator settings
-    # rr_model.getIntegrator().setValue('relative_tolerance', rel_tol)
-    # rr_model.getIntegrator().setValue('absolute_tolerance', abs_tol)
+    rr_model.getIntegrator().setValue('relative_tolerance', 1e-6)
+    rr_model.getIntegrator().setValue('absolute_tolerance', 1e-8)
+
+    if integrator is not None:
+        rr_model.setIntegrator(integrator)
+    
+
+    print_log(log_file, f"integrator: {rr_model.getIntegrator()}")
     
     return rr_model
 
@@ -104,10 +110,11 @@ def plot_results(simulation_data, img_dir_path="./imgs", img_name="simulation", 
 
 
 def simulate(rr_model, start_time = 0, end_time = 10, output_rows = 100):
+    #TODO: Ask if is correct to force a positive value
+    if rr_model.getIntegrator().getName() == "gillespie":
+        rr_model.getIntegrator().nonnegative = True
 
-    rr_model.setIntegrator('gillespie')
     result = rr_model.simulate(start_time, end_time, output_rows)
-
     return result
 
 
