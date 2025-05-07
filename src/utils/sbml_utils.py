@@ -1,6 +1,8 @@
 import sys
 from libsbml import *
 import json
+import numpy as np
+import itertools
 
 from src.classes.species import Species
 from src.classes.reaction import Reaction
@@ -121,11 +123,14 @@ def inhibit_species(sbml_model, target_species_id, log_file=None):
         Model: Updated SBML model with the inhibited species
     """
 
+    in_rules = False
+
     # For each Rules in the model, pin the rules to remove
     for rule in sbml_model.getListOfRules():
         # TODO: Ask if it's a correct approach to set the math to 0
         # if rule.isAssignment():
         if rule.getVariable() == target_species_id:  # Found the updating rule
+            in_rules = True
             # Set the math of the target_species costant to 0.0
             # Create the new ASTNode as REAL
             zero_ast = ASTNode(AST_REAL)
@@ -136,37 +141,40 @@ def inhibit_species(sbml_model, target_species_id, log_file=None):
 
     reactions_to_inhibit = []
 
-    # For each reaction in the model
-    for reaction in sbml_model.getListOfReactions():
-        # If the reaction has products
-        if reaction.getNumProducts() > 0:
-            # Identify the products to remove
-            products_to_remove = []
+    if not in_rules:
+        print_log(log_file, f"Species {target_species_id} not found in rules, looking in reactions...")
+        # For each reaction in the model
+        for reaction in sbml_model.getListOfReactions():
+            # If the reaction has products
+            if reaction.getNumProducts() > 0:
+                # Identify the products to remove
+                products_to_remove = []
 
-            # Collect the IDs of products to remove
-            for i in range(reaction.getNumProducts()):
-                product = reaction.getProduct(i)
-                if product.getSpecies() == target_species_id:
-                    products_to_remove.append(product.getSpecies())
+                # Collect the IDs of products to remove
+                for i in range(reaction.getNumProducts()):
+                    product = reaction.getProduct(i)
+                    if product.getSpecies() == target_species_id:
+                        products_to_remove.append(product.getSpecies())
 
-            # Remove the identified products
-            for product_id in products_to_remove:
-                reaction.removeProduct(product_id)
+                # Remove the identified products
+                for product_id in products_to_remove:
+                    reaction.removeProduct(product_id)
 
-        # Collecting all the reaction that has only the target_species as product
-        if reaction.getNumProducts() == 0:
-            reactions_to_inhibit.append(reaction.getId())
+            # Collecting all the reaction that has only the target_species as product
+            if reaction.getNumProducts() == 0:
+                reactions_to_inhibit.append(reaction.getId())
 
-    # TODO: Ask for wich approach is better
-    # V1: Only removes the species from the products list without inhibiting the reaction
-    #       (iff the species was the only product)
-    # V2: After removing the species from the product list, if the species was the only product,
-    #       also inhibit the reaction
-    #     - In this case libroadrunner could also be used
+        # TODO: Ask for wich approach is better
+        # V1: Only removes the species from the products list without inhibiting the reaction
+        #       (iff the species was the only product)
+        #      - In this case reactants concentrations keeps decreasing
+        #
+        # V2: After removing the species from the product list, if the species was the only product,
+        #       also inhibit the reaction
 
-    if True:  # False to exec V1, True to exec V2
-        for reaction in reactions_to_inhibit:
-            sbml_model = inhibit_reaction(sbml_model, reaction, log_file)
+        if True:  # False to exec V1, True to exec V2
+            for reaction in reactions_to_inhibit:
+                sbml_model = inhibit_reaction(sbml_model, reaction, log_file)
 
     # Set the initial concentration to 0.0
     for species in sbml_model.getListOfSpecies():
@@ -275,7 +283,7 @@ def print_reactions_as_json(reactions_list):
 
 def inhibit_reaction(sbml_model, target_reaction_id, log_file=None):
     """
-    Remove a reaction from the SBML model and return the updated model.
+    Set the kinetic law of the reaction to 0 in the SBML model and return the updated model.
 
     Args:
         sbml_model: SBML model object
@@ -299,11 +307,11 @@ def inhibit_reaction(sbml_model, target_reaction_id, log_file=None):
         result = reaction.getKineticLaw().setMath(zero_ast)
 
         if result == LIBSBML_OPERATION_SUCCESS:
-            print_log(log_file, f"Successfully removed reaction {target_reaction_id}")
+            print_log(log_file, f"Successfully inhibite reaction {target_reaction_id}")
         else:
             print_log(
                 log_file,
-                f"Error removing reaction {target_reaction_id}: error code {result}",
+                f"Error during inhibition reaction {target_reaction_id}: error code {result}",
             )
     else:
         print_log(log_file, f"Reaction {target_reaction_id} not found in the model")
@@ -311,26 +319,24 @@ def inhibit_reaction(sbml_model, target_reaction_id, log_file=None):
     return sbml_model
 
 
-def inhibit_reaction_rr(rr_model, target_reaction_id, log_file=None):
-    # TODO: Ask which of the two methods is better
-    """
-    Set the kineticLaw of a reaction to 0, inhibiting it
+# def inhibit_reaction_rr(rr_model, target_reaction_id, log_file=None):
+#     # TODO: Ask which of the two methods is better
+#     """
+#     Set the kineticLaw of a reaction to 0, inhibiting it
 
-    Args:
-        rr_model: roadrunner model object
-        target_reaction_id: ID of the reaction to remove
+#     Args:
+#         rr_model: roadrunner model object
+#         target_reaction_id: ID of the reaction to remove
 
-    Returns:
-    """
-    #Set the kineticLaw to 0
-    rr_model.setKineticLaw(target_reaction_id, "0", True)
+#     Returns:
+#     """
+#     #Set the kineticLaw to 0
+#     rr_model.setKineticLaw(target_reaction_id, "0", True)
 
 
 # ============
 # FUNCTIONS
 # ============
-
-
 def get_functions_list(SBML_model):
     """
     Get a list of Function objects from the SBML model.
@@ -435,3 +441,100 @@ def get_sbml_as_xml(model, log_file=None):
     else:
         print_log(log_file, "Error: Failed to convert SBML to XML string")
         return None
+
+
+
+
+#TODO: CHECK THIS PART
+def generate_species_samples(sbml_model, target_species = ["ACEx", "GLCx", "P"], log_file = None, n_samples = 5, variation = 20):
+    res_triple = []
+
+    for ts in target_species:
+        #taking intial concentration
+        t0_conc = sbml_model.getListOfSpecies().getElementBySId(ts).getInitialConcentration()
+
+        sample_lower_bound = t0_conc - ((variation/100)*t0_conc)
+        sample_upper_bound = t0_conc + ((variation/100)*t0_conc)
+
+        tmp = []
+
+        for i in range(0, n_samples):
+            tmp.append(np.random.uniform(sample_lower_bound, sample_upper_bound))
+
+        res_triple.append(tmp)
+
+    return tuple(res_triple)
+
+
+def create_samples_combination(input_samples, log_file=None):
+    ACEx_samples, GLCx_samples, P_samples = input_samples
+
+    combinantions = list(itertools.product(ACEx_samples, GLCx_samples, P_samples))
+
+    return combinantions
+
+
+# FOR DEBUG ONLY
+def check_for_duplicates(combinations, log_file=None):
+    """
+    Check if there are duplicate combinations in the list.
+    
+    Args:
+        combinations: List of combinations to check
+        log_file: Optional log file for output
+        
+    Returns:
+        tuple: (has_duplicates, num_duplicates)
+    """
+    # Converto ogni combinazione in tupla se già non lo è
+    # (le liste non sono hashable, le tuple sì)
+    tuple_combinations = [tuple(combo) if not isinstance(combo, tuple) else combo 
+                         for combo in combinations]
+    
+    # Confronto lunghezze
+    original_length = len(combinations)
+    unique_combinations = set(tuple_combinations)
+    unique_length = len(unique_combinations)
+    
+    if original_length == unique_length:
+        print_log(log_file, f"No duplicates found in {original_length} combinations.")
+        return False, 0
+    else:
+        # Ci sono duplicati
+        num_duplicates = original_length - unique_length
+        print_log(log_file, f"Found {num_duplicates} duplicates in {original_length} combinations.")
+        
+        # Trova e stampa alcuni esempi di duplicati
+        from collections import Counter
+        counts = Counter(tuple_combinations)
+        duplicates = {combo: count for combo, count in counts.items() if count > 1}
+        
+        print_log(log_file, "Examples of duplicates:")
+        for i, (combo, count) in enumerate(duplicates.items()):
+            print_log(log_file, f"  Combination {combo} appears {count} times")
+            if i >= 2:  # Mostra al massimo 3 esempi
+                break
+        
+        return True, num_duplicates
+
+
+
+
+#FOR DEBUG ONLY
+def check_presence(sbml_model, target_species_id, log_file):
+    in_rules = False
+    in_reactions = False
+
+    for rule in sbml_model.getListOfRules():
+        # TODO: Ask if it's a correct approach to set the math to 0
+        # if rule.isAssignment():
+        if rule.getVariable() == target_species_id:  # Found the updating rule
+            in_rules = True
+
+    for reaction in sbml_model.getListOfReactions():
+        for i in range(reaction.getNumProducts()):
+            product = reaction.getProduct(i)
+            if product.getSpecies() == target_species_id:
+                in_reactions = True
+
+    print_log(log_file, f"species {target_species_id}, both in rules ({in_rules}) and reactions ({in_reactions})? {in_rules and in_reactions}")

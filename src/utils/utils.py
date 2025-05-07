@@ -1,61 +1,200 @@
 import datetime
+import numpy as np
 
 def parse_args():
     """
     Parse command line arguments using a subcommand structure.
-    
+
     Returns:
         argparse.Namespace: Object containing all parsed arguments
     """
     import argparse
-    
+
     # Create main parser
     parser = argparse.ArgumentParser(
-        description='SBML model analysis and manipulation tool',
-        formatter_class=argparse.RawTextHelpFormatter
+        description="SBML model analysis and manipulation tool",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
-    
+
     # Create subparsers for different commands
-    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
     subparsers.required = True
-    
+
     # === SIMULATE command ===
-    simulate_parser = subparsers.add_parser('simulate', help='Simulate an SBML model')
-    simulate_parser.add_argument('input_path', help='Path to the SBML model file')
-    simulate_parser.add_argument('-t', '--time', type=float, default=10, 
-                                help='Simulation end time (default: 10)')
-    simulate_parser.add_argument('-i', '--integrator', choices=['cvode', 'gillespie', 'rk4'], 
-                                help='Integrator to use')
-    simulate_parser.add_argument('-o', '--output', default='./imgs',
-                                help='Output directory for plots (default: ./imgs)')
-    
+    simulate_parser = subparsers.add_parser("simulate", help="Simulate an SBML model")
+    simulate_parser.add_argument("input_path", help="Path to the SBML model file")
+    simulate_parser.add_argument(
+        "-t", "--time", type=float, default=10, help="Simulation end time (default: 10)"
+    )
+    simulate_parser.add_argument(
+        "-i",
+        "--integrator",
+        choices=["cvode", "gillespie", "rk4"],
+        help="Integrator to use",
+    )
+    simulate_parser.add_argument(
+        "-o",
+        "--output",
+        default="./imgs",
+        help="Output directory for plots (default: ./imgs)",
+    )
+
+    # === SIMULATE_SAMPLES command ===
+    simulate_samples_parser = subparsers.add_parser(
+        "simulate_samples", 
+        help="Simulate model with different input species concentrations"
+    )
+    simulate_samples_parser.add_argument(
+        "input_path", 
+        help="Path to the SBML model file"
+    )
+    simulate_samples_parser.add_argument(
+        "-is", 
+        "--input_species", 
+        nargs="+", 
+        required=True,
+        help="One or more species IDs to vary (e.g. -s ACEx GLCx P)"
+    )
+    simulate_samples_parser.add_argument(
+        "-ts", 
+        "--target_species", 
+        nargs="+", 
+        # required=True,
+        help="One or more species IDs to check"
+    )
+    simulate_samples_parser.add_argument(
+        "-n", 
+        "--num_samples", 
+        type=int, 
+        default=5,
+        help="Number of samples for each species (default: 5)"
+    )
+    simulate_samples_parser.add_argument(
+        "-v", 
+        "--variation", 
+        type=float, 
+        default=20.0,
+        help="Percentage variation around initial value (default: 20.0)"
+    )
+    simulate_samples_parser.add_argument(
+        "-t", "--time", type=float, default=10, help="Simulation end time (default: 10)"
+    )
+    simulate_samples_parser.add_argument(
+        "-i",
+        "--integrator",
+        choices=["cvode", "gillespie", "rk4"],
+        help="Integrator to use",
+    )
+    simulate_samples_parser.add_argument(
+        "-o",
+        "--output",
+        default="./imgs/samples",
+        help="Output directory for plots (default: ./imgs/samples)",
+    )
+
     # === INHIBIT_SPECIES command ===
-    inhibit_species_parser = subparsers.add_parser('inhibit_species', 
-                                                  help='Inhibit a species in the model')
-    inhibit_species_parser.add_argument('input_path', help='Path to the SBML model file')
-    inhibit_species_parser.add_argument('species_id', help='ID of the species to inhibit')
-    inhibit_species_parser.add_argument('-o', '--output', default='./imgs',
-                                       help='Output directory for plots (default: ./imgs)')
-    
+    inhibit_species_parser = subparsers.add_parser(
+        "inhibit_species", help="Inhibit a species in the model"
+    )
+    inhibit_species_parser.add_argument(
+        "input_path", help="Path to the SBML model file"
+    )
+    inhibit_species_parser.add_argument(
+        "species_id", help="ID of the species to inhibit"
+    )
+    inhibit_species_parser.add_argument(
+        "-o",
+        "--output",
+        default="./imgs",
+        help="Output directory for plots (default: ./imgs)",
+    )
+
     # === INHIBIT_REACTION command ===
-    inhibit_reaction_parser = subparsers.add_parser('inhibit_reaction', 
-                                                   help='Inhibit a reaction in the model')
-    inhibit_reaction_parser.add_argument('input_path', help='Path to the SBML model file')
-    inhibit_reaction_parser.add_argument('reaction_id', help='ID of the reaction to inhibit')
-    inhibit_reaction_parser.add_argument('-o', '--output', default='./imgs',
-                                       help='Output directory for plots (default: ./imgs)')
-    
+    inhibit_reaction_parser = subparsers.add_parser(
+        "inhibit_reaction", help="Inhibit a reaction in the model"
+    )
+    inhibit_reaction_parser.add_argument(
+        "input_path", help="Path to the SBML model file"
+    )
+    inhibit_reaction_parser.add_argument(
+        "reaction_id", help="ID of the reaction to inhibit"
+    )
+    inhibit_reaction_parser.add_argument(
+        "-o",
+        "--output",
+        default="./imgs",
+        help="Output directory for plots (default: ./imgs)",
+    )
+
+    # === CREATE PETRINET command ==
+    create_petrinet_parser = subparsers.add_parser(
+        "create_petrinet", help = "Create the PetriNet of the given model"
+    )
+
+    create_petrinet_parser.add_argument(
+        "input_path", help="Path to the SBML model"
+    )
+
+    create_petrinet_parser.add_argument(
+        "-o",
+        "--output",
+        default="./imgs/PetriNets",
+        help="Output directory for plots (default: ./imgs/PetriNets)",
+    )
+
+    create_petrinet_parser.add_argument(
+        "-tn",
+        "--tests_number",
+        default=10,
+        help="Number of tests to perform"
+    )
+
+    create_petrinet_parser.add_argument(
+        "-iq",
+        "--increase_quantity",
+        default=5
+    )
+
     # Common arguments for all commands
-    for subparser in [simulate_parser, inhibit_species_parser, inhibit_reaction_parser]:
-        subparser.add_argument('-l', '--log', help='Path to log file')
-    
+    for subparser in [simulate_parser, simulate_samples_parser, inhibit_species_parser, inhibit_reaction_parser]:
+        subparser.add_argument("-l", "--log", help="Path to log file")
+
     return parser.parse_args()
+
 
 def print_log(log_file, string):
     current_date = datetime.datetime.now()
     if log_file:
-        with open(log_file, 'a') as out:
+        with open(log_file, "a") as out:
             out.write(f"[{current_date}]: {string}\n")
     else:
         print(f"[{current_date}]: {string}")
 
+
+
+#=== DEBUG ====
+def check_variation(target_species, original_results, target_species_original_concentrations, target_species_perturbated_concentrations, log_file = None):
+    for i, (ts_name, ts_orig, ts_pert) in enumerate(zip(
+            target_species, 
+            target_species_original_concentrations, 
+            target_species_perturbated_concentrations)):
+                
+                # Calculate percentage variation
+                # Avoid division by zero using np.where
+                time = original_results[:, 0]
+                percent_change = np.where(
+                    ts_orig > 1e-10,  # Avoid division by values too close to zero
+                    (ts_pert - ts_orig) / ts_orig * 100,
+                    0  # If original value is almost zero, set variation to zero
+                )
+                
+                # Calculate statistics on variations
+                max_increase = np.max(percent_change)
+                max_decrease = np.min(percent_change)
+                avg_change = np.mean(percent_change)
+                
+                # Show statistics
+                print_log(log_file, f"\nSpecies: {ts_name}")
+                print_log(log_file, f"  - Average variation: {avg_change:.2f}%")
+                print_log(log_file, f"  - Maximum increase: {max_increase:.2f}%")
+                print_log(log_file, f"  - Maximum decrease: {max_decrease:.2f}%")

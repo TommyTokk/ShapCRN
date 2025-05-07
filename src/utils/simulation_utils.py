@@ -118,6 +118,26 @@ def simulate(rr_model, start_time = 0, end_time = 10, output_rows = 100):
     return result
 
 
+def simulate_samples(rr_model, combination, input_species_id, start_time=0, end_time=10, output_rows=100):
+    # Salva le selezioni correnti
+    current_selections = rr_model.selections
+    
+    # Imposta le nuove concentrazioni
+    if rr_model.getIntegrator().getName() == "gillespie":
+        rr_model.getIntegrator().nonnegative = True
+
+    for i in range(len(input_species_id)):
+        rr_model.setInitConcentration(input_species_id[i], combination[i])
+
+    rr_model.regenerateModel()
+    rr_model.reset()
+    
+    # Ripristina le selezioni originali
+    rr_model.selections = current_selections
+    
+    return rr_model.simulate(start_time, end_time, output_rows)
+
+
 def pearson_correlation(simulation_data, correlation_threshold=0.5):
     """
         Calculate the Pearson correlation of the simulation results and identify important species
@@ -139,9 +159,3 @@ def pearson_correlation(simulation_data, correlation_threshold=0.5):
     correlation_matrix = np.corrcoef(species_data, rowvar=False)
 
     return correlation_matrix
-
-
-
-
-
-
