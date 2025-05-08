@@ -142,10 +142,14 @@ def inhibit_species(sbml_model, target_species_id, log_file=None):
     reactions_to_inhibit = []
 
     if not in_rules:
-        print_log(log_file, f"Species {target_species_id} not found in rules, looking in reactions...")
+        print_log(
+            log_file,
+            f"Species {target_species_id} not found in rules, looking in reactions...",
+        )
         # For each reaction in the model
         for reaction in sbml_model.getListOfReactions():
             # If the reaction has products
+            # TODO: Notify the changes
             if reaction.getNumProducts() > 0:
                 # Identify the products to remove
                 products_to_remove = []
@@ -159,9 +163,24 @@ def inhibit_species(sbml_model, target_species_id, log_file=None):
                 # Remove the identified products
                 for product_id in products_to_remove:
                     reaction.removeProduct(product_id)
-
             # Collecting all the reaction that has only the target_species as product
             if reaction.getNumProducts() == 0:
+                reactions_to_inhibit.append(reaction.getId())
+
+            # Removing the species also from reactants to avoid errors
+            # During the simulation numerical errors accumulate and make the concentration not 0
+            if reaction.getNumReactants() > 0:
+                reactants_to_remove = []
+
+                for i in range(reaction.getNumReactants()):
+                    reactant = reaction.getReactant(i)
+                    if reactant.getSpecies() == target_species_id:
+                        reactants_to_remove.append(reactant.getSpecies())
+                # Remove the identified reactants
+                for reactant_id in reactants_to_remove:
+                    reaction.removeReactant(reactant_id)
+
+            if reaction.getNumReactants() == 0:
                 reactions_to_inhibit.append(reaction.getId())
 
         # TODO: Ask for wich approach is better
@@ -180,7 +199,8 @@ def inhibit_species(sbml_model, target_species_id, log_file=None):
     for species in sbml_model.getListOfSpecies():
         if species.getId() == target_species_id:
             result = species.setInitialConcentration(0.0)
-            print_log(log_file, f"result:{result}")
+            # result = species.setConstant(True)
+            # print_log(log_file, f"result:{result}")
             if result == LIBSBML_OPERATION_FAILED:
                 exit(f"Error setting concentration for {species.getId()}")
 
@@ -443,18 +463,24 @@ def get_sbml_as_xml(model, log_file=None):
         return None
 
 
-
-
-#TODO: CHECK THIS PART
-def generate_species_samples(sbml_model, target_species = ["ACEx", "GLCx", "P"], log_file = None, n_samples = 5, variation = 20):
+# TODO: CHECK THIS PART
+def generate_species_samples(
+    sbml_model,
+    target_species=["ACEx", "GLCx", "P"],
+    log_file=None,
+    n_samples=5,
+    variation=20,
+):
     res_triple = []
 
     for ts in target_species:
-        #taking intial concentration
-        t0_conc = sbml_model.getListOfSpecies().getElementBySId(ts).getInitialConcentration()
+        # taking intial concentration
+        t0_conc = (
+            sbml_model.getListOfSpecies().getElementBySId(ts).getInitialConcentration()
+        )
 
-        sample_lower_bound = t0_conc - ((variation/100)*t0_conc)
-        sample_upper_bound = t0_conc + ((variation/100)*t0_conc)
+        sample_lower_bound = t0_conc - ((variation / 100) * t0_conc)
+        sample_upper_bound = t0_conc + ((variation / 100) * t0_conc)
 
         tmp = []
 
@@ -478,49 +504,53 @@ def create_samples_combination(input_samples, log_file=None):
 def check_for_duplicates(combinations, log_file=None):
     """
     Check if there are duplicate combinations in the list.
-    
+
     Args:
         combinations: List of combinations to check
         log_file: Optional log file for output
-        
+
     Returns:
         tuple: (has_duplicates, num_duplicates)
     """
     # Converto ogni combinazione in tupla se già non lo è
     # (le liste non sono hashable, le tuple sì)
-    tuple_combinations = [tuple(combo) if not isinstance(combo, tuple) else combo 
-                         for combo in combinations]
-    
+    tuple_combinations = [
+        tuple(combo) if not isinstance(combo, tuple) else combo
+        for combo in combinations
+    ]
+
     # Confronto lunghezze
     original_length = len(combinations)
     unique_combinations = set(tuple_combinations)
     unique_length = len(unique_combinations)
-    
+
     if original_length == unique_length:
         print_log(log_file, f"No duplicates found in {original_length} combinations.")
         return False, 0
     else:
         # Ci sono duplicati
         num_duplicates = original_length - unique_length
-        print_log(log_file, f"Found {num_duplicates} duplicates in {original_length} combinations.")
-        
+        print_log(
+            log_file,
+            f"Found {num_duplicates} duplicates in {original_length} combinations.",
+        )
+
         # Trova e stampa alcuni esempi di duplicati
         from collections import Counter
+
         counts = Counter(tuple_combinations)
         duplicates = {combo: count for combo, count in counts.items() if count > 1}
-        
+
         print_log(log_file, "Examples of duplicates:")
         for i, (combo, count) in enumerate(duplicates.items()):
             print_log(log_file, f"  Combination {combo} appears {count} times")
             if i >= 2:  # Mostra al massimo 3 esempi
                 break
-        
+
         return True, num_duplicates
 
 
-
-
-#FOR DEBUG ONLY
+# FOR DEBUG ONLY
 def check_presence(sbml_model, target_species_id, log_file):
     in_rules = False
     in_reactions = False
@@ -537,4 +567,7 @@ def check_presence(sbml_model, target_species_id, log_file):
             if product.getSpecies() == target_species_id:
                 in_reactions = True
 
-    print_log(log_file, f"species {target_species_id}, both in rules ({in_rules}) and reactions ({in_reactions})? {in_rules and in_reactions}")
+    print_log(
+        log_file,
+        f"species {target_species_id}, both in rules ({in_rules}) and reactions ({in_reactions})? {in_rules and in_reactions}",
+    )

@@ -171,30 +171,17 @@ def print_log(log_file, string):
         print(f"[{current_date}]: {string}")
 
 
-
 #=== DEBUG ====
-def check_variation(target_species, original_results, target_species_original_concentrations, target_species_perturbated_concentrations, log_file = None):
-    for i, (ts_name, ts_orig, ts_pert) in enumerate(zip(
-            target_species, 
-            target_species_original_concentrations, 
-            target_species_perturbated_concentrations)):
-                
-                # Calculate percentage variation
-                # Avoid division by zero using np.where
-                time = original_results[:, 0]
-                percent_change = np.where(
-                    ts_orig > 1e-10,  # Avoid division by values too close to zero
-                    (ts_pert - ts_orig) / ts_orig * 100,
-                    0  # If original value is almost zero, set variation to zero
-                )
-                
-                # Calculate statistics on variations
-                max_increase = np.max(percent_change)
-                max_decrease = np.min(percent_change)
-                avg_change = np.mean(percent_change)
-                
-                # Show statistics
-                print_log(log_file, f"\nSpecies: {ts_name}")
-                print_log(log_file, f"  - Average variation: {avg_change:.2f}%")
-                print_log(log_file, f"  - Maximum increase: {max_increase:.2f}%")
-                print_log(log_file, f"  - Maximum decrease: {max_decrease:.2f}%")
+def analyze_simulation_variations(target_species_data, original_results, output_dir, log_file=None):
+    """
+    Analyze variations between original and multiple perturbed simulations.
+    
+    Args:
+        target_species_data: Dictionary with species data organized by species
+        original_results: Original simulation results
+        output_dir: Output directory for plots
+        log_file: Optional log file handler
+    """
+
+    #TODO
+    pass
