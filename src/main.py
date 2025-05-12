@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import roadrunner
 import libsbml
 import numpy as np
+from dotenv import load_dotenv
 
 # Add the src folder path to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,9 +15,11 @@ from src.utils import sbml_utils as sbml_ut
 from src.utils import simulation_utils as sim_ut
 from src.utils import net_utils as nu
 from src.utils import utils as ut
+from src.utils import plot_utils as plt_ut
 
 
 def main():
+    load_dotenv()
     # Use the parse_args function to get command-line arguments
     args = ut.parse_args()
 
@@ -37,12 +40,23 @@ def main():
             else:
                 rr = sim_ut.load_roadrunner_model(sbml_model, log_file)
 
-            res = sim_ut.simulate(
-                rr, end_time=args.time, start_time=0, log_file=log_file
-            )
+            # sim_ut.simulate_to_steady_state(rr, log_file=log_file)
+            # steady_state_time = sim_ut.time_to_steady_state_window(rr, 10)
+
+            # ut.print_log(log_file, f"Steady state reached at time: {steady_state_time}")
+
+            # if steady_state_time:
+            #   simulation_end_time = steady_state_time
+            # else:
+            #    simulation_end_time = args.time
+            #
+            # rr.reset()
+
+            res = sim_ut.simulate(rr, end_time=100, start_time=0, log_file=log_file)
+
             # ut.print_log(log_file, rr["[Px]"])
             # ut.print_log(log_file, f"Concentration of Px:\n {res[:, res.colnames.index("[Px]")]}")
-            sim_ut.plot_results(res, args.output, file_name, log_file)
+            plt_ut.plot_results(res, args.output, file_name, log_file)
 
         elif args.command == "simulate_samples":
             # Load the model
@@ -80,7 +94,7 @@ def main():
             # ut.print_log(log_file, f"Model boundary species: {rr.model.getBoundarySpeciesIds()}")
             # exit(1)
 
-            original_results = sim_ut.simulate(rr, start_time=0, end_time=10)
+            original_results = sim_ut.simulate(rr, start_time=0, end_time=100)
 
             samples_simulations_results = (
                 []
@@ -95,7 +109,7 @@ def main():
                         combinations[i],
                         input_species_ids,
                         start_time=0,
-                        end_time=10,
+                        end_time=100,
                     )
                 )
 
@@ -104,40 +118,63 @@ def main():
             for ts in target_species_ids:
                 try:
                     ts_index = original_results.colnames.index(f"[{ts}]")
-                    
+
                     target_species_data[ts] = {
                         "original": original_results[:, ts_index],
-                        "simulations": []  # List containing informations about the simulations
+                        "simulations": [],  # List containing informations about the simulations
                     }
-                    
+
                     # Adding the results of the simulations
                     for i in range(len(samples_simulations_results)):
                         try:
                             # Getting the info about the combinations for te specified simulation's ID
                             combination_values = combinations[i]
-                            combination_str = "-".join([f"{species}:{value:.4f}" for species, value in zip(input_species_ids, combination_values)])
-                            
+                            combination_str = "-".join(
+                                [
+                                    f"{species}:{value:.4f}"
+                                    for species, value in zip(
+                                        input_species_ids, combination_values
+                                    )
+                                ]
+                            )
+
                             # Creating the simulation dictionary
                             simulation_data = {
                                 "id": f"sim_{i}_{combination_str}",
-                                "combination": combinations[i],  # Saving the combination
-                                "results": samples_simulations_results[i][:, ts_index]  # Saving the results
+                                "combination": combinations[
+                                    i
+                                ],  # Saving the combination
+                                "results": samples_simulations_results[i][
+                                    :, ts_index
+                                ],  # Saving the results
                             }
-                            
+
                             # Adding to the simulations's list
-                            target_species_data[ts]["simulations"].append(simulation_data)
-                            
+                            target_species_data[ts]["simulations"].append(
+                                simulation_data
+                            )
+
                         except Exception as e:
-                            ut.print_log(log_file, f"Error extracting data for simulation {i}, species {ts}: {e}")
-                            
-                    ut.print_log(log_file, f"Processed {len(target_species_data[ts]['simulations'])} simulations for species {ts}")
-                    
+                            ut.print_log(
+                                log_file,
+                                f"Error extracting data for simulation {i}, species {ts}: {e}",
+                            )
+
+                    ut.print_log(
+                        log_file,
+                        f"Processed {len(target_species_data[ts]['simulations'])} simulations for species {ts}",
+                    )
+
                 except Exception as e:
-                    ut.print_log(log_file, f"Species {ts} not present in the results: {e}")
+                    ut.print_log(
+                        log_file, f"Species {ts} not present in the results: {e}"
+                    )
                     continue
 
             # Analyze data
-            ut.analyze_simulation_variations(target_species_data, original_results, args.output, log_file)
+            sim_ut.analyze_simulation_variations(
+                target_species_data, original_results, args.output, log_file
+            )
 
         elif args.command == "inhibit_species":
             # Load the model

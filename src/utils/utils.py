@@ -1,5 +1,6 @@
 import datetime
 import numpy as np
+import json
 
 def parse_args():
     """
@@ -170,18 +171,15 @@ def print_log(log_file, string):
     else:
         print(f"[{current_date}]: {string}")
 
+def dict_pretty_print(dict_obj):
+    """Pretty print a dictionary as formatted JSON.
+
+    Args:
+        dict_obj: Dictionary to be printed
+    """
+
+    json_formatted_str = json.dumps(dict_obj, indent=2)
+    print(json_formatted_str)
+
 
 #=== DEBUG ====
-def analyze_simulation_variations(target_species_data, original_results, output_dir, log_file=None):
-    """
-    Analyze variations between original and multiple perturbed simulations.
-    
-    Args:
-        target_species_data: Dictionary with species data organized by species
-        original_results: Original simulation results
-        output_dir: Output directory for plots
-        log_file: Optional log file handler
-    """
-
-    #TODO
-    pass

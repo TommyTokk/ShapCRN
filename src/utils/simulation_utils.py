@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 import os
 import math
 
+
 from src.utils.utils import print_log
+from src.utils import plot_utils as plt_ut
 
 
 def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
@@ -40,7 +42,7 @@ def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
     return rr_model
 
 
-def simulate(rr_model, start_time=0, end_time=10, output_rows=100, log_file=None):
+def simulate(rr_model, start_time=0, end_time=100, output_rows=100, log_file=None):
     # TODO: Ask if is correct to force a positive value
     if rr_model.getIntegrator().getName() == "gillespie":
         rr_model.getIntegrator().nonnegative = True
@@ -87,80 +89,130 @@ def simulate_samples(
     return rr_model.simulate(start_time, end_time, output_rows)
 
 
-def plot_results(
-    simulation_data, img_dir_path="./imgs", img_name="simulation", log_file=None
+def analyze_simulation_variations(
+    target_species_data, original_results, output_dir, log_file=None
 ):
-    """
-    Visualize the simulation results and save the plot to a file.
 
-    Args:
-        simulation_data: NumPy array with simulation results
-        img_dir_path: Directory where to save the image (default: "./imgs")
-        img_name: Name of the image file without extension (default: "simulation")
-    """
-    species_names = simulation_data.colnames[1:]
-    # print(species_names)
+    precision = int(os.getenv("SIMULATION_PREC", "20"))
+    mask_value = 1e-20
+    for target_species, data in target_species_data.items():
+        original_data = data["original"]
+        simulations_data = data["simulations"]
+        time = original_results[:, 0]
+        mask = np.abs(original_data) > mask_value
 
-    # Create directory if it doesn't exist
-    os.makedirs(img_dir_path, exist_ok=True)
+        perturbed_data_list = [sim["results"] for sim in simulations_data]
+        perturbed_array = np.array(
+            perturbed_data_list
+        )  # Shape: (n_simulations, n_time_points)
 
-    # Ensure img_name has .png extension
-    if not img_name.endswith(".png"):
-        img_name = f"{img_name}.png"
+        # End value analysis
+        last_original_value = original_data[-1]
+        last_simulations_values = perturbed_array[
+            :, -1
+        ]  # Get last values from all simulations
 
-    # Combine directory path and filename
-    img_file_path = os.path.join(img_dir_path, img_name)
+        print_log(
+            log_file,
+            f"Analyzing {target_species} with {len(last_simulations_values)} simulations",
+        )
 
-    time = simulation_data[:, 0]
+        # Initialize variations array
+        if np.abs(last_original_value) > mask_value:
+            percents_variations = (
+                (last_simulations_values - last_original_value) / last_original_value
+            ) * 100
+            variation_type = "percent"
+        else:
+            print_log(
+                log_file, "  Last original value near zero - using absolute differences"
+            )
+            percents_variations = last_simulations_values - last_original_value
+            variation_type = "absolute"
 
-    # Create figure with adjusted size to accommodate legend
-    plt.figure(figsize=(12, 8))
+        # Calculate statistics
+        last_value_avg = np.mean(percents_variations)
+        last_value_max = np.max(percents_variations)
+        last_value_min = np.min(percents_variations)
 
-    for i, species in enumerate(species_names):
-        column_idx = i + 1
-        if column_idx < simulation_data.shape[1]:
-            plt.plot(time, simulation_data[:, column_idx], label=species)
+        # Full timeline analysis
+        variations_percentage = np.full_like(perturbed_array, np.nan)
+        for sim_idx, simulation in enumerate(perturbed_array):
+            valid_mask = mask & (np.abs(original_data) > mask_value)
+            variations_percentage[sim_idx, valid_mask] = (
+                (simulation[valid_mask] - original_data[valid_mask])
+                / original_data[valid_mask]
+            ) * 100
 
-    plt.xlabel("Time")
-    plt.ylabel("Concentration")
-    plt.title(f'Simulation: {img_name.replace(".png", "")}')
-    plt.grid(True)
+        # Calculate timeline statistics (automatically ignores NaNs)
+        avg_percentage_variation = np.nanmean(variations_percentage, axis=0)
+        overall_avg = np.nanmean(avg_percentage_variation)
+        max_avg = np.nanmax(avg_percentage_variation)
+        min_avg = np.nanmin(avg_percentage_variation)
 
-    # Calculate the optimal number of columns for the legend
-    # based on the number of species to display
-    num_species = len(species_names)
-    if num_species <= 3:
-        ncols = 1
-    elif num_species <= 8:
-        ncols = 2
-    elif num_species <= 15:
-        ncols = 3
-    elif num_species <= 24:
-        ncols = 4
-    else:
-        # For very large models, increase the number of columns
-        ncols = math.ceil(num_species / 10)
+        # Reporting
+        variation_suffix = "%" if variation_type == "percent" else " units"
+        print_log(log_file, f"  Statistics for {target_species}:")
+        print_log(
+            log_file, f"    - Average overall variation: {overall_avg:.{precision}f}%"
+        )
+        print_log(
+            log_file, f"    - Maximum pointwise increase: {max_avg:.{precision}f}%"
+        )
+        print_log(
+            log_file, f"    - Maximum pointwise decrease: {min_avg:.{precision}f}%"
+        )
+        print_log(
+            log_file,
+            f"    - Final value avg variation: {last_value_avg:.{precision}f}{variation_suffix}",
+        )
+        print_log(
+            log_file,
+            f"    - Final value max variation: {last_value_max:.{precision}f}{variation_suffix}",
+        )
+        print_log(
+            log_file,
+            f"    - Final value min variation: {last_value_min:.{precision}f}{variation_suffix}",
+        )
 
-    # Create a legend with multiple columns, positioned below the graph
-    legend = plt.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.15),
-        ncol=ncols,
-        fontsize="small",
-        frameon=True,
-        fancybox=True,
-        shadow=True,
-    )
+        # Plotting
+        species_dir = os.path.join(output_dir, target_species)
+        os.makedirs(species_dir, exist_ok=True)
 
-    # Dynamically adjust spacing to provide more room for the legend
-    plt.tight_layout()
-    plt.subplots_adjust(bottom=0.2 + 0.02 * math.ceil(num_species / ncols))
+        # Statistical comparison plot
+        mean_values = np.nanmean(perturbed_array, axis=0)
+        std_values = np.nanstd(perturbed_array, axis=0)
+        plt_ut.plot_statistical_comparison(
+            time,
+            original_data,
+            mean_values,
+            std_values,
+            np.nanmin(perturbed_array, axis=0),
+            np.nanmax(perturbed_array, axis=0),
+            target_species,
+            species_dir,
+        )
 
-    # Save the figure with the complete path
-    plt.savefig(img_file_path, bbox_inches="tight")
-    plt.close()  # Close the figure to free memory
+        # Percentage variation plot
+        plt_ut.plot_percentage_variation(
+            time,
+            avg_percentage_variation,
+            variations_percentage,
+            target_species,
+            species_dir,
+        )
 
-    print_log(log_file, f"Plot saved to: {img_file_path}")
+        # Boxplot distribution
+        plt_ut.plot_boxplot_distribution(
+            perturbed_array, time, target_species, species_dir
+        )
+
+        print_log(log_file, f"  Created plots in {species_dir}\n")
+
+
+def simulate_with_steady_state():
+    # TODO
+    pass
 
 
 def pearson_correlation(simulation_data, correlation_threshold=0.5):
