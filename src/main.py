@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from math import log
 import os
 import sys
@@ -52,11 +53,19 @@ def main():
             #
             # rr.reset()
 
-            res = sim_ut.simulate(rr, end_time=100, start_time=0, log_file=log_file)
+            res, ss_time, colnames = sim_ut.simulate(
+                rr,
+                end_time=args.time,
+                start_time=0,
+                log_file=log_file,
+                steady_state=args.steady_state,
+            )
+
+            ut.print_log(log_file, f"Colnames: {colnames}")
 
             # ut.print_log(log_file, rr["[Px]"])
             # ut.print_log(log_file, f"Concentration of Px:\n {res[:, res.colnames.index("[Px]")]}")
-            plt_ut.plot_results(res, args.output, file_name, log_file)
+            plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
 
         elif args.command == "simulate_samples":
             # Load the model
@@ -64,7 +73,7 @@ def main():
             file_name = os.path.basename(args.input_path)
 
             input_species_ids = args.input_species
-            target_species_ids = args.target_species
+            target_species_ids = args.target_ids
 
             # Generate the samples
             samples = sbml_ut.generate_species_samples(
@@ -94,7 +103,7 @@ def main():
             # ut.print_log(log_file, f"Model boundary species: {rr.model.getBoundarySpeciesIds()}")
             # exit(1)
 
-            original_results = sim_ut.simulate(rr, start_time=0, end_time=100)
+            original_results = sim_ut.simulate(rr, start_time=0, end_time=args.time)
 
             samples_simulations_results = (
                 []
@@ -109,7 +118,7 @@ def main():
                         combinations[i],
                         input_species_ids,
                         start_time=0,
-                        end_time=100,
+                        end_time=args.time,
                     )
                 )
 

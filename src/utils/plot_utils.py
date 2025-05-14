@@ -7,7 +7,11 @@ from utils.utils import print_log
 
 
 def plot_results(
-    simulation_data, img_dir_path="./imgs", img_name="simulation", log_file=None
+    simulation_data,
+    colnames,
+    img_dir_path="./imgs",
+    img_name="simulation",
+    log_file=None,
 ):
     """
     Visualize the simulation results and save the plot to a file.
@@ -17,7 +21,7 @@ def plot_results(
         img_dir_path: Directory where to save the image (default: "./imgs")
         img_name: Name of the image file without extension (default: "simulation")
     """
-    species_names = simulation_data.colnames[1:]
+    species_names = colnames
     # print(species_names)
 
     # Create directory if it doesn't exist
@@ -81,11 +85,20 @@ def plot_results(
 
     print_log(log_file, f"Plot saved to: {img_file_path}")
 
-def plot_statistical_comparison(time, original_data, mean_values, std_values, min_values, max_values,
-                               target_species, species_dir):
+
+def plot_statistical_comparison(
+    time,
+    original_data,
+    mean_values,
+    std_values,
+    min_values,
+    max_values,
+    target_species,
+    species_dir,
+):
     """
     Plot the comparison between original data and simulation statistics with confidence intervals.
-    
+
     Args:
         time: Time points array
         original_data: Original simulation data
@@ -97,28 +110,39 @@ def plot_statistical_comparison(time, original_data, mean_values, std_values, mi
         species_dir: Directory to save the plot
     """
     plt.figure(figsize=(12, 8))
-    plt.plot(time, original_data, 'b-', linewidth=2, label='Original')
-    plt.plot(time, mean_values, 'r-', linewidth=2, label='Mean of simulations')
-    plt.fill_between(time, mean_values - std_values, mean_values + std_values,
-                    color='r', alpha=0.2, label='±1 Std Dev')
-    plt.fill_between(time, min_values, max_values, 
-                    color='gray', alpha=0.15, label='Min-Max range')
-    
-    plt.xlabel('Time')
-    plt.ylabel('Concentration')
-    plt.title(f'{target_species} - Original vs Perturbed (125 simulations)')
+    plt.plot(time, original_data, "b-", linewidth=2, label="Original")
+    plt.plot(time, mean_values, "r-", linewidth=2, label="Mean of simulations")
+    plt.fill_between(
+        time,
+        mean_values - std_values,
+        mean_values + std_values,
+        color="r",
+        alpha=0.2,
+        label="±1 Std Dev",
+    )
+    plt.fill_between(
+        time, min_values, max_values, color="gray", alpha=0.15, label="Min-Max range"
+    )
+
+    plt.xlabel("Time")
+    plt.ylabel("Concentration")
+    plt.title(f"{target_species} - Original vs Perturbed (125 simulations)")
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    
-    plt.savefig(os.path.join(species_dir, f"{target_species}_statistical_comparison.png"))
+
+    plt.savefig(
+        os.path.join(species_dir, f"{target_species}_statistical_comparison.png")
+    )
     plt.close()
 
 
-def plot_percentage_variation(time, mean_percent_variation, percent_variations, target_species, species_dir):
+def plot_percentage_variation(
+    time, mean_percent_variation, percent_variations, target_species, species_dir
+):
     """
     Plot the percentage variation from original data.
-    
+
     Args:
         time: Time points array
         mean_percent_variation: Mean percentage variation across simulations
@@ -127,29 +151,36 @@ def plot_percentage_variation(time, mean_percent_variation, percent_variations, 
         species_dir: Directory to save the plot
     """
     plt.figure(figsize=(12, 6))
-    plt.plot(time, mean_percent_variation, 'g-', linewidth=2, label='Mean % variation')
+    plt.plot(time, mean_percent_variation, "g-", linewidth=2, label="Mean % variation")
     # Add standard deviation of the percentage variations
     std_percent = np.std(percent_variations, axis=0)
-    plt.fill_between(time, mean_percent_variation - std_percent, 
-                    mean_percent_variation + std_percent,
-                    color='g', alpha=0.2, label='±1 Std Dev')
-    plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
-    
-    plt.xlabel('Time')
-    plt.ylabel('Variation %')
-    plt.title(f'{target_species} - Percentage Variation from Original')
+    plt.fill_between(
+        time,
+        mean_percent_variation - std_percent,
+        mean_percent_variation + std_percent,
+        color="g",
+        alpha=0.2,
+        label="±1 Std Dev",
+    )
+    plt.axhline(y=0, color="k", linestyle="--", alpha=0.3)
+
+    plt.xlabel("Time")
+    plt.ylabel("Variation %")
+    plt.title(f"{target_species} - Percentage Variation from Original")
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    
+
     plt.savefig(os.path.join(species_dir, f"{target_species}_percentage_variation.png"))
     plt.close()
 
 
-def plot_variations_heatmap(percent_variations, perturbed_data_list, target_species, species_dir):
+def plot_variations_heatmap(
+    percent_variations, perturbed_data_list, target_species, species_dir
+):
     """
     Plot a heatmap of percentage variations across all simulations.
-    
+
     Args:
         percent_variations: Array of percentage variations for all simulations
         perturbed_data_list: List of perturbed simulation data
@@ -161,28 +192,37 @@ def plot_variations_heatmap(percent_variations, perturbed_data_list, target_spec
         step = len(perturbed_data_list) // 50
         sampled_percent_variations = percent_variations[::step, :]
         plt.figure(figsize=(14, 8))
-        plt.imshow(sampled_percent_variations, aspect='auto', cmap='RdBu_r', 
-                  vmin=-50, vmax=50)  # Limit to ±50% for better visualization
-        plt.colorbar(label='Variation %')
-        plt.xlabel('Timepoints')
-        plt.ylabel('Simulation #')
-        plt.title(f'{target_species} - Variation Heatmap (Sample of simulations)')
+        plt.imshow(
+            sampled_percent_variations, aspect="auto", cmap="RdBu_r", vmin=-50, vmax=50
+        )  # Limit to ±50% for better visualization
+        plt.colorbar(label="Variation %")
+        plt.xlabel("Timepoints")
+        plt.ylabel("Simulation #")
+        plt.title(f"{target_species} - Variation Heatmap (Sample of simulations)")
     else:
         plt.figure(figsize=(14, 8))
-        plt.imshow(percent_variations, aspect='auto', cmap='RdBu_r', vmin=-50, vmax=50)
-        plt.colorbar(label='Variation %')
-        plt.xlabel('Timepoints')
-        plt.ylabel('Simulation #')
-        plt.title(f'{target_species} - Variation Heatmap (All simulations)')
-    
+        plt.imshow(percent_variations, aspect="auto", cmap="RdBu_r", vmin=-50, vmax=50)
+        plt.colorbar(label="Variation %")
+        plt.xlabel("Timepoints")
+        plt.ylabel("Simulation #")
+        plt.title(f"{target_species} - Variation Heatmap (All simulations)")
+
     plt.tight_layout()
     plt.savefig(os.path.join(species_dir, f"{target_species}_heatmap.png"))
     plt.close()
 
-def plot_boxplot_distribution(perturbed_array, time, target_species, species_dir, num_timepoints=5, original_data=None):
+
+def plot_boxplot_distribution(
+    perturbed_array,
+    time,
+    target_species,
+    species_dir,
+    num_timepoints=5,
+    original_data=None,
+):
     """
     Create boxplots showing the distribution of simulation values at selected timepoints.
-    
+
     Args:
         perturbed_array: Array containing all simulation results for the species
         time: Time points array
@@ -192,50 +232,61 @@ def plot_boxplot_distribution(perturbed_array, time, target_species, species_dir
         original_data: Optional array with original simulation data (default: None)
     """
     # Select timepoints evenly distributed across the simulation
-    indices = np.linspace(0, len(time)-1, num_timepoints, dtype=int)
+    indices = np.linspace(0, len(time) - 1, num_timepoints, dtype=int)
     selected_times = time[indices]
-    
+
     # Extract data at selected timepoints
     data_at_timepoints = [perturbed_array[:, idx] for idx in indices]
-    
+
     plt.figure(figsize=(12, 8))
-    
+
     # Create boxplot
     box = plt.boxplot(data_at_timepoints, patch_artist=True)
-    
+
     # Customize boxplot colors
-    for patch in box['boxes']:
-        patch.set_facecolor('lightblue')
-        
+    for patch in box["boxes"]:
+        patch.set_facecolor("lightblue")
+
     # Add a line for the legend entry (invisible, just for the legend)
-    plt.plot([], [], 'lightblue', linewidth=10, label='Simulation distribution')
-    
+    plt.plot([], [], "lightblue", linewidth=10, label="Simulation distribution")
+
     # Add original data points if provided
     if original_data is not None:
         original_values = original_data[indices]
-        plt.scatter(range(1, num_timepoints+1), original_values, color='blue', 
-                   marker='o', s=80, label='Original value')
-    
+        plt.scatter(
+            range(1, num_timepoints + 1),
+            original_values,
+            color="blue",
+            marker="o",
+            s=80,
+            label="Original value",
+        )
+
     # Set labels for x-axis with selected time points
-    plt.xticks(range(1, num_timepoints+1), [f't={t:.2f}' for t in selected_times])
-    
-    plt.xlabel('Time')
-    plt.ylabel('Concentration')
-    plt.title(f'{target_species} - Distribution of Values Across Simulations')
+    plt.xticks(range(1, num_timepoints + 1), [f"t={t:.2f}" for t in selected_times])
+
+    plt.xlabel("Time")
+    plt.ylabel("Concentration")
+    plt.title(f"{target_species} - Distribution of Values Across Simulations")
     plt.grid(True, alpha=0.3)
-    
+
     # Add simple legend like in plot_percentage_variation
     plt.legend()
-    
+
     # Add a text with statistics in the corner
     stats_text = "Statistics per timepoint:\n"
     for i, data in enumerate(data_at_timepoints):
         stats_text += f"t={selected_times[i]:.2f}: mean={np.mean(data):.4f}, "
         stats_text += f"std={np.std(data):.4f}\n"
-    
-    plt.figtext(0.02, 0.02, stats_text, fontsize=8, 
-                bbox=dict(facecolor='white', alpha=0.5, boxstyle='round'))
-    
+
+    plt.figtext(
+        0.02,
+        0.02,
+        stats_text,
+        fontsize=8,
+        bbox=dict(facecolor="white", alpha=0.5, boxstyle="round"),
+    )
+
     plt.tight_layout()
     plt.savefig(os.path.join(species_dir, f"{target_species}_boxplot_distribution.png"))
     plt.close()
