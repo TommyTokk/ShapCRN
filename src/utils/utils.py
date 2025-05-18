@@ -40,7 +40,7 @@ def parse_args():
         default="./imgs",
         help="Output directory for plots (default: ./imgs)",
     )
-    # Aggiunta delle opzioni per steady state
+    # Steady state options for simulate
     simulate_parser.add_argument(
         "--steady-state",
         action="store_true",
@@ -68,7 +68,7 @@ def parse_args():
         "--threshold",
         type=float,
         default=1e-6,
-        help="Threshold for steady state detection on fluxes (default: 1e-6)",
+        help="Threshold for steady state detection (default: 1e-6)",
     )
 
     # === SIMULATE_SAMPLES command ===
@@ -90,8 +90,7 @@ def parse_args():
         "-tids",
         "--target_ids",
         nargs="+",
-        # required=True,
-        help="One or more  IDs to check",
+        help="One or more IDs to check",
     )
     simulate_samples_parser.add_argument(
         "-n",
@@ -116,6 +115,37 @@ def parse_args():
         choices=["cvode", "gillespie", "rk4"],
         help="Integrator to use",
     )
+    # Steady state options for simulate_samples
+    simulate_samples_parser.add_argument(
+        "--steady-state",
+        action="store_true",
+        help="Simulate until steady state is reached",
+    )
+    simulate_samples_parser.add_argument(
+        "--max-time",
+        type=float,
+        default=1000,
+        help="Maximum simulation time when seeking steady state (default: 1000)",
+    )
+    simulate_samples_parser.add_argument(
+        "--sim-step",
+        type=float,
+        default=5,
+        help="Time step for steady state check (default: 5)",
+    )
+    simulate_samples_parser.add_argument(
+        "--points",
+        type=int,
+        default=1000,
+        help="Number of points in the final profile (default: 1000)",
+    )
+    simulate_samples_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=1e-6,
+        help="Threshold for steady state detection (default: 1e-6)",
+    )
+
     simulate_samples_parser.add_argument(
         "-o",
         "--output",

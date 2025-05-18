@@ -89,12 +89,21 @@ def simulate(
         return result, ss_time, colnames
     else:
         # Standard simulation
+
+        print_log(log_file, "Normal simulations")
         res = rr_model.simulate(start_time, end_time, output_rows)
         return res, None, res.colnames[1:]
 
 
 def simulate_samples(
-    rr_model, combination, input_species_id, start_time=0, end_time=10, output_rows=100
+    rr_model,
+    combination,
+    input_species_id,
+    start_time=0,
+    end_time=10,
+    output_rows=100,
+    steady_state=False,
+    max_end_time=1000,
 ):
     """
     Simulate the specified model, using the specified input combination
@@ -128,13 +137,30 @@ def simulate_samples(
     # Needed because the .reset() method reset also the simulation selections
     rr_model.selections = current_selections
 
-    return rr_model.simulate(start_time, end_time, output_rows)
+    return simulate(
+        rr_model,
+        start_time,
+        end_time,
+        output_rows,
+        steady_state=steady_state,
+        max_end_time=max_end_time,
+    )
+    # return rr_model.simulate(start_time, end_time, output_rows)
 
 
 def analyze_simulation_variations(
     target_data, original_results, output_dir, log_file=None, target_type=0
 ):
+    """
+    Analizza le variazioni delle simulazioni rispetto ai risultati originali.
 
+    Args:
+        target_data: Dizionario con i dati delle specie target
+        original_results: Risultati della simulazione originale
+        output_dir: Directory di output per i grafici
+        log_file: File di log
+        target_type: Tipo di target (0=specie, 1=reazione)
+    """
     precision = int(os.getenv("SIMULATION_PREC", "20"))
     mask_value = 1e-20
 
@@ -149,10 +175,28 @@ def analyze_simulation_variations(
             print_log(log_file, f"time len: {len(time)}")
             mask = np.abs(original_data) > mask_value
 
+            # Estrai i dati delle simulazioni
             perturbed_data_list = [sim["results"] for sim in simulations_data]
-            perturbed_array = np.array(
-                perturbed_data_list
-            )  # Shape: (n_simulations, n_time_points)
+
+            # Verifica se tutti gli array hanno la stessa lunghezza
+            lengths = [len(sim_data) for sim_data in perturbed_data_list]
+            min_length = min(lengths)
+
+            if not all(length == min_length for length in lengths):
+                print_log(
+                    log_file,
+                    f"Warning: Simulation results have different lengths. Truncating to minimum length: {min_length}",
+                )
+                # Tronca tutti i dati alla lunghezza minima
+                perturbed_data_list = [
+                    sim_data[:min_length] for sim_data in perturbed_data_list
+                ]
+                original_data = original_data[:min_length]
+                time = time[:min_length]
+                mask = mask[:min_length]
+
+            # Converti in array NumPy
+            perturbed_array = np.array(perturbed_data_list)
 
             # End value analysis
             last_original_value = original_data[-1]
@@ -269,6 +313,7 @@ def simulate_with_steady_state(
     points_per_block=100,
     threshold=1e-6,
     monitor_species=None,
+    log_file=None,
 ):
     """
     Simulates a model until steady state is reached using a block-by-block approach.
@@ -299,12 +344,15 @@ def simulate_with_steady_state(
     steady_state_time = None
     colnames = None
 
-    test = rr_model.model.getReactionIds().index("GROWTH")
+    # test = rr_model.model.getReactionIds().index("GROWTH")
 
     while current_time < max_end_time:
-        print(f"Growth Reaction rate: {rr_model.model.getReactionRates()[test]}")
+        # print(f"Growth Reaction rate: {rr_model.model.getReactionRates()[test]}")
         next_time = min(current_time + block_size, max_end_time)
         block_results = rr_model.simulate(current_time, next_time, points_per_block)
+        # TODO: Implement the norm method to stop the simulations
+        # rates = [np.linalg.norm(rates) for rates in rr_model.getRatesOfChange()]
+        # print_log(log_file, f"Derivatives: {rates}")
         all_results.append(block_results)
 
         if current_time == start_time:
@@ -314,7 +362,25 @@ def simulate_with_steady_state(
             # Extract concentrations at the last point
             prev_conc = prev_block[-1, 1 : 1 + len(all_species)]
             curr_conc = block_results[-1, 1 : 1 + len(all_species)]
-            variations = (curr_conc - prev_conc) / prev_conc
+            # Calcolo più robusto delle variazioni
+            variations = np.zeros_like(prev_conc)
+            for i in range(len(prev_conc)):
+                if (
+                    abs(prev_conc[i]) > 1e-12
+                ):  # Soglia per evitare divisioni per numeri molto piccoli
+                    variations[i] = abs((curr_conc[i] - prev_conc[i]) / prev_conc[i])
+                else:
+                    variations[i] = abs(
+                        curr_conc[i] - prev_conc[i]
+                    )  # Usa variazione assoluta
+
+            # Check if indices are valid
+            monitor_idx = [i for i in monitor_idx if i < len(variations)]
+            if not monitor_idx:
+                print("Warning: No valid species to monitor for steady state")
+                monitor_idx = range(min(len(variations), len(all_species)))
+
+            # check steady state using vector norm
 
             # Check steady state for all monitored species
             for idx in monitor_idx:

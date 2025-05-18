@@ -68,12 +68,15 @@ def main():
             plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
 
         elif args.command == "simulate_samples":
+            steady_state = args.steady_state
+            min_ss_time = args.max_time
+            ss_time = args.max_time
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path)
             file_name = os.path.basename(args.input_path)
 
             input_species_ids = args.input_species
-            target_species_ids = args.target_ids
+            target_ids = args.target_ids
 
             # Generate the samples
             samples = sbml_ut.generate_species_samples(
@@ -94,16 +97,30 @@ def main():
                 rr = sim_ut.load_roadrunner_model(sbml_model, log_file)
 
             # Check if some target species are boundary species
-            for ts in target_species_ids:
-                if ts in rr.model.getBoundarySpeciesIds():
-                    rr.selections = rr.selections + [f"[{ts}]"]
+            for ts in target_ids:
+                if ts in rr.model.getReactionIds():
+                    rr.selections = rr.selections + [f"{ts}"]
 
             # ut.print_log(log_file, rr.timeCourseSelections)
             # ut.print_log(log_file, f"Model floating species: {rr.model.getFloatingSpeciesIds()}")
             # ut.print_log(log_file, f"Model boundary species: {rr.model.getBoundarySpeciesIds()}")
             # exit(1)
 
-            original_results = sim_ut.simulate(rr, start_time=0, end_time=args.time)
+            original_results, ss_time, colnames = sim_ut.simulate(
+                rr,
+                start_time=0,
+                end_time=args.time,
+                steady_state=steady_state,
+                max_end_time=args.max_time,
+            )
+
+            min_ss_time = (
+                ss_time
+                if ss_time is not None and ss_time <= min_ss_time
+                else min_ss_time
+            )
+
+            colnames = colnames
 
             samples_simulations_results = (
                 []
@@ -112,21 +129,32 @@ def main():
             for i in range(len(combinations)):
                 ut.print_log(log_file, f"Simulation nr. {i}")
                 # ut.print_log(log_file, f"ACEp' concentration: {rr["ACEp"]}")
-                samples_simulations_results.append(
-                    sim_ut.simulate_samples(
-                        rr,
-                        combinations[i],
-                        input_species_ids,
-                        start_time=0,
-                        end_time=args.time,
-                    )
+                sim_res, ss_time, colnames = sim_ut.simulate_samples(
+                    rr,
+                    combinations[i],
+                    input_species_ids,
+                    start_time=0,
+                    end_time=args.time,
+                    steady_state=steady_state,
+                    max_end_time=args.max_time,
                 )
+                min_ss_time = (
+                    ss_time
+                    if ss_time is not None and ss_time <= min_ss_time
+                    else min_ss_time
+                )
+                ut.print_log(log_file, f"Min time {min_ss_time}")
+                samples_simulations_results.append(sim_res)
+            ut.print_log(log_file, f"Min ss_time: {min_ss_time}")
 
             target_species_data = {}  # Dictionary for species informations
 
-            for ts in target_species_ids:
+            for ts in target_ids:
                 try:
-                    ts_index = original_results.colnames.index(f"[{ts}]")
+                    try:
+                        ts_index = colnames.index(f"[{ts}]")
+                    except:
+                        ts_index = colnames.index(f"{ts}")
 
                     target_species_data[ts] = {
                         "original": original_results[:, ts_index],
@@ -179,6 +207,11 @@ def main():
                         log_file, f"Species {ts} not present in the results: {e}"
                     )
                     continue
+
+            ut.print_log(log_file, f"target_species_data: {target_species_data}")
+            ut.print_log(log_file, f"original_results: {original_results}")
+
+            # TODO: Check the simulation time and cut the excess
 
             # Analyze data
             sim_ut.analyze_simulation_variations(
