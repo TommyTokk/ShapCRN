@@ -89,10 +89,8 @@ def plot_results(
 def plot_statistical_comparison(
     time,
     original_data,
-    mean_values,
-    std_values,
-    min_values,
-    max_values,
+    perturbed_array,
+    avg_rms_variations_percentage,
     target_species,
     species_dir,
 ):
@@ -102,26 +100,20 @@ def plot_statistical_comparison(
     Args:
         time: Time points array
         original_data: Original simulation data
-        mean_values: Mean values across all simulations
-        std_values: Standard deviation across all simulations
-        min_values: Minimum values across all simulations
-        max_values: Maximum values across all simulations
+        rms_variations
         target_species: Name of the species being analyzed
         species_dir: Directory to save the plot
     """
+    max_traces = 125
     plt.figure(figsize=(12, 8))
     plt.plot(time, original_data, "b-", linewidth=2, label="Original")
-    plt.plot(time, mean_values, "r-", linewidth=2, label="Mean of simulations")
     plt.fill_between(
         time,
-        mean_values - std_values,
-        mean_values + std_values,
+        original_data - ((avg_rms_variations_percentage / 100) * original_data),
+        original_data + ((avg_rms_variations_percentage / 100) * original_data),
         color="r",
         alpha=0.2,
-        label="±1 Std Dev",
-    )
-    plt.fill_between(
-        time, min_values, max_values, color="gray", alpha=0.15, label="Min-Max range"
+        label="± avg_rms_variations",
     )
 
     plt.xlabel("Time")
@@ -151,7 +143,7 @@ def plot_percentage_variation(
         species_dir: Directory to save the plot
     """
     plt.figure(figsize=(12, 6))
-    plt.plot(time, mean_percent_variation, "g-", linewidth=2, label="Mean % variation")
+    plt.plot(time, mean_percent_variation, "g-", linewidth=2, label="RMS % variation")
     # Add standard deviation of the percentage variations
     std_percent = np.std(percent_variations, axis=0)
     plt.fill_between(
@@ -289,4 +281,69 @@ def plot_boxplot_distribution(
 
     plt.tight_layout()
     plt.savefig(os.path.join(species_dir, f"{target_species}_boxplot_distribution.png"))
+    plt.close()
+
+
+def plot_all_simulation_traces(
+    time,
+    original_data,
+    perturbed_array,
+    target_species,
+    species_dir,
+    max_traces=125,
+    alpha=0.5,
+):
+    """
+    Plot all simulation traces along with the original simulation for comparison.
+
+    Args:
+        time: Time points array
+        original_data: Original simulation data for the target species
+        perturbed_array: Array of all simulation results (shape: n_simulations, n_timepoints)
+        target_species: Name of the species being analyzed
+        species_dir: Directory to save the plot
+        max_traces: Maximum number of traces to plot to avoid overcrowding (default: 125)
+        alpha: Transparency level for the perturbed traces (default: 0.5)
+    """
+    plt.figure(figsize=(12, 8))
+
+    # Limit the number of traces if there are too many
+    n_simulations = perturbed_array.shape[0]
+    if n_simulations > max_traces:
+        # Sample evenly spaced traces
+        indices = np.linspace(0, n_simulations - 1, max_traces, dtype=int)
+        traces_to_plot = perturbed_array[indices]
+        n_plotted = max_traces
+    else:
+        traces_to_plot = perturbed_array
+        n_plotted = n_simulations
+
+    cmap = plt.cm.viridis  # Altre opzioni: plasma, magma, inferno, cividis
+    colors = [cmap(i / n_plotted) for i in range(n_plotted)]
+
+    # Plot all perturbed traces with different colors
+    for i in range(n_plotted):
+        plt.plot(time, traces_to_plot[i], color=colors[i], alpha=alpha, linewidth=0.8)
+
+    # Add a representative trace for legend
+    plt.plot(
+        [],
+        [],
+        color=colors[0],
+        alpha=0.7,
+        linewidth=1,
+        label=f"Perturbed ({n_simulations} simulations)",
+    )
+
+    # Plot the original trace with emphasis
+    plt.plot(time, original_data, "b-", linewidth=2, label="Original")
+
+    plt.xlabel("Time")
+    plt.ylabel("Concentration")
+    plt.title(f"{target_species} - All Simulation Traces")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(species_dir, f"{target_species}_all_traces.png"))
     plt.close()

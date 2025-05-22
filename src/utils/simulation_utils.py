@@ -1,3 +1,5 @@
+from sys import prefix
+from matplotlib import axis
 import roadrunner as rr
 import libsbml
 import numpy as np
@@ -91,6 +93,7 @@ def simulate(
         # Standard simulation
 
         print_log(log_file, "Normal simulations")
+        print_log(log_file, f"End time: {end_time}")
         res = rr_model.simulate(start_time, end_time, output_rows)
         return res, None, res.colnames[1:]
 
@@ -99,11 +102,11 @@ def simulate_samples(
     rr_model,
     combination,
     input_species_id,
+    max_end_time,
     start_time=0,
     end_time=10,
     output_rows=100,
     steady_state=False,
-    max_end_time=1000,
 ):
     """
     Simulate the specified model, using the specified input combination
@@ -148,7 +151,7 @@ def simulate_samples(
     # return rr_model.simulate(start_time, end_time, output_rows)
 
 
-def analyze_simulation_variations(
+def analyze_simulation_variations(  # TODO: Check correctness
     target_data, original_results, output_dir, log_file=None, target_type=0
 ):
     """
@@ -175,10 +178,10 @@ def analyze_simulation_variations(
             print_log(log_file, f"time len: {len(time)}")
             mask = np.abs(original_data) > mask_value
 
-            # Estrai i dati delle simulazioni
+            # Get data results
             perturbed_data_list = [sim["results"] for sim in simulations_data]
 
-            # Verifica se tutti gli array hanno la stessa lunghezza
+            # check if every simulation has the same length
             lengths = [len(sim_data) for sim_data in perturbed_data_list]
             min_length = min(lengths)
 
@@ -187,7 +190,7 @@ def analyze_simulation_variations(
                     log_file,
                     f"Warning: Simulation results have different lengths. Truncating to minimum length: {min_length}",
                 )
-                # Tronca tutti i dati alla lunghezza minima
+
                 perturbed_data_list = [
                     sim_data[:min_length] for sim_data in perturbed_data_list
                 ]
@@ -195,7 +198,7 @@ def analyze_simulation_variations(
                 time = time[:min_length]
                 mask = mask[:min_length]
 
-            # Converti in array NumPy
+            # Using numpy array
             perturbed_array = np.array(perturbed_data_list)
 
             # End value analysis
@@ -211,7 +214,7 @@ def analyze_simulation_variations(
 
             # Initialize variations array
             if np.abs(last_original_value) > mask_value:
-                percents_variations = (
+                last_value_percents_variations = (
                     (last_simulations_values - last_original_value)
                     / last_original_value
                 ) * 100
@@ -221,83 +224,85 @@ def analyze_simulation_variations(
                     log_file,
                     "  Last original value near zero - using absolute differences",
                 )
-                percents_variations = last_simulations_values - last_original_value
+                last_value_percents_variations = (
+                    last_simulations_values - last_original_value
+                )
                 variation_type = "absolute"
 
             # Calculate statistics
-            last_value_avg = np.mean(percents_variations)
-            last_value_max = np.max(percents_variations)
-            last_value_min = np.min(percents_variations)
+            # print_log(
+            #     log_file,
+            #     f"Last value percent variations: {last_value_percents_variations}",
+            # )
+            last_value_rms_variations = rms_average(
+                last_value_percents_variations, axis=0
+            )
 
-            # Full timeline analysis
+            last_value_std_variations = np.std(
+                last_value_percents_variations, mean=last_value_rms_variations
+            )
+
+            print_log(
+                log_file,
+                f"[{target_species}]Last value variations RMS: {last_value_rms_variations}",
+            )
+            print_log(
+                log_file,
+                f"[{target_species}]Last value variations std: {last_value_std_variations}",
+            )
+
+            # FULL TIME ANALYSIS
+            variations = np.full_like(perturbed_array, np.nan)
             variations_percentage = np.full_like(perturbed_array, np.nan)
 
             valid_mask = mask & (np.abs(original_data) > mask_value)
-            variations_percentage[:, valid_mask] = (
-                (perturbed_array[:, valid_mask] - original_data[valid_mask])
-                / original_data[valid_mask]
-            ) * 100
 
-            # Calculate timeline statistics (automatically ignores NaNs)
-            avg_percentage_variation = np.nanmean(variations_percentage, axis=0)
-            overall_avg = np.nanmean(avg_percentage_variation)
-            max_avg = np.nanmax(avg_percentage_variation)
-            min_avg = np.nanmin(avg_percentage_variation)
+            variations[:, valid_mask] = (
+                perturbed_array[:, valid_mask] - original_data[valid_mask]
+            ) / original_data[
+                valid_mask
+            ]  # Array containing percentage_variations
 
-            # Reporting
-            variation_suffix = "%" if variation_type == "percent" else " units"
-            print_log(log_file, f"  Statistics for {target_species}:")
-            print_log(
-                log_file,
-                f"    - Average overall variation: {overall_avg:.{precision}f}%",
-            )
-            print_log(
-                log_file, f"    - Maximum pointwise increase: {max_avg:.{precision}f}%"
-            )
-            print_log(
-                log_file, f"    - Maximum pointwise decrease: {min_avg:.{precision}f}%"
-            )
-            print_log(
-                log_file,
-                f"    - Final value avg variation: {last_value_avg:.{precision}f}{variation_suffix}",
-            )
-            print_log(
-                log_file,
-                f"    - Final value max variation: {last_value_max:.{precision}f}{variation_suffix}",
-            )
-            print_log(
-                log_file,
-                f"    - Final value min variation: {last_value_min:.{precision}f}{variation_suffix}",
+            variations_percentage = variations * 100
+
+            variations_percentage_rms = rms_average(variations_percentage, axis=0)
+
+            # print_log(
+            #     log_file, f"Variation percentage rms: {variations_percentage_rms}"
+            # )
+
+            avg_variations_percentage_rms = np.mean(variations_percentage_rms)
+            std_variations_percentage_rms = np.std(
+                variations_percentage, mean=avg_variations_percentage_rms
             )
 
-            # Plotting
+            print_log(
+                log_file,
+                f"[{target_species}]Std variation percentage RMS: {std_variations_percentage_rms:.{precision}f}%",
+            )
+            print_log(
+                log_file,
+                f"[{target_species}]Average variations percentage RMS:±{avg_variations_percentage_rms:.{precision}f}%",
+            )
+
+            # plotting
             species_dir = os.path.join(output_dir, target_species)
             os.makedirs(species_dir, exist_ok=True)
 
-            # Statistical comparison plot
-            mean_values = np.nanmean(perturbed_array, axis=0)
-            std_values = np.nanstd(perturbed_array, axis=0)
+            # plotting simulations comparison
+            plt_ut.plot_all_simulation_traces(
+                time, original_data, perturbed_array, target_species, species_dir
+            )
+
             plt_ut.plot_statistical_comparison(
                 time,
                 original_data,
-                mean_values,
-                std_values,
-                np.nanmin(perturbed_array, axis=0),
-                np.nanmax(perturbed_array, axis=0),
+                perturbed_array,
+                avg_variations_percentage_rms,
                 target_species,
                 species_dir,
             )
 
-            # Percentage variation plot
-            plt_ut.plot_percentage_variation(
-                time,
-                avg_percentage_variation,
-                variations_percentage,
-                target_species,
-                species_dir,
-            )
-
-            # Boxplot distribution
             plt_ut.plot_boxplot_distribution(
                 perturbed_array, time, target_species, species_dir
             )
@@ -309,12 +314,12 @@ def simulate_with_steady_state(
     rr_model,
     start_time=0,
     max_end_time=1000,
-    block_size=20,
+    block_size=10,
     points_per_block=100,
     threshold=1e-6,
     monitor_species=None,
     log_file=None,
-):
+):  # TODO: Make it more efficient
     """
     Simulates a model until steady state is reached using a block-by-block approach.
 
@@ -338,41 +343,44 @@ def simulate_with_steady_state(
     # Precompute indices to monitor
     monitor_idx = [all_species.index(s) for s in monitor_species]
 
+    # Prepare column names (including 'time')
+    colnames = rr_model.timeCourseSelections.copy()
+
     current_time = start_time
     all_results = []
     prev_block = None
     steady_state_time = None
-    colnames = None
-
+    steady_blocks_count = 0
+    initial_block_size = block_size
+    zero_tol = 1e-12
+    consecutive_checks = 2
+    max_block_size = 50
     # test = rr_model.model.getReactionIds().index("GROWTH")
 
     while current_time < max_end_time:
         # print(f"Growth Reaction rate: {rr_model.model.getReactionRates()[test]}")
         next_time = min(current_time + block_size, max_end_time)
+        print_log(log_file, f"Next time: {next_time}")
+        print_log(log_file, f"block_size: {block_size}")
         block_results = rr_model.simulate(current_time, next_time, points_per_block)
-        # TODO: Implement the norm method to stop the simulations
-        # rates = [np.linalg.norm(rates) for rates in rr_model.getRatesOfChange()]
-        # print_log(log_file, f"Derivatives: {rates}")
         all_results.append(block_results)
-
-        if current_time == start_time:
-            colnames = block_results.colnames[1:]
 
         if prev_block is not None:
             # Extract concentrations at the last point
             prev_conc = prev_block[-1, 1 : 1 + len(all_species)]
             curr_conc = block_results[-1, 1 : 1 + len(all_species)]
-            # Calcolo più robusto delle variazioni
+
             variations = np.zeros_like(prev_conc)
-            for i in range(len(prev_conc)):
-                if (
-                    abs(prev_conc[i]) > 1e-12
-                ):  # Soglia per evitare divisioni per numeri molto piccoli
-                    variations[i] = abs((curr_conc[i] - prev_conc[i]) / prev_conc[i])
-                else:
-                    variations[i] = abs(
-                        curr_conc[i] - prev_conc[i]
-                    )  # Usa variazione assoluta
+            small_mask = np.abs(prev_conc) < zero_tol
+            # absolute change where prev is near zero
+            variations[small_mask] = np.abs(
+                curr_conc[small_mask] - prev_conc[small_mask]
+            )
+            # relative elsewhere
+            variations[~small_mask] = np.abs(
+                (curr_conc[~small_mask] - prev_conc[~small_mask])
+                / prev_conc[~small_mask]
+            )
 
             # Check if indices are valid
             monitor_idx = [i for i in monitor_idx if i < len(variations)]
@@ -380,31 +388,45 @@ def simulate_with_steady_state(
                 print("Warning: No valid species to monitor for steady state")
                 monitor_idx = range(min(len(variations), len(all_species)))
 
-            # check steady state using vector norm
+            is_steady = False
 
             # Check steady state for all monitored species
             for idx in monitor_idx:
-                if abs(variations[idx]) >= threshold:
+                print_log(log_file, f"Variation: {variations[idx] < 1e-4}")
+                if variations[idx] < 1e-4:
+                    is_steady = True
+                else:
+                    is_steady = False
+                    break
+
+            print_log(log_file, f"Is Steady: {is_steady}")
+
+            if is_steady:
+                steady_blocks_count += 1
+                print_log(log_file, f"Steady block at time {current_time}")
+
+                if steady_blocks_count >= consecutive_checks:
+                    steady_state_time = next_time
                     break
             else:
-                # No species has exceeded the threshold
-                steady_state_time = next_time
+                steady_blocks_count = 0
 
-                # Break the loop without further blocks
-                break
+        if steady_blocks_count <= consecutive_checks:
+            block_size = max(initial_block_size, block_size * 0.8)
+        else:
+            block_size = min(block_size * 1.2, max_block_size)
 
         prev_block = block_results
         current_time = next_time
 
-    # Concatenate blocks removing duplicates
-    if len(all_results) > 1:
+    # Concatenate, dropping duplicate boundary rows
+    if not all_results:
+        full_results = np.empty((0, len(colnames)))
+    else:
         for i in range(1, len(all_results)):
+            # Drop first row of each subsequent block
             all_results[i] = all_results[i][1:]
         full_results = np.vstack(all_results)
-    else:
-        full_results = (
-            all_results[0] if all_results else np.empty((0, 1 + len(all_species)))
-        )
 
     return full_results, steady_state_time, colnames
 
@@ -430,3 +452,164 @@ def pearson_correlation(simulation_data, correlation_threshold=0.5):
     correlation_matrix = np.corrcoef(species_data, rowvar=False)
 
     return correlation_matrix
+
+
+def rms_average(array, axis):
+    """
+    Calculate Root Mean Square average, which emphasizes larger values.
+
+    Parameters:
+    -----------
+    array : numpy.ndarray
+        Array of shape (n_simulations, n_timepoints) with perturbed simulations
+    axis: Axis to consider
+
+    Returns:
+    --------
+    numpy.ndarray
+        RMS average
+    """
+    # Square all values, take mean, then take square root
+    result = np.sqrt(np.nanmean(np.square(array), axis=axis))
+
+    return result
+
+
+def log_transform_average(simulations, epsilon=1e-10):
+    """
+    Average simulations using log-transform to handle multiplicative perturbations.
+
+    Parameters:
+    -----------
+    simulations : numpy.ndarray
+        Array of shape (m, n) with m simulations and n timepoints
+    epsilon : float
+        Small value to avoid log(0)
+
+    Returns:
+    --------
+    numpy.ndarray
+        Log-transform averaged simulation of shape (n,)
+    """
+    # Add small epsilon to avoid log(0) issues
+    safe_simulations = simulations + epsilon
+
+    # Log-transform the data
+    log_simulations = np.log(safe_simulations)
+
+    # Calculate mean in log space
+    mean_log = np.mean(log_simulations, axis=0)
+
+    # Transform back to original space
+    mean_simulation = np.exp(mean_log)
+
+    return mean_simulation
+
+
+def plot_variation_range(
+    time,
+    original_data,
+    perturbed_array,
+    target_species,
+    species_dir,
+):
+    """
+    Plot the range of variation using the actual simulations with smallest and largest values.
+
+    Args:
+        time: Time points array
+        original_data: Original simulation data for the target species
+        perturbed_array: Array of all simulation results (shape: n_simulations, n_timepoints)
+        target_species: Name of the species being analyzed
+        species_dir: Directory to save the plot
+    """
+    plt.figure(figsize=(12, 8))
+
+    # Identifica le simulazioni con valori più piccoli e più grandi
+    # Utilizziamo la media di ogni simulazione come criterio
+    simulation_means = np.mean(perturbed_array, axis=1)
+    min_sim_idx = np.argmin(simulation_means)
+    max_sim_idx = np.argmax(simulation_means)
+
+    # Estrai le simulazioni complete con valori minimi e massimi
+    min_simulation = perturbed_array[min_sim_idx]
+    max_simulation = perturbed_array[max_sim_idx]
+
+    # Plot del range come area riempita tra le due simulazioni
+    plt.fill_between(
+        time,
+        min_simulation,
+        max_simulation,
+        color="lightblue",
+        alpha=0.5,
+        label="Simulation Range",
+    )
+
+    # Plot delle simulazioni minima e massima come linee
+    plt.plot(time, min_simulation, "b-", linewidth=1, alpha=0.7, label="Min Simulation")
+    plt.plot(time, max_simulation, "b-", linewidth=1, alpha=0.7, label="Max Simulation")
+
+    # Plot dei dati originali
+    plt.plot(time, original_data, "r-", linewidth=2.5, label="Original")
+
+    # Aggiungi etichette e titoli
+    plt.xlabel("Time")
+    plt.ylabel("Concentration")
+    plt.title(f"{target_species} - Simulation Variation Range")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+
+    # Aggiungi il numero di simulazioni come annotazione
+    n_simulations = perturbed_array.shape[0]
+    plt.figtext(
+        0.02,
+        0.02,
+        f"Based on {n_simulations} simulations\nShowing simulations with smallest and largest average values",
+        fontsize=10,
+        bbox=dict(facecolor="white", alpha=0.8, boxstyle="round"),
+    )
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(species_dir, f"{target_species}_variation_range.png"))
+    plt.close()
+
+
+def geometric_mean_variation(perturbed_array, original_data):
+    """
+    Calcola la variazione media usando una trasformazione logaritmica,
+    che gestisce correttamente variazioni percentuali opposte come +10% e -10%.
+
+    Esempio:
+    +10% (moltiplicatore 1.1) e -10% (moltiplicatore 0.9) hanno una media geometrica di 0.995,
+    che corrisponde meglio alla realtà rispetto alla media aritmetica di 1.
+    """
+    # Converti le variazioni percentuali in moltiplicatori
+    ratios = perturbed_array / original_data
+
+    # Calcola la media logaritmica
+    log_ratios = np.log(ratios)
+    mean_log_ratio = np.nanmean(log_ratios, axis=0)
+
+    # Riconverti in percentuale
+    return (np.exp(mean_log_ratio) - 1) * 100
+
+
+def analyze_directional_variations(variations_percentage):
+    """
+    analyze directional variations
+    """
+
+    pos_variations = []
+    neg_variations = []
+
+    for variations in variations_percentage:
+        for vp in variations:
+            if vp is not None and vp >= 0:
+                pos_variations.append(vp)
+            else:
+                neg_variations.append(vp)
+
+    mean_pos = np.nanmean(pos_variations)
+    mean_neg = np.nanmean(neg_variations)
+
+    return mean_pos, mean_neg

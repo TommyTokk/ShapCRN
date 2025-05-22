@@ -143,9 +143,11 @@ def main():
                     if ss_time is not None and ss_time <= min_ss_time
                     else min_ss_time
                 )
-                ut.print_log(log_file, f"Min time {min_ss_time}")
+                if args.steady_state:
+                    ut.print_log(log_file, f"Min time {min_ss_time}")
                 samples_simulations_results.append(sim_res)
-            ut.print_log(log_file, f"Min ss_time: {min_ss_time}")
+            if args.steady_state:
+                ut.print_log(log_file, f"Min ss_time: {min_ss_time}")
 
             target_species_data = {}  # Dictionary for species informations
 
@@ -207,9 +209,6 @@ def main():
                         log_file, f"Species {ts} not present in the results: {e}"
                     )
                     continue
-
-            ut.print_log(log_file, f"target_species_data: {target_species_data}")
-            ut.print_log(log_file, f"original_results: {original_results}")
 
             # TODO: Check the simulation time and cut the excess
 

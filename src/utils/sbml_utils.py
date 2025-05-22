@@ -466,7 +466,7 @@ def get_sbml_as_xml(model, log_file=None):
 # TODO: CHECK THIS PART
 def generate_species_samples(
     sbml_model,
-    target_species=["ACEx", "GLCx", "P"],
+    target_species=["ACEx", "GLCx", "Px"],
     log_file=None,
     n_samples=5,
     variation=20,
