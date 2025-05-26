@@ -454,7 +454,7 @@ def pearson_correlation(simulation_data, correlation_threshold=0.5):
     return correlation_matrix
 
 
-def rms_average(array, axis):
+def rms_average(array, axis=1):
     """
     Calculate Root Mean Square average, which emphasizes larger values.
 

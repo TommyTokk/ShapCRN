@@ -1,3 +1,4 @@
+from math import prod
 import sys
 from libsbml import *
 import json
@@ -111,7 +112,7 @@ def species_dict_list(species_list):
     return [s.to_dict() for s in species_list]
 
 
-def inhibit_species(sbml_model, target_species_id, log_file=None):
+def knockout_species(sbml_model, target_species_id, log_file=None):
     """
     Removes a species from the products of reactions and sets its initial concentration to 0.
 
@@ -123,88 +124,92 @@ def inhibit_species(sbml_model, target_species_id, log_file=None):
         Model: Updated SBML model with the inhibited species
     """
 
-    in_rules = False
-
-    # For each Rules in the model, pin the rules to remove
-    for rule in sbml_model.getListOfRules():
-        # TODO: Ask if it's a correct approach to set the math to 0
-        # if rule.isAssignment():
-        if rule.getVariable() == target_species_id:  # Found the updating rule
-            in_rules = True
-            # Set the math of the target_species costant to 0.0
-            # Create the new ASTNode as REAL
-            zero_ast = ASTNode(AST_REAL)
-            # Set the value of the node
-            zero_ast.setValue(0.0)
-            # Change the math of the node
-            rule.setMath(zero_ast)
-
-    reactions_to_inhibit = []
-
-    if not in_rules:
-        print_log(
-            log_file,
-            f"Species {target_species_id} not found in rules, looking in reactions...",
-        )
-        # For each reaction in the model
-        for reaction in sbml_model.getListOfReactions():
-            # If the reaction has products
-            # TODO: Notify the changes
-            if reaction.getNumProducts() > 0:
-                # Identify the products to remove
-                products_to_remove = []
-
-                # Collect the IDs of products to remove
-                for i in range(reaction.getNumProducts()):
-                    product = reaction.getProduct(i)
-                    if product.getSpecies() == target_species_id:
-                        products_to_remove.append(product.getSpecies())
-
-                # Remove the identified products
-                for product_id in products_to_remove:
-                    reaction.removeProduct(product_id)
-            # Collecting all the reaction that has only the target_species as product
-            if reaction.getNumProducts() == 0:
-                reactions_to_inhibit.append(reaction.getId())
-
-            # Removing the species also from reactants to avoid errors
-            # During the simulation numerical errors accumulate and make the concentration not 0
-            if reaction.getNumReactants() > 0:
-                reactants_to_remove = []
-
-                for i in range(reaction.getNumReactants()):
-                    reactant = reaction.getReactant(i)
-                    if reactant.getSpecies() == target_species_id:
-                        reactants_to_remove.append(reactant.getSpecies())
-                # Remove the identified reactants
-                for reactant_id in reactants_to_remove:
-                    reaction.removeReactant(reactant_id)
-
-            if reaction.getNumReactants() == 0:
-                reactions_to_inhibit.append(reaction.getId())
-
-        # TODO: Ask for wich approach is better
-        # V1: Only removes the species from the products list without inhibiting the reaction
-        #       (iff the species was the only product)
-        #      - In this case reactants concentrations keeps decreasing
-        #
-        # V2: After removing the species from the product list, if the species was the only product,
-        #       also inhibit the reaction
-
-        if True:  # False to exec V1, True to exec V2
-            for reaction in reactions_to_inhibit:
-                sbml_model = inhibit_reaction(sbml_model, reaction, log_file)
-
-    # Set the initial concentration to 0.0
-    for species in sbml_model.getListOfSpecies():
-        if species.getId() == target_species_id:
-            result = species.setInitialConcentration(0.0)
-            # result = species.setConstant(True)
-            # print_log(log_file, f"result:{result}")
-            if result == LIBSBML_OPERATION_FAILED:
-                exit(f"Error setting concentration for {species.getId()}")
-
-    return sbml_model
+    # TODO: Search for forward reactions that has the target species as reagents and delete them
+    # TODO: Search for reverse reactions that has the target species as product and delete the species from the product's list
+    # TODO: Recreate the model
+    pass
+    # in_rules = False
+    #
+    # # For each Rules in the model, pin the rules to remove
+    # for rule in sbml_model.getListOfRules():
+    #     # TODO: Ask if it's a correct approach to set the math to 0
+    #     # if rule.isAssignment():
+    #     if rule.getVariable() == target_species_id:  # Found the updating rule
+    #         in_rules = True
+    #         # Set the math of the target_species costant to 0.0
+    #         # Create the new ASTNode as REAL
+    #         zero_ast = ASTNode(AST_REAL)
+    #         # Set the value of the node
+    #         zero_ast.setValue(0.0)
+    #         # Change the math of the node
+    #         rule.setMath(zero_ast)
+    #
+    # reactions_to_inhibit = []
+    #
+    # if not in_rules:
+    #     print_log(
+    #         log_file,
+    #         f"Species {target_species_id} not found in rules, looking in reactions...",
+    #     )
+    #     # For each reaction in the model
+    #     for reaction in sbml_model.getListOfReactions():
+    #         # If the reaction has products
+    #         # TODO: Notify the changes
+    #         if reaction.getNumProducts() > 0:
+    #             # Identify the products to remove
+    #             products_to_remove = []
+    #
+    #             # Collect the IDs of products to remove
+    #             for i in range(reaction.getNumProducts()):
+    #                 product = reaction.getProduct(i)
+    #                 if product.getSpecies() == target_species_id:
+    #                     products_to_remove.append(product.getSpecies())
+    #
+    #             # Remove the identified products
+    #             for product_id in products_to_remove:
+    #                 reaction.removeProduct(product_id)
+    #         # Collecting all the reaction that has only the target_species as product
+    #         if reaction.getNumProducts() == 0:
+    #             reactions_to_inhibit.append(reaction.getId())
+    #
+    #         # Removing the species also from reactants to avoid errors
+    #         # During the simulation numerical errors accumulate and make the concentration not 0
+    #         if reaction.getNumReactants() > 0:
+    #             reactants_to_remove = []
+    #
+    #             for i in range(reaction.getNumReactants()):
+    #                 reactant = reaction.getReactant(i)
+    #                 if reactant.getSpecies() == target_species_id:
+    #                     reactants_to_remove.append(reactant.getSpecies())
+    #             # Remove the identified reactants
+    #             for reactant_id in reactants_to_remove:
+    #                 reaction.removeReactant(reactant_id)
+    #
+    #         if reaction.getNumReactants() == 0:
+    #             reactions_to_inhibit.append(reaction.getId())
+    #
+    #     # TODO: Ask for wich approach is better
+    #     # V1: Only removes the species from the products list without inhibiting the reaction
+    #     #       (iff the species was the only product)
+    #     #      - In this case reactants concentrations keeps decreasing
+    #     #
+    #     # V2: After removing the species from the product list, if the species was the only product,
+    #     #       also inhibit the reaction
+    #
+    #     if True:  # False to exec V1, True to exec V2
+    #         for reaction in reactions_to_inhibit:
+    #             sbml_model = inhibit_reaction(sbml_model, reaction, log_file)
+    #
+    # # Set the initial concentration to 0.0
+    # for species in sbml_model.getListOfSpecies():
+    #     if species.getId() == target_species_id:
+    #         result = species.setInitialConcentration(0.0)
+    #         # result = species.setConstant(True)
+    #         # print_log(log_file, f"result:{result}")
+    #         if result == LIBSBML_OPERATION_FAILED:
+    #             exit(f"Error setting concentration for {species.getId()}")
+    #
+    # return sbml_model
 
 
 # ============
@@ -301,7 +306,32 @@ def print_reactions_as_json(reactions_list):
     dict_pretty_print(reactions_dict)
 
 
-def inhibit_reaction(sbml_model, target_reaction_id, log_file=None):
+def split_reversible_reactions(sbml_model, equilibrium_costant, log_file=None):
+    reactions = sbml_model.getListOfReactions()
+    for reaction in reactions:
+        is_reversible = reaction.getReversible()
+
+        reaction_id = reaction.getId()
+        reaction_name = reaction.getName()
+
+        if is_reversible:
+            reagents = reaction.getListOfReactants()
+            products = reaction.getListOfProducts()
+
+            reverse_reaction_id = reaction_id + "_rev"
+            reverse_reaction_name = reaction_name + "_rev"
+
+            print_log(log_file, f"{reverse_reaction_id}, {reverse_reaction_name}")
+
+            reverse_reaction_reagents = products
+            reverse_reaction_products = reagents
+
+            # TODO: Create the reverse reaction
+            # TODO: Add the reverse reaction to the model
+            # TODO: Regenerate the model
+
+
+def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
     """
     Set the kinetic law of the reaction to 0 in the SBML model and return the updated model.
 

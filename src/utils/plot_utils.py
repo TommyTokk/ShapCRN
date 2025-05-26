@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 import math
+from networkx.algorithms.bipartite import color
 import numpy as np
 
 from utils.utils import print_log
@@ -115,6 +116,11 @@ def plot_statistical_comparison(
         alpha=0.2,
         label="± avg_rms_variations",
     )
+
+    min = np.min(perturbed_array, axis=0)
+    max = np.max(perturbed_array, axis=0)
+
+    plt.fill_between(time, min, max, color="grey", alpha=0.2, label="Min-Max")
 
     plt.xlabel("Time")
     plt.ylabel("Concentration")

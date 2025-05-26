@@ -33,6 +33,10 @@ def main():
             sbml_model = sbml_ut.load_model(args.input_path)
             file_name = os.path.basename(args.input_path)
 
+            sbml_ut.split_reversible_reactions(sbml_model, log_file)
+
+            exit(1)
+
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
             # Load and simulate
@@ -59,6 +63,7 @@ def main():
                 start_time=0,
                 log_file=log_file,
                 steady_state=args.steady_state,
+                max_end_time=args.max_time,
             )
 
             ut.print_log(log_file, f"Colnames: {colnames}")
