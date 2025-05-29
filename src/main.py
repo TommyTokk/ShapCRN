@@ -4,10 +4,12 @@ import os
 import sys
 import networkx as nx
 import matplotlib.pyplot as plt
+from numpy._typing import _UnknownType
 import roadrunner
 import libsbml
 import numpy as np
 from dotenv import load_dotenv
+
 
 # Add the src folder path to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,9 +35,8 @@ def main():
             sbml_model = sbml_ut.load_model(args.input_path)
             file_name = os.path.basename(args.input_path)
 
-            sbml_ut.split_reversible_reactions(sbml_model, log_file)
-
-            exit(1)
+            # sbml_ut.split_reversible_reactions(sbml_model, log_file)
+            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
@@ -83,10 +84,11 @@ def main():
             input_species_ids = args.input_species
             target_ids = args.target_ids
 
+            # TODO: Check this part
             # Generate the samples
             samples = sbml_ut.generate_species_samples(
                 sbml_model,
-                input_species_ids,
+                target_species=input_species_ids,
                 log_file=log_file,
                 n_samples=args.num_samples,
                 variation=args.variation,
@@ -225,6 +227,9 @@ def main():
         elif args.command == "inhibit_species":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path)
+
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+
             file_name = os.path.basename(args.input_path)
 
             # FOR DEBUG
@@ -236,7 +241,7 @@ def main():
             )
 
             # Inhibit the species
-            modified_model = sbml_ut.inhibit_species(
+            modified_model = sbml_ut.knockout_species(
                 sbml_model, args.species_id, log_file
             )
             operation_name = f"no_species_{args.species_id}"
@@ -298,7 +303,7 @@ def main():
             )
 
             # Inhibit the reaction
-            modified_model = sbml_ut.inhibit_reaction(
+            modified_model = sbml_ut.knockout_reaction(
                 sbml_model, args.reaction_id, log_file
             )
             operation_name = f"no_reaction_{args.reaction_id}"

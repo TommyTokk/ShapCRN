@@ -1,3 +1,4 @@
+import enum
 from sys import prefix
 from matplotlib import axis
 import roadrunner as rr
@@ -411,10 +412,10 @@ def simulate_with_steady_state(
             else:
                 steady_blocks_count = 0
 
-        if steady_blocks_count <= consecutive_checks:
-            block_size = max(initial_block_size, block_size * 0.8)
+        if steady_blocks_count > consecutive_checks:
+            block_size = min(initial_block_size, block_size * 1.2)
         else:
-            block_size = min(block_size * 1.2, max_block_size)
+            block_size = max(block_size * 0.5, max_block_size)
 
         prev_block = block_results
         current_time = next_time
@@ -592,6 +593,61 @@ def geometric_mean_variation(perturbed_array, original_data):
 
     # Riconverti in percentuale
     return (np.exp(mean_log_ratio) - 1) * 100
+
+
+def keq_from_equilibrium_concentrations(
+    self, reactant_concs, product_concs, stoichiometry=None
+):
+    """
+    Calculate Keq from equilibrium concentrations
+    For reaction: aA + bB ⇌ cC + dD
+    Keq = ([C]^c * [D]^d) / ([A]^a * [B]^b)
+
+    Args:
+        reactant_concs: List of reactant concentrations at equilibrium
+        product_concs: List of product concentrations at equilibrium
+        stoichiometry: Dict with stoichiometric coefficients
+                      e.g., {'reactants': [1, 1], 'products': [1, 1]}
+
+    Returns:
+        Equilibrium constant
+    """
+    if stoichiometry is None:
+        stoichiometry = {
+            "reactants": [1] * len(reactant_concs),
+            "products": [1] * len(product_concs),
+        }
+
+    # Calculate numerator (products)
+    numerator = 1
+    for i, conc in enumerate(product_concs):
+        numerator *= conc ** stoichiometry["products"][i]
+
+    # Calculate denominator (reactants)
+    denominator = 1
+    for i, conc in enumerate(reactant_concs):
+        denominator *= conc ** stoichiometry["reactants"][i]
+
+    keq = numerator / denominator
+    return keq
+
+
+# def get_concentrations_at_equilibrium(rr_model, species=None, log_file=None):
+#
+#     floating_species = rr_model.model.getFloatingSpeciesIds()
+#     bounded_species = rr_model.model.getBoundarySpeciesIds()
+#     tot_species = [f"[{s}]" for s in (floating_species + bounded_species)]
+#
+#     rr_model.steadyStateSelections = tot_species
+#
+#     rr_model.conservedMoietyAnalysis = True
+#     steady_state = rr_model.steadyState()
+#
+#     steady_state_concentrations = rr_model.getSteadyStateValuesNamedArray()
+#
+#     print_log(log_file, f"{steady_state_concentrations.colnames}")
+#
+#     # TODO: Return an object <species_id, steady_state_concentrations>
 
 
 def analyze_directional_variations(variations_percentage):
