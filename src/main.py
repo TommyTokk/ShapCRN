@@ -36,7 +36,7 @@ def main():
             file_name = os.path.basename(args.input_path)
 
             # sbml_ut.split_reversible_reactions(sbml_model, log_file)
-            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
@@ -67,7 +67,7 @@ def main():
                 max_end_time=args.max_time,
             )
 
-            ut.print_log(log_file, f"Colnames: {colnames}")
+            # ut.print_log(log_file, f"Colnames: {colnames}")
 
             # ut.print_log(log_file, rr["[Px]"])
             # ut.print_log(log_file, f"Concentration of Px:\n {res[:, res.colnames.index("[Px]")]}")
@@ -224,7 +224,7 @@ def main():
                 target_species_data, original_results, args.output, log_file
             )
 
-        elif args.command == "inhibit_species":
+        elif args.command == "knockout_species":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path)
 
@@ -237,7 +237,8 @@ def main():
             #     sbml_ut.check_presence(sbml_model, specie.getId(), log_file)
 
             ut.print_log(
-                log_file, f"Inhibiting species {args.species_id} in model: {file_name}"
+                log_file,
+                f"Knocking out species {args.species_id} in model: {file_name}",
             )
 
             # Inhibit the species
@@ -292,14 +293,14 @@ def main():
             # res_modified = sim_ut.simulate(rr_modified)
             # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
 
-        elif args.command == "inhibit_reaction":
+        elif args.command == "knockout_reaction":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path)
             file_name = os.path.basename(args.input_path)
 
             ut.print_log(
                 log_file,
-                f"Inhibiting reaction {args.reaction_id} in model: {file_name}",
+                f"Knocking out reaction {args.reaction_id} in model: {file_name}",
             )
 
             # Inhibit the reaction

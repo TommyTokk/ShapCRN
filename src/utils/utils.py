@@ -1,5 +1,5 @@
 import datetime
-import numpy as np
+
 import json
 
 
@@ -153,34 +153,34 @@ def parse_args():
         help="Output directory for plots (default: ./imgs/samples)",
     )
 
-    # === INHIBIT_SPECIES command ===
-    inhibit_species_parser = subparsers.add_parser(
-        "inhibit_species", help="Inhibit a species in the model"
+    # === KNOCKOUT_SPECIES command ===
+    knockout_species_parser = subparsers.add_parser(
+        "knockout_species", help="Knockout a species in the model"
     )
-    inhibit_species_parser.add_argument(
+    knockout_species_parser.add_argument(
         "input_path", help="Path to the SBML model file"
     )
-    inhibit_species_parser.add_argument(
+    knockout_species_parser.add_argument(
         "species_id", help="ID of the species to inhibit"
     )
-    inhibit_species_parser.add_argument(
+    knockout_species_parser.add_argument(
         "-o",
         "--output",
         default="./imgs",
         help="Output directory for plots (default: ./imgs)",
     )
 
-    # === INHIBIT_REACTION command ===
-    inhibit_reaction_parser = subparsers.add_parser(
-        "inhibit_reaction", help="Inhibit a reaction in the model"
+    # === KNOCKOUT_REACTION command ===
+    knockout_reaction_parser = subparsers.add_parser(
+        "knockout_reaction", help="Knockout a reaction in the model"
     )
-    inhibit_reaction_parser.add_argument(
+    knockout_reaction_parser.add_argument(
         "input_path", help="Path to the SBML model file"
     )
-    inhibit_reaction_parser.add_argument(
+    knockout_reaction_parser.add_argument(
         "reaction_id", help="ID of the reaction to inhibit"
     )
-    inhibit_reaction_parser.add_argument(
+    knockout_reaction_parser.add_argument(
         "-o",
         "--output",
         default="./imgs",
@@ -211,8 +211,8 @@ def parse_args():
     for subparser in [
         simulate_parser,
         simulate_samples_parser,
-        inhibit_species_parser,
-        inhibit_reaction_parser,
+        knockout_species_parser,
+        knockout_reaction_parser,
     ]:
         subparser.add_argument("-l", "--log", help="Path to log file")
 

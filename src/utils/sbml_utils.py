@@ -1,9 +1,5 @@
-from math import prod
 import os
-import sys
 
-from matplotlib.pyplot import get
-from classes import product
 import libsbml
 import json
 import numpy as np
@@ -12,13 +8,9 @@ import itertools
 from src.classes.species import Species
 from src.classes.reaction import Reaction
 from src.classes.function import Function
-from src.classes.reagent import Reagent
-from src.classes.product import Product
+
 
 from src.utils.utils import print_log
-from utils.simulation_utils import (
-    load_roadrunner_model,
-)
 
 
 def load_model(model_file_path):
@@ -156,10 +148,13 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
         )
 
         # For each reaction in the model
-        # FIX: Something bad happens here
         for reaction in sbml_model.getListOfReactions():
             if "forward" in reaction.getId():
-                reactions_to_knockout.append(reaction.getId())
+                if reaction.getNumReactants() > 0:
+                    for i in range(reaction.getNumReactants()):
+                        reactant = reaction.getReactant(i).getSpecies()
+                        if target_species_id == reactant:
+                            reactions_to_knockout.append(reaction.getId())
             elif "reverse" in reaction.getId():
                 if reaction.getNumProducts() > 0:
                     products_to_remove = []
