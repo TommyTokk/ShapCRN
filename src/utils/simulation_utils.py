@@ -324,37 +324,442 @@ def analyze_simulation_variations(  # TODO: Check correctness
             print_log(log_file, f"  Created plots in {species_dir}\n")
 
 
-def aggregate_by_variations(final_results, log_file=None):
+def aggregate_by_combination(final_results, log_file=None):
+    """
+    Aggregates results by combination with detailed information for each target species.
 
+    Returns:
+        Dict: {2
+            'combination_key': {
+                'target_species_1': {
+                    'last_original_value': float,
+                    'last_perturbed_value': float,
+                    'variation': float,
+                    'variation_type': str,
+                    'original_series': array,
+                    'perturbed_series': array
+                },
+                'target_species_2': { ... },
+                ...
+            },
+            ...
+        }
+    """
     aggregated_result = {}
 
+    # First collect all unique combinations
+    all_combinations = set()
     for target_species, ts_data in final_results.items():
-        print_log(log_file, f"target_species: {target_species}")
-        for combination, value in ts_data.items():
-            last_original_value = value["original"][-1]
-            last_perturbed_value = value["perturbed_result"][-1]
+        all_combinations.update(ts_data.keys())
+
+    # For each combination, collect data from all target species
+    for combination in all_combinations:
+        aggregated_result[combination] = {}
+
+        for target_species, ts_data in final_results.items():
+            if combination in ts_data:
+                value = ts_data[combination]
+                last_original_value = value["original"][-1]
+                last_perturbed_value = value["perturbed_result"][-1]
+
+                # Calculate variation
+                try:
+                    if abs(last_original_value) > 1e-30:  # Avoid division by zero
+                        variation = (
+                            last_perturbed_value - last_original_value
+                        ) / last_original_value
+                        variation_type = "relative"
+                    else:
+                        variation = last_perturbed_value - last_original_value
+                        variation_type = "absolute"
+                except:
+                    variation = last_perturbed_value - last_original_value
+                    variation_type = "absolute"
+
+                # Add information for this target species
+                aggregated_result[combination][target_species] = {
+                    "last_original_value": last_original_value,
+                    "last_perturbed_value": last_perturbed_value,
+                    "variation": variation,
+                    "variation_type": variation_type,
+                    "original_series": value["original"],
+                    "perturbed_series": value["perturbed_result"],
+                }
+
+    for combination, combination_data in aggregated_result.items():
+        print_log(log_file, f"combination: {combination}")
+        for target_species, ts_data in combination_data.items():
+            print_log(log_file, f"  target_species: {target_species}")
+            print_log(
+                log_file, f"      last_original_value:{ts_data['last_original_value']}"
+            )
+            print_log(
+                log_file,
+                f"      last_perturbed_value_value:{ts_data['last_perturbed_value']}",
+            )
+            print_log(log_file, f"      variation:{ts_data['variation']}")
+            print_log(log_file, f"      variation_type:{ts_data['variation_type']}")
+    return aggregated_result
+
+
+def get_simulations_informations(  # TODO: Check if the method is correct
+    samples_simulations_results,
+    original_results,
+    combinations,
+    target_ids,
+    colnames,
+    log_file=None,
+):
+    """
+    Returns a dictionary with original and perturbation results for each target species.
+    """
+
+    # Pre-compute column indices for all target species
+    target_indices = {}
+    missing_species = []
+
+    for ts in target_ids:
+        try:
+            # Try both formats in one go
+            for col_format in [f"[{ts}]", f"{ts}"]:
+                if col_format in colnames:
+                    target_indices[ts] = colnames.index(col_format)
+                    break
+            else:
+                missing_species.append(ts)
+        except Exception as e:
+            print_log(log_file, f"Error finding column for species {ts}: {e}")
+            missing_species.append(ts)
+
+    if missing_species:
+        print_log(log_file, f"Missing species: {missing_species}")
+
+    # Only process species that exist in the data
+    valid_target_ids = [ts for ts in target_ids if ts in target_indices]
+
+    if not valid_target_ids:
+        print_log(log_file, "No valid target species found")
+        return {}
+
+    # Initialize results structure
+    table_results = {}
+
+    # Add original results (vectorized)
+    table_results["original"] = {}
+    for ts in valid_target_ids:
+        ts_index = target_indices[ts]
+        table_results["original"][ts] = original_results[
+            -1, ts_index
+        ]  # Final concentration
+
+    # Process simulations in batch
+    if not combinations or not samples_simulations_results:
+        print_log(log_file, "No simulation data to process")
+        return table_results
+
+    # Pre-compute combination keys
+    combination_keys = [
+        "_".join([f"{val:.3f}" for val in combo]) for combo in combinations
+    ]
+
+    # Process all simulations at once
+    for i, (combo_key, combination_values) in enumerate(
+        zip(combination_keys, combinations)
+    ):
+        if i >= len(samples_simulations_results):
+            print_log(log_file, f"Simulation {i} missing results data")
+            continue
+
+        table_results[combo_key] = {}
+        simulation_results = samples_simulations_results[i]
+
+        # Extract final concentrations for all target species at once
+        for ts in valid_target_ids:
+            ts_index = target_indices[ts]
+            try:
+                table_results[combo_key][ts] = simulation_results[-1, ts_index]
+            except (IndexError, TypeError) as e:
+                print_log(
+                    log_file, f"Error extracting results for sim {i}, species {ts}: {e}"
+                )
+                table_results[combo_key][ts] = np.nan
+
+    print_log(
+        log_file,
+        f"Processed {len(table_results)-1} simulations for {len(valid_target_ids)} species",
+    )
+
+    return table_results
+
+
+def get_simulations_informations_with_detailed_data(
+    samples_simulations_results,
+    original_results,
+    combinations,
+    input_species_ids,
+    target_ids,
+    colnames,
+    log_file=None,
+):
+    """
+    Alternative version that keeps the detailed simulation data structure
+    while still being more efficient than the original.
+    """
+
+    # Pre-compute column indices
+    target_indices = {}
+    for ts in target_ids:
+        try:
+            for col_format in [f"[{ts}]", f"{ts}"]:
+                if col_format in colnames:
+                    target_indices[ts] = colnames.index(col_format)
+                    break
+            else:
+                continue
+        except Exception as e:
+            print_log(log_file, f"Species {ts} not present in the results: {e}")
+            continue
+
+    if not target_indices:
+        return {}
+
+    # Build detailed data structure more efficiently
+    target_species_data = {}
+
+    for ts, ts_index in target_indices.items():
+        target_species_data[ts] = {
+            "original": original_results[:, ts_index],
+            "simulations": [],
+        }
+
+        # Process all simulations for this species
+        for i, combination_values in enumerate(combinations):
+            if i >= len(samples_simulations_results):
+                continue
 
             try:
-                variation = (
-                    last_perturbed_value - last_original_value
-                ) / last_original_value
-                variation_type = "realtive"
-            except:
-                variation = last_perturbed_value - last_original_value
-                variation_type = "absolute"
+                combination_str = "-".join(
+                    [
+                        f"{species}:{value:.4f}"
+                        for species, value in zip(input_species_ids, combination_values)
+                    ]
+                )
 
-            aggregated_result[combination] = {
-                "last_original_value": last_original_value,
-                "last_perturbed_value": last_perturbed_value,
-                "variation": variation,
-                "variation_type": variation_type,
-            }
-    for combination, data in aggregated_result.items():
-        print_log(log_file, f"Combination: {combination}")
-        print_log(log_file, f"  last_original_value: {data['last_original_value']}")
-        print_log(log_file, f"  last_perturbed_value: {data['last_perturbed_value']}")
-        print_log(log_file, f"  variation: {data['variation']}")
-        print_log(log_file, f"  variation_type: {data['variation_type']}")
+                simulation_data = {
+                    "id": f"sim_{i}_{combination_str}",
+                    "combination": combination_values,
+                    "results": samples_simulations_results[i][:, ts_index],
+                }
+
+                target_species_data[ts]["simulations"].append(simulation_data)
+
+            except Exception as e:
+                print_log(
+                    log_file,
+                    f"Error extracting data for simulation {i}, species {ts}: {e}",
+                )
+
+        print_log(
+            log_file,
+            f"Processed {len(target_species_data[ts]['simulations'])} simulations for species {ts}",
+        )
+
+    # Build table structure efficiently
+    table_results = {"original": {}}
+
+    # Add original concentrations
+    for ts in target_indices:
+        table_results["original"][ts] = target_species_data[ts]["original"][-1]
+
+    # Create lookup for faster simulation data access
+    sim_lookup = defaultdict(dict)
+    for ts, data in target_species_data.items():
+        for sim_data in data["simulations"]:
+            combo_tuple = tuple(sim_data["combination"])
+            sim_lookup[combo_tuple][ts] = sim_data["results"][-1]
+
+    # Add perturbation rows
+    for combination_values in combinations:
+        combo_key = "_".join([f"{val:.3f}" for val in combination_values])
+        combo_tuple = tuple(combination_values)
+
+        table_results[combo_key] = {}
+        for ts in target_indices:
+            table_results[combo_key][ts] = sim_lookup[combo_tuple].get(ts, np.nan)
+
+    print_log(
+        log_file,
+        f"Created table structure with {len(table_results)} rows and {len(target_indices)} columns",
+    )
+
+    return table_results
+
+
+# def get_simulations_informations(
+#     samples_simulations_results,
+#     original_results,
+#     combinations,
+#     input_species_ids,
+#     target_ids,
+#     colnames,
+#     log_file=None,
+# ):
+#     """
+#     Return a dictionary like:
+#         {
+#             'original': {
+#                 'A': conc_A_original,
+#                 'B': conc_B_original,
+#                 'C': conc_C_original,
+#                 'D': conc_D_original,
+#                 ...
+#             },
+#             'pert_1': {
+#                 'A': conc_A_pert1,
+#                 'B': conc_B_pert1,
+#                 'C': conc_C_pert1,
+#                 'D': conc_D_pert1,
+#                 ...
+#             },
+#             'pert_2': {
+#                 'A': conc_A_pert2,
+#                 'B': conc_B_pert2,
+#                 'C': conc_C_pert2,
+#                 'D': conc_D_pert2,
+#                 ...
+#             },
+#             ...
+#         }
+#     """
+#     target_species_data = {}  # Dictionary for species informations
+#
+#     for ts in target_ids:
+#         try:
+#             try:
+#                 ts_index = colnames.index(f"[{ts}]")
+#             except:
+#                 ts_index = colnames.index(f"{ts}")
+#
+#             target_species_data[ts] = {
+#                 "original": original_results[:, ts_index],
+#                 "simulations": [],  # List containing informations about the simulations
+#             }
+#
+#             # Adding the results of the simulations
+#             for i in range(len(samples_simulations_results)):
+#                 try:
+#                     # Getting the info about the combinations for te specified simulation's ID
+#                     combination_values = combinations[i]
+#                     combination_str = "-".join(
+#                         [
+#                             f"{species}:{value:.4f}"
+#                             for species, value in zip(
+#                                 input_species_ids, combination_values
+#                             )
+#                         ]
+#                     )
+#
+#                     # Creating the simulation dictionary
+#                     simulation_data = {
+#                         "id": f"sim_{i}_{combination_str}",
+#                         "combination": combinations[i],  # Saving the combination
+#                         "results": samples_simulations_results[i][
+#                             :, ts_index
+#                         ],  # Saving the results
+#                     }
+#
+#                     # Adding to the simulations's list
+#                     target_species_data[ts]["simulations"].append(simulation_data)
+#
+#                 except Exception as e:
+#                     print_log(
+#                         log_file,
+#                         f"Error extracting data for simulation {i}, species {ts}: {e}",
+#                     )
+#
+#             print_log(
+#                 log_file,
+#                 f"Processed {len(target_species_data[ts]['simulations'])} simulations for species {ts}",
+#             )
+#
+#         except Exception as e:
+#             print_log(log_file, f"Species {ts} not present in the results: {e}")
+#             continue
+#
+#     # Create table-like structure
+#     table_results = {}
+#
+#     # Add original row
+#     table_results["original"] = {}
+#     for ts in target_ids:
+#         if ts in target_species_data:
+#             table_results["original"][ts] = target_species_data[ts]["original"][
+#                 -1
+#             ]  # Final concentration
+#
+#     # Add perturbation rows using combination values as keys
+#     n_simulations = len(combinations) if combinations else 0
+#     for i in range(n_simulations):
+#         # Use the combination values as key instead of pert_{i+1}
+#         combination_values = combinations[i]
+#         combination_key = "_".join([f"{val:.3f}" for val in combination_values])
+#
+#         table_results[combination_key] = {}
+#
+#         for ts in target_ids:
+#             if ts in target_species_data:
+#                 # Find the simulation data for this combination and target species
+#                 for sim_data in target_species_data[ts]["simulations"]:
+#                     if sim_data["combination"] == combination_values:
+#                         table_results[combination_key][ts] = sim_data["results"][
+#                             -1
+#                         ]  # Final concentration
+#                         break
+#                 else:
+#                     # If not found, set to None or NaN
+#                     table_results[combination_key][ts] = np.nan
+#
+#     print_log(
+#         log_file,
+#         f"Created table structure with {len(table_results)} rows and {len(target_ids)} columns",
+#     )
+#
+#     return table_results
+
+
+def simulate_combinations(
+    rr,
+    combinations,
+    input_species_ids,
+    min_ss_time,
+    end_time,
+    max_end_time,
+    steady_state=False,
+    log_file=None,
+):
+    samples_simulations_results = []
+    for i in range(len(combinations)):
+        print_log(log_file, f"Simulation nr. {i}")
+
+        sim_res, ss_time, colnames = simulate_samples(
+            rr,
+            combinations[i],
+            input_species_ids,
+            start_time=0,
+            end_time=end_time,
+            steady_state=steady_state,
+            max_end_time=max_end_time,
+        )
+        min_ss_time = (
+            ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
+        )
+        if steady_state:
+            print_log(log_file, f"Min time {min_ss_time}")
+        samples_simulations_results.append(sim_res)
+    if steady_state:
+        print_log(log_file, f"Min ss_time: {min_ss_time}")
+
+    return samples_simulations_results
 
 
 def get_importance_informations(
