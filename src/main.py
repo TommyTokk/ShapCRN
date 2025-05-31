@@ -36,7 +36,7 @@ def main():
             file_name = os.path.basename(args.input_path)
 
             # sbml_ut.split_reversible_reactions(sbml_model, log_file)
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
@@ -74,6 +74,7 @@ def main():
             plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
 
         elif args.command == "simulate_samples":
+            # TODO: Move all the logic in a method
             steady_state = args.steady_state
             min_ss_time = args.max_time
             ss_time = args.max_time
@@ -84,7 +85,6 @@ def main():
             input_species_ids = args.input_species
             target_ids = args.target_ids
 
-            # TODO: Check this part
             # Generate the samples
             samples = sbml_ut.generate_species_samples(
                 sbml_model,
@@ -103,10 +103,17 @@ def main():
             else:
                 rr = sim_ut.load_roadrunner_model(sbml_model, log_file)
 
-            # Check if some target species are boundary species
+            if args.target_ids is None:
+                target_ids = (
+                    rr.model.getBoundarySpeciesIds() + rr.model.getFloatingSpeciesIds()
+                )
+
+            # Check if some target species are reaction
             for ts in target_ids:
                 if ts in rr.model.getReactionIds():
                     rr.selections = rr.selections + [f"{ts}"]
+                elif ts in rr.model.getBoundarySpeciesIds():
+                    rr.selections = rr.selections + [f"[{ts}]"]
 
             # ut.print_log(log_file, rr.timeCourseSelections)
             # ut.print_log(log_file, f"Model floating species: {rr.model.getFloatingSpeciesIds()}")
@@ -217,12 +224,41 @@ def main():
                     )
                     continue
 
-            # TODO: Check the simulation time and cut the excess
+            # ut.print_log(log_file, f"target_species_data: {target_species_data}")
+
+            # Create final dictionary with the requested format
+            final_results = {}
+
+            for ts in target_ids:
+                if ts in target_species_data:
+                    final_results[ts] = {}
+
+                    # Get original time series for this target species
+                    original_time_series = target_species_data[ts]["original"]
+
+                    # Process each simulation for this target species
+                    for sim_data in target_species_data[ts]["simulations"]:
+                        combination = sim_data["combination"]
+                        simulation_time_series = sim_data["results"]
+
+                        # Create combination key as string
+                        combination_key = "_".join(
+                            [f"{val:.3f}" for val in combination]
+                        )
+
+                        # Add to final results
+                        final_results[ts][combination_key] = {
+                            "original": original_time_series,  # All values over time
+                            "perturbed_result": simulation_time_series,  # All values over time
+                        }
+            original_model_dictionary = sim_ut.aggregate_by_variations(
+                final_results, log_file
+            )
 
             # Analyze data
-            sim_ut.analyze_simulation_variations(
-                target_species_data, original_results, args.output, log_file
-            )
+            # sim_ut.analyze_simulation_variations(
+            #     target_species_data, original_results, args.output, log_file
+            # )
 
         elif args.command == "knockout_species":
             # Load the model

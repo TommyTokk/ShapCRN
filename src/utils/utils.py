@@ -90,6 +90,7 @@ def parse_args():
         "-tids",
         "--target_ids",
         nargs="+",
+        default=None,
         help="One or more IDs to check",
     )
     simulate_samples_parser.add_argument(

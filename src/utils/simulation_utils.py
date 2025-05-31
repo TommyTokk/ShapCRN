@@ -9,7 +9,7 @@ import os
 import math
 from collections import defaultdict
 
-from src.utils.utils import print_log
+from src.utils.utils import dict_pretty_print, print_log
 from src.utils import plot_utils as plt_ut
 
 
@@ -94,7 +94,7 @@ def simulate(
         # Standard simulation
 
         print_log(log_file, "Normal simulations")
-        print_log(log_file, f"End time: {end_time}")
+
         res = rr_model.simulate(start_time, end_time, output_rows)
         return res, None, res.colnames[1:]
 
@@ -152,6 +152,7 @@ def simulate_samples(
     # return rr_model.simulate(start_time, end_time, output_rows)
 
 
+# FIX: Refactor the code
 def analyze_simulation_variations(  # TODO: Check correctness
     target_data, original_results, output_dir, log_file=None, target_type=0
 ):
@@ -235,6 +236,7 @@ def analyze_simulation_variations(  # TODO: Check correctness
             #     log_file,
             #     f"Last value percent variations: {last_value_percents_variations}",
             # )
+
             last_value_rms_variations = rms_average(
                 last_value_percents_variations, axis=0
             )
@@ -253,24 +255,35 @@ def analyze_simulation_variations(  # TODO: Check correctness
             )
 
             # FULL TIME ANALYSIS
+            # FIX: Problem with nan values
+            # FIX: Problem with average
             variations = np.full_like(perturbed_array, np.nan)
             variations_percentage = np.full_like(perturbed_array, np.nan)
 
-            valid_mask = mask & (np.abs(original_data) > mask_value)
+            # Separate masks for percentage and absolute variations
+            valid_mask_percent = mask & (np.abs(original_data) > mask_value)
+            valid_mask_absolute = mask & (np.abs(original_data) <= mask_value)
 
-            variations[:, valid_mask] = (
-                perturbed_array[:, valid_mask] - original_data[valid_mask]
-            ) / original_data[
-                valid_mask
-            ]  # Array containing percentage_variations
+            # Calculate percentage variations where original data is significant
+            variations[:, valid_mask_percent] = (
+                perturbed_array[:, valid_mask_percent]
+                - original_data[valid_mask_percent]
+            ) / original_data[valid_mask_percent]
+
+            # For points where original data is near zero, use absolute differences
+            variations[:, valid_mask_absolute] = (
+                perturbed_array[:, valid_mask_absolute]
+                - original_data[valid_mask_absolute]
+            )
 
             variations_percentage = variations * 100
 
-            variations_percentage_rms = rms_average(variations_percentage, axis=0)
-
-            # print_log(
-            #     log_file, f"Variation percentage rms: {variations_percentage_rms}"
-            # )
+            # Only calculate RMS for valid percentage variations
+            variations_percentage_rms = np.full(variations_percentage.shape[1], np.nan)
+            if np.any(valid_mask_percent):
+                variations_percentage_rms[valid_mask_percent] = rms_average(
+                    variations_percentage[:, valid_mask_percent], axis=0
+                )
 
             avg_variations_percentage_rms = np.mean(variations_percentage_rms)
             std_variations_percentage_rms = np.std(
@@ -309,6 +322,45 @@ def analyze_simulation_variations(  # TODO: Check correctness
             )
 
             print_log(log_file, f"  Created plots in {species_dir}\n")
+
+
+def aggregate_by_variations(final_results, log_file=None):
+
+    aggregated_result = {}
+
+    for target_species, ts_data in final_results.items():
+        print_log(log_file, f"target_species: {target_species}")
+        for combination, value in ts_data.items():
+            last_original_value = value["original"][-1]
+            last_perturbed_value = value["perturbed_result"][-1]
+
+            try:
+                variation = (
+                    last_perturbed_value - last_original_value
+                ) / last_original_value
+                variation_type = "realtive"
+            except:
+                variation = last_perturbed_value - last_original_value
+                variation_type = "absolute"
+
+            aggregated_result[combination] = {
+                "last_original_value": last_original_value,
+                "last_perturbed_value": last_perturbed_value,
+                "variation": variation,
+                "variation_type": variation_type,
+            }
+    for combination, data in aggregated_result.items():
+        print_log(log_file, f"Combination: {combination}")
+        print_log(log_file, f"  last_original_value: {data['last_original_value']}")
+        print_log(log_file, f"  last_perturbed_value: {data['last_perturbed_value']}")
+        print_log(log_file, f"  variation: {data['variation']}")
+        print_log(log_file, f"  variation_type: {data['variation_type']}")
+
+
+def get_importance_informations(
+    target_data, original_results, output_dir, log_file=None
+):
+    pass
 
 
 def simulate_with_steady_state(
@@ -455,7 +507,7 @@ def pearson_correlation(simulation_data, correlation_threshold=0.5):
     return correlation_matrix
 
 
-def rms_average(array, axis=1):
+def rms_average(array, axis=1, log_file=None):
     """
     Calculate Root Mean Square average, which emphasizes larger values.
 
@@ -471,7 +523,9 @@ def rms_average(array, axis=1):
         RMS average
     """
     # Square all values, take mean, then take square root
-    result = np.sqrt(np.nanmean(np.square(array), axis=axis))
+    square = np.square(array)
+    print_log(log_file, f"Square: {square}")
+    result = np.sqrt(np.nanmean(square, axis=axis))
 
     return result
 

@@ -601,18 +601,18 @@ def generate_species_samples(
     res = []
 
     for ts in target_species:
-        # taking intial concentration
+        # taking initial concentration
         t0_conc = (
             sbml_model.getListOfSpecies().getElementBySId(ts).getInitialConcentration()
         )
 
-        sample_lower_bound = t0_conc - ((variation / 100) * t0_conc)
-        sample_upper_bound = t0_conc + ((variation / 100) * t0_conc)
-
         tmp = []
 
-        for i in range(0, n_samples):
-            tmp.append(np.random.uniform(sample_lower_bound, sample_upper_bound))
+        for i in range(n_samples):
+            # Sample multiplication factors between (1-variation/100) and (1+variation/100)
+            factor = np.random.uniform(1 - variation / 100, 1 + variation / 100)
+            sample = t0_conc * factor
+            tmp.append(sample)
 
         res.append(tmp)
 
@@ -620,12 +620,14 @@ def generate_species_samples(
 
 
 def create_samples_combination(input_samples, log_file=None):
-    # TODO: Remove the hard coded part
-    ACEx_samples, GLCx_samples, P_samples = input_samples
+    # input_samples is a 2D array: e.g., [[1, 2], [3, 4], [5, 6]]
 
-    combinantions = list(itertools.product(ACEx_samples, GLCx_samples, P_samples))
+    print_log(log_file, f"Input samples: {input_samples}")
 
-    return combinantions
+    combinations = list(itertools.product(*input_samples))
+
+    # print_log(log_file, f"Combinations: {combinations}")
+    return combinations
 
 
 # FOR DEBUG ONLY
