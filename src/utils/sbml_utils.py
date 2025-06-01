@@ -112,6 +112,7 @@ def species_dict_list(species_list):
 
 
 def knockout_species(sbml_model, target_species_id, log_file=None):
+    # FIX: Check if the logic for knock out a species is correct
     """
     Removes a species from the products of reactions and sets its initial concentration to 0.
 
@@ -128,7 +129,7 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
     # For each Rules in the model, pin the rules to remove
     for rule in sbml_model.getListOfRules():
         # TODO: Ask if it's a correct approach to set the math to 0
-        # if rule.isAssignment():
+
         if rule.getVariable() == target_species_id:  # Found the updating rule
             in_rules = True
             # Set the math of the target_species costant to 0.0
@@ -140,6 +141,7 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
             rule.setMath(zero_ast)
 
     reactions_to_knockout = []
+    products_to_remove = []
 
     if not in_rules:
         print_log(
@@ -149,25 +151,59 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
 
         # For each reaction in the model
         for reaction in sbml_model.getListOfReactions():
+
             if "forward" in reaction.getId():
+                print_log(log_file, f"forward {reaction.getId()}")
                 if reaction.getNumReactants() > 0:
                     for i in range(reaction.getNumReactants()):
                         reactant = reaction.getReactant(i).getSpecies()
                         if target_species_id == reactant:
+                            print_log(
+                                log_file,
+                                f"{target_species_id} found in forward reaction {reaction.getId()}",
+                            )
                             reactions_to_knockout.append(reaction.getId())
+
             elif "reverse" in reaction.getId():
                 if reaction.getNumProducts() > 0:
-                    products_to_remove = []
+
                     for i in range(reaction.getNumProducts()):
                         species = reaction.getProduct(i).getSpecies()
 
                         print_log(log_file, f"{species}")
 
                         if species == target_species_id:
+                            print_log(
+                                log_file,
+                                f"{target_species_id} found in reverse reaction {reaction.getId()}",
+                            )
                             products_to_remove.append(species)
 
                     for product_id in products_to_remove:
                         reaction.removeProduct(product_id)
+            else:
+                if reaction.getNumReactants() > 0:
+                    for i in range(reaction.getNumReactants()):
+                        reactant = reaction.getReactant(i).getSpecies()
+                        if target_species_id == reactant:
+                            print_log(
+                                log_file,
+                                f"{target_species_id} found in reaction {reaction.getId()} as reactant",
+                            )
+                            reactions_to_knockout.append(reaction.getId())
+
+                if reaction.getNumProducts() > 0:
+                    for i in range(reaction.getNumProducts()):
+                        product = reaction.getProduct(i).getSpecies()
+                        if target_species_id == product:
+                            print_log(
+                                log_file,
+                                f"{target_species_id} found in reaction {reaction.getId()} as produtct",
+                            )
+                            products_to_remove.append(product)
+
+                for product_id in products_to_remove:
+                    reaction.removeProduct(product_id)
 
         for reaction in reactions_to_knockout:
             sbml_model = knockout_reaction(sbml_model, reaction, log_file)
@@ -176,7 +212,7 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
     for species in sbml_model.getListOfSpecies():
         if species.getId() == target_species_id:
             result = species.setInitialConcentration(0.0)
-            # result = species.setConstant(True)
+            result = species.setConstant(True)
             # print_log(log_file, f"result:{result}")
             if result == libsbml.LIBSBML_OPERATION_FAILED:
                 exit(f"Error setting concentration for {species.getId()}")
@@ -453,11 +489,13 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
         result = reaction.getKineticLaw().setMath(zero_ast)
 
         if result == libsbml.LIBSBML_OPERATION_SUCCESS:
-            print_log(log_file, f"Successfully inhibite reaction {target_reaction_id}")
+            print_log(
+                log_file, f"Successfully knocked out reaction {target_reaction_id}"
+            )
         else:
             print_log(
                 log_file,
-                f"Error during inhibition reaction {target_reaction_id}: error code {result}",
+                f"Error during knocking out reaction {target_reaction_id}: error code {result}",
             )
     else:
         print_log(log_file, f"Reaction {target_reaction_id} not found in the model")

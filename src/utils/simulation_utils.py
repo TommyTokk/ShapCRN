@@ -40,7 +40,7 @@ def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
     if integrator is not None:
         rr_model.setIntegrator(integrator)
 
-    print_log(log_file, f"integrator: {rr_model.getIntegrator()}")
+    # print_log(log_file, f"integrator: {rr_model.getIntegrator()}")
 
     return rr_model
 
@@ -93,7 +93,7 @@ def simulate(
     else:
         # Standard simulation
 
-        print_log(log_file, "Normal simulations")
+        # print_log(log_file, "Normal simulations")
 
         res = rr_model.simulate(start_time, end_time, output_rows)
         return res, None, res.colnames[1:]
@@ -595,6 +595,65 @@ def get_simulations_informations_with_detailed_data(
     return table_results
 
 
+def get_variations_dict(
+    final_results_original_model, final_results_knocked_model, log_file=None
+):
+    variations_dict = {}
+
+    for i in range(len(final_results_knocked_model)):
+        knocked_species, knocked_species_info_dict = final_results_knocked_model[i]
+
+        variations_dict[knocked_species] = {}
+
+        for combination, species_dict in knocked_species_info_dict.items():
+
+            if combination not in variations_dict:
+                variations_dict[knocked_species][combination] = {}
+
+            print_log(log_file, f"combination: {combination}")
+
+            for species in species_dict.keys():
+                print_log(log_file, f"  Species: {species}")
+
+                original_model_species_value = final_results_original_model[
+                    combination
+                ][species]
+                knocked_model_species_value = knocked_species_info_dict[combination][
+                    species
+                ]
+
+                try:
+                    variation = (
+                        knocked_model_species_value - original_model_species_value
+                    ) / original_model_species_value
+                    variation_type = "relative"
+                except:
+                    variation = (
+                        knocked_model_species_value - original_model_species_value
+                    )
+                    variation_type = "absolute"
+
+                variations_dict[knocked_species][combination][species] = {
+                    "original_value": original_model_species_value,
+                    "knocked_value": knocked_model_species_value,
+                    "variation": variation,
+                    "variation_type": variation_type,
+                }
+
+    for knocked_species, combinations in variations_dict.items():
+        print_log(log_file, f"Knocked Species: {knocked_species}")
+        for combination, species_info in combinations.items():
+            print_log(log_file, f"  Combination: {combination}")
+            for species, value in species_info.items():
+                print_log(log_file, f"    Species: {species}")
+                print_log(log_file, f"      Original value: {value['original_value']}")
+                print_log(log_file, f"      Knocked value: {value['knocked_value']}")
+                print_log(log_file, f"      Variation: {value['variation']}")
+                print_log(log_file, f"      Variation type: {value['variation_type']}")
+
+    return variations_dict
+
+
 # def get_simulations_informations(
 #     samples_simulations_results,
 #     original_results,
@@ -739,7 +798,7 @@ def simulate_combinations(
 ):
     samples_simulations_results = []
     for i in range(len(combinations)):
-        print_log(log_file, f"Simulation nr. {i}")
+        # print_log(log_file, f"Simulation nr. {i}")
 
         sim_res, ss_time, colnames = simulate_samples(
             rr,
