@@ -112,36 +112,22 @@ def species_dict_list(species_list):
 
 
 def knockout_species(sbml_model, target_species_id, log_file=None):
-    # FIX: Check if the logic for knock out a species is correct
     """
     Removes a species from the products of reactions and sets its initial concentration to 0.
-
-    Args:
-        sbml_model: SBML model object
-        target_species_id: ID of the species to inhibit
-
-    Returns:
-        Model: Updated SBML model with the inhibited species
     """
-
     in_rules = False
 
     # For each Rules in the model, pin the rules to remove
     for rule in sbml_model.getListOfRules():
-        # TODO: Ask if it's a correct approach to set the math to 0
-
         if rule.getVariable() == target_species_id:  # Found the updating rule
             in_rules = True
-            # Set the math of the target_species costant to 0.0
-            # Create the new ASTNode as REAL
-            zero_ast = libsbml.ASTNode(libsbml.AST_REAL)
-            # Set the value of the node
-            zero_ast.setValue(0.0)
-            # Change the math of the node
+            # Set the math of the target_species constant to 0
+            zero_ast = libsbml.ASTNode(libsbml.AST_INTEGER)
+            zero_ast.setValue(0)
             rule.setMath(zero_ast)
+            print_log(log_file, f"Set rule for {target_species_id} to 0")
 
     reactions_to_knockout = []
-    products_to_remove = []
 
     if not in_rules:
         print_log(
@@ -149,73 +135,72 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
             f"Species {target_species_id} not found in rules, looking in reactions...",
         )
 
-        # For each reaction in the model
+        # Collect all reactions that need to be knocked out
         for reaction in sbml_model.getListOfReactions():
+            reaction_id = reaction.getId()
+            should_knockout = False
 
-            if "forward" in reaction.getId():
-                print_log(log_file, f"forward {reaction.getId()}")
-                if reaction.getNumReactants() > 0:
-                    for i in range(reaction.getNumReactants()):
-                        reactant = reaction.getReactant(i).getSpecies()
-                        if target_species_id == reactant:
-                            print_log(
-                                log_file,
-                                f"{target_species_id} found in forward reaction {reaction.getId()}",
-                            )
-                            reactions_to_knockout.append(reaction.getId())
+            # Check if species is a reactant
+            for i in range(reaction.getNumReactants()):
+                if reaction.getReactant(i).getSpecies() == target_species_id:
+                    should_knockout = True
+                    print_log(
+                        log_file,
+                        f"{target_species_id} found as reactant in {reaction_id}",
+                    )
+                    break
 
-            elif "reverse" in reaction.getId():
-                if reaction.getNumProducts() > 0:
+            if should_knockout:
+                reactions_to_knockout.append(reaction_id)
 
-                    for i in range(reaction.getNumProducts()):
-                        species = reaction.getProduct(i).getSpecies()
+        # Remove products (handle this separately to avoid index issues)
+        products_to_remove = []
+        for reaction in sbml_model.getListOfReactions():
+            num_products = reaction.getNumProducts()
 
-                        print_log(log_file, f"{species}")
+            if (
+                reaction.getId() not in reactions_to_knockout
+            ):  # Only if not already being knocked out
+                for i in range(num_products):
+                    if reaction.getProduct(i).getSpecies() == target_species_id:
+                        products_to_remove.append((reaction.getId(), i))
+                        print_log(
+                            log_file,
+                            f"{target_species_id} found as product in {reaction.getId()}",
+                        )
 
-                        if species == target_species_id:
-                            print_log(
-                                log_file,
-                                f"{target_species_id} found in reverse reaction {reaction.getId()}",
-                            )
-                            products_to_remove.append(species)
+        # Remove products (from highest index to lowest to avoid index shifting)
+        products_by_reaction = {}
+        for reaction_id, product_idx in products_to_remove:
+            if reaction_id not in products_by_reaction:
+                products_by_reaction[reaction_id] = []
+            products_by_reaction[reaction_id].append(product_idx)
 
-                    for product_id in products_to_remove:
-                        reaction.removeProduct(product_id)
-            else:
-                if reaction.getNumReactants() > 0:
-                    for i in range(reaction.getNumReactants()):
-                        reactant = reaction.getReactant(i).getSpecies()
-                        if target_species_id == reactant:
-                            print_log(
-                                log_file,
-                                f"{target_species_id} found in reaction {reaction.getId()} as reactant",
-                            )
-                            reactions_to_knockout.append(reaction.getId())
+        for reaction_id, indices in products_by_reaction.items():
+            reaction = sbml_model.getReaction(reaction_id)
+            # Sort indices in descending order to remove from end to beginning
+            for idx in sorted(indices, reverse=True):
+                print_log(
+                    log_file, f"Removing product at index {idx} from {reaction_id}"
+                )
+                reaction.removeProduct(idx)
+                # if reaction.getNumProducts() == 0:
+                #     reactions_to_knockout.append(reaction_id)
 
-                if reaction.getNumProducts() > 0:
-                    for i in range(reaction.getNumProducts()):
-                        product = reaction.getProduct(i).getSpecies()
-                        if target_species_id == product:
-                            print_log(
-                                log_file,
-                                f"{target_species_id} found in reaction {reaction.getId()} as produtct",
-                            )
-                            products_to_remove.append(product)
+        # Knockout the reactions that need to be knocked out
+        for reaction_id in reactions_to_knockout:
+            print_log(log_file, f"Calling knockout_reaction for {reaction_id}")
+            sbml_model = knockout_reaction(sbml_model, reaction_id, log_file)
 
-                for product_id in products_to_remove:
-                    reaction.removeProduct(product_id)
-
-        for reaction in reactions_to_knockout:
-            sbml_model = knockout_reaction(sbml_model, reaction, log_file)
-
-    # Set the initial concentration to 0.0
+    # Set the initial concentration to 0.0 and make it constant
     for species in sbml_model.getListOfSpecies():
         if species.getId() == target_species_id:
             result = species.setInitialConcentration(0.0)
             result = species.setConstant(True)
-            # print_log(log_file, f"result:{result}")
             if result == libsbml.LIBSBML_OPERATION_FAILED:
-                exit(f"Error setting concentration for {species.getId()}")
+                print_log(
+                    log_file, f"Error setting concentration for {species.getId()}"
+                )
 
     return sbml_model
 
@@ -481,24 +466,27 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
         # Remove a reaction from the model
         # result = sbml_model.removeReaction(target_reaction_id)
         # Create the new ASTNode as REAL
-        zero_ast = libsbml.ASTNode(libsbml.AST_REAL)
+        zero_ast = libsbml.ASTNode(libsbml.AST_INTEGER)
         # Set the value of the node
-        zero_ast.setValue(0.0)
+        zero_ast.setValue(0)
 
-        # Set the kineticLaw of the reaction to 0
-        result = reaction.getKineticLaw().setMath(zero_ast)
+        # Set the kinetic law
+        kinetic_law = reaction.getKineticLaw()
+        if kinetic_law is not None:
+            result = kinetic_law.setMath(zero_ast)
 
-        if result == libsbml.LIBSBML_OPERATION_SUCCESS:
-            print_log(
-                log_file, f"Successfully knocked out reaction {target_reaction_id}"
-            )
+            if result == libsbml.LIBSBML_OPERATION_SUCCESS:
+                # Force model validation/consistency check
+                # sbml_model.checkConsistency()
+                print_log(
+                    log_file, f"Successfully knocked out reaction {target_reaction_id}"
+                )
+            else:
+                print_log(log_file, f"Error setting kinetic law: {result}")
         else:
             print_log(
-                log_file,
-                f"Error during knocking out reaction {target_reaction_id}: error code {result}",
+                log_file, f"No kinetic law found for reaction {target_reaction_id}"
             )
-    else:
-        print_log(log_file, f"Reaction {target_reaction_id} not found in the model")
 
     return sbml_model
 
@@ -569,22 +557,22 @@ def save_sbml_model(model, file_path, log_file):
         bool: True if the save was successful, False otherwise
     """
     # Check the type of the model and convert to SBMLDocument if necessary
-    if isinstance(model, Model):
+    if isinstance(model, libsbml.Model):
         # If it's a Model, get the associated document
         doc = model.getSBMLDocument()
         if doc is None:
             # If there's no associated document, create a new one
-            doc = SBMLDocument(model.getLevel(), model.getVersion())
+            doc = libsbml.SBMLDocument(model.getLevel(), model.getVersion())
             doc.setModel(model)
-        success = writeSBMLToFile(doc, file_path)
+        success = libsbml.writeSBMLToFile(doc, file_path)
     elif isinstance(model, str):
         # If it's an XML string
-        reader = SBMLReader()
+        reader = libsbml.SBMLReader()
         doc = reader.readSBMLFromString(model)
-        success = writeSBMLToFile(doc, file_path)
+        success = libsbml.writeSBMLToFile(doc, file_path)
     else:
         # Otherwise, try directly
-        success = writeSBMLToFile(model, file_path)
+        success = libsbml.writeSBMLToFile(model, file_path)
 
     if success:
         print_log(log_file, f"Successfully saved SBML to: {file_path}")

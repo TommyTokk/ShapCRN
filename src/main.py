@@ -70,10 +70,14 @@ def main():
             # ut.print_log(log_file, f"Colnames: {colnames}")
 
             # ut.print_log(log_file, rr["[Px]"])
-            # ut.print_log(log_file, f"Concentration of Px:\n {res[:, res.colnames.index("[Px]")]}")
+            ut.print_log(
+                log_file,
+                f"Concentration of species_0:\n {res[:, res.colnames.index('[species_0]')]}",
+            )
             plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
 
         elif args.command == "simulate_samples":
+            # TODO: Check if the method is correct
             steady_state = args.steady_state
             max_end_time = args.max_time
             min_ss_time = args.max_time
@@ -236,6 +240,8 @@ def main():
                 final_results_original_model, knocked_data, log_file
             )
 
+            plt_ut.plot_knockdown_effect_heatmap(variations_dict, log_file=log_file)
+
         elif args.command == "knockout_species":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path)
@@ -263,42 +269,11 @@ def main():
                 log_file,
                 f"Searching for updating operations on target species {args.species_id}",
             )
-            found = False
-            for rule in sbml_model.getListOfRules():
-                if rule.getVariable() == args.species_id:
-                    ut.print_log(
-                        log_file, f"Found rules for {args.species_id}, {rule.getType()}"
-                    )
-                    found = True
-            if not found:
-                ut.print_log(log_file, f"No rules has been found for {args.species_id}")
-            found = False
-            for reaction in sbml_model.getListOfReactions():
-                for i in range(reaction.getNumProducts()):
-                    product = reaction.getProduct(i)
-                    if product.getSpecies() == args.species_id:
-                        ut.print_log(
-                            log_file,
-                            f"target species found as product in reaction {reaction.getId()}",
-                        )
-                        found = True
-            if not found:
-                ut.print_log(
-                    log_file,
-                    f"No reactions has been found having {args.species_id} as product",
-                )
 
             # Save
             xml_string, output_filename = sbml_ut.save_file(
                 file_name, operation_name, modified_model, True, log_file
             )
-
-            for specie in sbml_model.getListOfSpecies():
-                if specie.getId() == args.species_id:
-                    ut.print_log(
-                        log_file,
-                        f"Concentration of {args.species_id} is {specie.getInitialConcentration()}",
-                    )
 
             # Simulate the modified model
             # rr_modified = sim_ut.load_roadrunner_model(xml_string, log_file)
@@ -309,6 +284,8 @@ def main():
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path)
             file_name = os.path.basename(args.input_path)
+
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
             ut.print_log(
                 log_file,

@@ -640,16 +640,16 @@ def get_variations_dict(
                     "variation_type": variation_type,
                 }
 
-    for knocked_species, combinations in variations_dict.items():
-        print_log(log_file, f"Knocked Species: {knocked_species}")
-        for combination, species_info in combinations.items():
-            print_log(log_file, f"  Combination: {combination}")
-            for species, value in species_info.items():
-                print_log(log_file, f"    Species: {species}")
-                print_log(log_file, f"      Original value: {value['original_value']}")
-                print_log(log_file, f"      Knocked value: {value['knocked_value']}")
-                print_log(log_file, f"      Variation: {value['variation']}")
-                print_log(log_file, f"      Variation type: {value['variation_type']}")
+    # for knocked_species, combinations in variations_dict.items():
+    #     print_log(log_file, f"Knocked Species: {knocked_species}")
+    #     for combination, species_info in combinations.items():
+    #         print_log(log_file, f"  Combination: {combination}")
+    #         for species, value in species_info.items():
+    #             print_log(log_file, f"    Species: {species}")
+    #             print_log(log_file, f"      Original value: {value['original_value']}")
+    #             print_log(log_file, f"      Knocked value: {value['knocked_value']}")
+    #             print_log(log_file, f"      Variation: {value['variation']}")
+    #             print_log(log_file, f"      Variation type: {value['variation_type']}")
 
     return variations_dict
 

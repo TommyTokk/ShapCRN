@@ -3,6 +3,7 @@ import os
 import math
 from networkx.algorithms.bipartite import color
 import numpy as np
+import matplotlib.colors as colors
 
 from utils.utils import print_log
 
@@ -353,3 +354,157 @@ def plot_all_simulation_traces(
     plt.tight_layout()
     plt.savefig(os.path.join(species_dir, f"{target_species}_all_traces.png"))
     plt.close()
+
+
+def plot_knockdown_effect_heatmap(
+    variations_dict,
+    output_dir="./imgs",
+    use_log_scale=True,
+    cmap="viridis_r",  # "_r" per avere colori più scuri per valori maggiori
+    log_file=None,
+):
+    """
+    Crea una heatmap che visualizza l'impatto delle specie knockout sul modello.
+    Maggiore è la variazione, più scuro è il colore.
+
+    Args:
+        variations_dict: Il dizionario delle variazioni da get_variations_dict
+        output_dir: Directory dove salvare i grafici
+        use_log_scale: Se usare scala logaritmica per visualizzare meglio variazioni di ordini diversi
+        cmap: Colormap da usare (default: "viridis_r")
+        log_file: File opzionale per il logging
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Estrai tutte le specie knocked out e le specie target
+    knocked_species_list = list(variations_dict.keys())
+    all_target_species = set()
+    for knocked_species, combinations in variations_dict.items():
+        for combination, species_dict in combinations.items():
+            all_target_species.update(species_dict.keys())
+
+    all_target_species = sorted(list(all_target_species))
+
+    # Prepara la matrice di dati
+    num_knocked = len(knocked_species_list)
+    num_targets = len(all_target_species)
+
+    # Inizializza la matrice con NaN per distinguere dati mancanti
+    variation_matrix = np.full((num_knocked, num_targets), np.nan)
+
+    # Per ogni specie knocked, calcola l'effetto medio su ogni specie target
+    for i, knocked_species in enumerate(knocked_species_list):
+        species_variations = {}
+
+        # Raccogli tutte le variazioni per ogni specie target su tutte le combinazioni
+        for combination, species_dict in variations_dict[knocked_species].items():
+            for target_species, value in species_dict.items():
+                if target_species not in species_variations:
+                    species_variations[target_species] = []
+
+                # Usa il valore assoluto per la magnitudine della variazione
+                variation_value = np.abs(value["variation"])
+                species_variations[target_species].append(variation_value)
+
+        # Calcola la variazione media per ogni specie target
+        for j, target_species in enumerate(all_target_species):
+            if (
+                target_species in species_variations
+                and species_variations[target_species]
+            ):
+                variation_matrix[i, j] = np.nanmean(species_variations[target_species])
+
+    # Crea la heatmap utilizzando matplotlib
+    plt.figure(figsize=(max(12, num_targets / 2), max(8, num_knocked / 2)))
+
+    # Maschera per i valori NaN
+    masked_array = np.ma.array(variation_matrix, mask=np.isnan(variation_matrix))
+
+    # Configura la normalizzazione dei colori
+    if use_log_scale:
+        # Gestisci zeri e negativi se usi scala logaritmica
+        positive_values = masked_array[masked_array > 0]
+        if len(positive_values) > 0:
+            min_positive = np.min(positive_values)
+            max_value = np.max(masked_array)
+            norm = colors.LogNorm(vmin=min_positive, vmax=max_value)
+        else:
+            norm = None
+    else:
+        max_val = np.max(masked_array)
+        if max_val > 0:
+            norm = colors.Normalize(vmin=0, vmax=max_val)
+        else:
+            norm = None
+
+    # Crea la heatmap con matplotlib
+    plt.figure(figsize=(max(12, num_targets / 2), max(8, num_knocked / 2)))
+    im = plt.imshow(masked_array, cmap=cmap, norm=norm, aspect="auto")
+
+    # Aggiungi colorbar
+    cbar = plt.colorbar(im)
+    cbar.set_label("Magnitudine variazione media")
+
+    # Aggiungi le etichette degli assi
+    plt.xticks(np.arange(len(all_target_species)), all_target_species, rotation=90)
+    plt.yticks(np.arange(len(knocked_species_list)), knocked_species_list)
+
+    plt.title("Impatto delle specie knockout sui componenti del modello")
+    plt.xlabel("Specie target")
+    plt.ylabel("Specie knockout")
+
+    # Aggiungi una griglia per migliorare la leggibilità
+    plt.grid(False)
+
+    plt.tight_layout()
+
+    # Salva la figura
+    output_path = os.path.join(output_dir, "knockdown_effects_heatmap.png")
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print_log(log_file, f"Salvata heatmap dell'effetto knockout in: {output_path}")
+
+    # Crea una seconda heatmap con valori normalizzati per riga
+    if not np.all(np.isnan(variation_matrix)):
+        # Normalizza ogni riga (ogni specie knocked) per evidenziare cosa influenza maggiormente
+        row_normalized = np.zeros_like(variation_matrix)
+        for i in range(variation_matrix.shape[0]):
+            row_data = variation_matrix[i, :]
+            valid_data = row_data[~np.isnan(row_data)]
+            if len(valid_data) > 0 and np.max(valid_data) > 0:
+                row_normalized[i, ~np.isnan(row_data)] = valid_data / np.max(valid_data)
+
+        # Maschera per i valori NaN nella matrice normalizzata
+        masked_normalized = np.ma.array(row_normalized, mask=np.isnan(row_normalized))
+
+        # Crea la heatmap normalizzata
+        plt.figure(figsize=(max(12, num_targets / 2), max(8, num_knocked / 2)))
+        im = plt.imshow(masked_normalized, cmap=cmap, aspect="auto")
+
+        # Aggiungi colorbar
+        cbar = plt.colorbar(im)
+        cbar.set_label("Impatto normalizzato (0-1)")
+
+        # Aggiungi le etichette degli assi
+        plt.xticks(np.arange(len(all_target_species)), all_target_species, rotation=90)
+        plt.yticks(np.arange(len(knocked_species_list)), knocked_species_list)
+
+        plt.title("Impatto relativo delle specie knockout")
+        plt.xlabel("Specie target")
+        plt.ylabel("Specie knockout")
+
+        plt.grid(False)
+        plt.tight_layout()
+
+        # Salva la figura normalizzata
+        norm_output_path = os.path.join(
+            output_dir, "knockdown_effects_normalized_heatmap.png"
+        )
+        plt.savefig(norm_output_path, dpi=300, bbox_inches="tight")
+        plt.close()
+
+        print_log(
+            log_file,
+            f"Salvata heatmap normalizzata dell'effetto knockout in: {norm_output_path}",
+        )
