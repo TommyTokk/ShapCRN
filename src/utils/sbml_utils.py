@@ -19,9 +19,7 @@ def load_model(model_file_path):
 
     document = reader.readSBMLFromFile(model_file_path)
 
-    model = document.getModel()
-
-    return model
+    return document
 
 
 def dict_pretty_print(dict_obj):
@@ -704,6 +702,25 @@ def check_for_duplicates(combinations, log_file=None):
                 break
 
         return True, num_duplicates
+
+
+def get_selections(sbml_model, rr_model, target_ids, log_file=None):
+
+    selections = rr_model.selections
+
+    # Check if some target species are reaction
+    for ts in target_ids:
+        # print_log(log_file, f"[GET SELECTIONS]{ts}")
+        if ts in [r.getId() for r in sbml_model.getListOfReactions()]:
+            selections = selections + [f"{ts}"]
+        elif (
+            ts in [s.getId() for s in sbml_model.getListOfSpecies()]
+            and f"[{ts}]" not in selections
+        ):
+            selections = selections + [f"[{ts}]"]
+
+    # print_log(log_file, f"[GET SELECTIONS]sel: {selections}")
+    return selections
 
 
 # FOR DEBUG ONLY
