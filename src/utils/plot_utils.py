@@ -1,10 +1,12 @@
 import matplotlib.pyplot as plt
-import os
+
 import math
 from networkx.algorithms.bipartite import color
 import numpy as np
 import matplotlib.colors as colors
-
+import os  # needed for saving
+from collections import defaultdict
+from utils.simulation_utils import get_variations_mean
 from utils.utils import print_log
 
 
@@ -174,43 +176,6 @@ def plot_percentage_variation(
     plt.close()
 
 
-def plot_variations_heatmap(
-    percent_variations, perturbed_data_list, target_species, species_dir
-):
-    """
-    Plot a heatmap of percentage variations across all simulations.
-
-    Args:
-        percent_variations: Array of percentage variations for all simulations
-        perturbed_data_list: List of perturbed simulation data
-        target_species: Name of the species being analyzed
-        species_dir: Directory to save the plot
-    """
-    if len(perturbed_data_list) > 50:
-        # Sample only 50 simulations for better visualization
-        step = len(perturbed_data_list) // 50
-        sampled_percent_variations = percent_variations[::step, :]
-        plt.figure(figsize=(14, 8))
-        plt.imshow(
-            sampled_percent_variations, aspect="auto", cmap="RdBu_r", vmin=-50, vmax=50
-        )  # Limit to ±50% for better visualization
-        plt.colorbar(label="Variation %")
-        plt.xlabel("Timepoints")
-        plt.ylabel("Simulation #")
-        plt.title(f"{target_species} - Variation Heatmap (Sample of simulations)")
-    else:
-        plt.figure(figsize=(14, 8))
-        plt.imshow(percent_variations, aspect="auto", cmap="RdBu_r", vmin=-50, vmax=50)
-        plt.colorbar(label="Variation %")
-        plt.xlabel("Timepoints")
-        plt.ylabel("Simulation #")
-        plt.title(f"{target_species} - Variation Heatmap (All simulations)")
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(species_dir, f"{target_species}_heatmap.png"))
-    plt.close()
-
-
 def plot_boxplot_distribution(
     perturbed_array,
     time,
@@ -356,155 +321,88 @@ def plot_all_simulation_traces(
     plt.close()
 
 
-def plot_knockdown_effect_heatmap(
+def plot_variations_heatmap(
     variations_dict,
-    output_dir="./imgs",
-    use_log_scale=True,
-    cmap="viridis_r",  # "_r" per avere colori più scuri per valori maggiori
+    figsize=(12, 8),
+    cmap="RdBu_r",
+    save_path="./imgs",
+    show_averages=True,
+    title=None,
     log_file=None,
 ):
     """
-    Crea una heatmap che visualizza l'impatto delle specie knockout sul modello.
-    Maggiore è la variazione, più scuro è il colore.
+    Create a heatmap visualization of species variations across knockouts,
+    with visible grid lines between cells.
 
     Args:
-        variations_dict: Il dizionario delle variazioni da get_variations_dict
-        output_dir: Directory dove salvare i grafici
-        use_log_scale: Se usare scala logaritmica per visualizzare meglio variazioni di ordini diversi
-        cmap: Colormap da usare (default: "viridis_r")
-        log_file: File opzionale per il logging
+        variations_dict: Dict returned by get_simulations_variations
+        figsize: Figure size tuple (default: (12, 8))
+        cmap: Colormap for heatmap (default: "RdBu_r")
+        save_path: Path to save the plot (optional)
+        show_averages: Whether to show average variations (default: True)
+        title: Custom title for the plot (optional)
     """
-    os.makedirs(output_dir, exist_ok=True)
 
-    # Estrai tutte le specie knocked out e le specie target
-    knocked_species_list = list(variations_dict.keys())
-    all_target_species = set()
-    for knocked_species, combinations in variations_dict.items():
-        for combination, species_dict in combinations.items():
-            all_target_species.update(species_dict.keys())
+    if not variations_dict:
+        print("No variations data to plot.")
+        return
 
-    all_target_species = sorted(list(all_target_species))
+    # Collect all species and knocked-out species
+    all_species = set()
+    ko_species_list = list(variations_dict.keys())
 
-    # Prepara la matrice di dati
-    num_knocked = len(knocked_species_list)
-    num_targets = len(all_target_species)
+    heatmap_data, all_species = get_variations_mean(
+        variations_dict, all_species, ko_species_list, log_file
+    )
+    # Create the figure
+    plt.figure(figsize=figsize)
 
-    # Inizializza la matrice con NaN per distinguere dati mancanti
-    variation_matrix = np.full((num_knocked, num_targets), np.nan)
+    # Color scale limits
+    vmax = heatmap_data.max()
+    vmin = 0  # minimum is zero (absolute values)
 
-    # Per ogni specie knocked, calcola l'effetto medio su ogni specie target
-    for i, knocked_species in enumerate(knocked_species_list):
-        species_variations = {}
+    # Draw the heatmap
+    im = plt.imshow(heatmap_data, cmap=cmap, aspect="auto", vmin=vmin, vmax=vmax)
 
-        # Raccogli tutte le variazioni per ogni specie target su tutte le combinazioni
-        for combination, species_dict in variations_dict[knocked_species].items():
-            for target_species, value in species_dict.items():
-                if target_species not in species_variations:
-                    species_variations[target_species] = []
+    # Set x- and y-axis labels
+    plt.xticks(range(len(all_species)), all_species, rotation=45, ha="right")
+    plt.yticks(range(len(ko_species_list)), ko_species_list)
 
-                # Usa il valore assoluto per la magnitudine della variazione
-                variation_value = np.abs(value["variation"])
-                species_variations[target_species].append(variation_value)
+    # Add separating lines between cells:
+    ax = plt.gca()
+    # Set minor ticks at -0.5, 0.5, 1.5, ..., up to the number of species
+    ax.set_xticks(np.arange(-0.5, len(all_species), 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(ko_species_list), 1), minor=True)
+    # Draw the grid using the minor ticks
+    ax.grid(which="minor", color="gray", linestyle="-", linewidth=0.5)
+    # Remove minor tick markers (actual ticks are not needed)
+    ax.tick_params(which="minor", bottom=False, left=False)
 
-        # Calcola la variazione media per ogni specie target
-        for j, target_species in enumerate(all_target_species):
-            if (
-                target_species in species_variations
-                and species_variations[target_species]
-            ):
-                variation_matrix[i, j] = np.nanmean(species_variations[target_species])
+    # Add colorbar
+    cbar = plt.colorbar(im, shrink=0.8)
+    cbar.set_label("Mean Absolute Variation", rotation=270, labelpad=20)
 
-    # Crea la heatmap utilizzando matplotlib
-    plt.figure(figsize=(max(12, num_targets / 2), max(8, num_knocked / 2)))
+    # Title
+    if title is None:
+        title = "Species Variations Heatmap\n(Mean absolute variation across all combinations)"
+    plt.title(title, fontsize=14, fontweight="bold", pad=20)
 
-    # Maschera per i valori NaN
-    masked_array = np.ma.array(variation_matrix, mask=np.isnan(variation_matrix))
-
-    # Configura la normalizzazione dei colori
-    if use_log_scale:
-        # Gestisci zeri e negativi se usi scala logaritmica
-        positive_values = masked_array[masked_array > 0]
-        if len(positive_values) > 0:
-            min_positive = np.min(positive_values)
-            max_value = np.max(masked_array)
-            norm = colors.LogNorm(vmin=min_positive, vmax=max_value)
-        else:
-            norm = None
-    else:
-        max_val = np.max(masked_array)
-        if max_val > 0:
-            norm = colors.Normalize(vmin=0, vmax=max_val)
-        else:
-            norm = None
-
-    # Crea la heatmap con matplotlib
-    plt.figure(figsize=(max(12, num_targets / 2), max(8, num_knocked / 2)))
-    im = plt.imshow(masked_array, cmap=cmap, norm=norm, aspect="auto")
-
-    # Aggiungi colorbar
-    cbar = plt.colorbar(im)
-    cbar.set_label("Magnitudine variazione media")
-
-    # Aggiungi le etichette degli assi
-    plt.xticks(np.arange(len(all_target_species)), all_target_species, rotation=90)
-    plt.yticks(np.arange(len(knocked_species_list)), knocked_species_list)
-
-    plt.title("Impatto delle specie knockout sui componenti del modello")
-    plt.xlabel("Specie target")
-    plt.ylabel("Specie knockout")
-
-    # Aggiungi una griglia per migliorare la leggibilità
-    plt.grid(False)
+    plt.xlabel("Species", fontweight="bold")
+    plt.ylabel("Knocked Out Species", fontweight="bold")
 
     plt.tight_layout()
 
-    # Salva la figura
-    output_path = os.path.join(output_dir, "knockdown_effects_heatmap.png")
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    # Save if specified
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        plt.savefig(os.path.join(save_path, "Variation Heatmap.png"))
     plt.close()
 
-    print_log(log_file, f"Salvata heatmap dell'effetto knockout in: {output_path}")
-
-    # Crea una seconda heatmap con valori normalizzati per riga
-    if not np.all(np.isnan(variation_matrix)):
-        # Normalizza ogni riga (ogni specie knocked) per evidenziare cosa influenza maggiormente
-        row_normalized = np.zeros_like(variation_matrix)
-        for i in range(variation_matrix.shape[0]):
-            row_data = variation_matrix[i, :]
-            valid_data = row_data[~np.isnan(row_data)]
-            if len(valid_data) > 0 and np.max(valid_data) > 0:
-                row_normalized[i, ~np.isnan(row_data)] = valid_data / np.max(valid_data)
-
-        # Maschera per i valori NaN nella matrice normalizzata
-        masked_normalized = np.ma.array(row_normalized, mask=np.isnan(row_normalized))
-
-        # Crea la heatmap normalizzata
-        plt.figure(figsize=(max(12, num_targets / 2), max(8, num_knocked / 2)))
-        im = plt.imshow(masked_normalized, cmap=cmap, aspect="auto")
-
-        # Aggiungi colorbar
-        cbar = plt.colorbar(im)
-        cbar.set_label("Impatto normalizzato (0-1)")
-
-        # Aggiungi le etichette degli assi
-        plt.xticks(np.arange(len(all_target_species)), all_target_species, rotation=90)
-        plt.yticks(np.arange(len(knocked_species_list)), knocked_species_list)
-
-        plt.title("Impatto relativo delle specie knockout")
-        plt.xlabel("Specie target")
-        plt.ylabel("Specie knockout")
-
-        plt.grid(False)
-        plt.tight_layout()
-
-        # Salva la figura normalizzata
-        norm_output_path = os.path.join(
-            output_dir, "knockdown_effects_normalized_heatmap.png"
-        )
-        plt.savefig(norm_output_path, dpi=300, bbox_inches="tight")
-        plt.close()
-
-        print_log(
-            log_file,
-            f"Salvata heatmap normalizzata dell'effetto knockout in: {norm_output_path}",
-        )
+    # Summary statistics
+    print("\nHeatmap Summary:")
+    print(f"Max variation: {heatmap_data.max():.4f}")
+    print(f"Min variation: {heatmap_data.min():.4f}")
+    print(f"Mean absolute variation: {heatmap_data.mean():.4f}")
+    non_zero = np.count_nonzero(heatmap_data)
+    total = heatmap_data.size
+    print(f"Non-zero variations: {non_zero}/{total} ({non_zero/total*100:.1f}%)")

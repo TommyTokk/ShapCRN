@@ -240,4 +240,76 @@ def dict_pretty_print(dict_obj):
     print(json_formatted_str)
 
 
+def pretty_print_variations(variations_dict, precision=4, show_zero=False):
+    """
+    Pretty print the variations dictionary in a readable format.
+
+    Args:
+        variations_dict: Dict returned by get_simulations_variations
+        precision: Number of decimal places to show (default: 4)
+        show_zero: Whether to show variations that are zero (default: False)
+    """
+    if not variations_dict:
+        print("No variations to display.")
+        return
+
+    print("=" * 80)
+    print("SIMULATION VARIATIONS REPORT")
+    print("=" * 80)
+
+    for ko_species in sorted(variations_dict.keys()):
+        print(f"\n🧬 KNOCKED OUT SPECIES: {ko_species}")
+        print("-" * 60)
+
+        combinations = variations_dict[ko_species]
+        if not combinations:
+            print("  No combinations found.")
+            continue
+
+        for combination in sorted(combinations.keys()):
+            print(f"\n  📊 Combination: {combination}")
+            print("  " + "─" * 50)
+
+            species_variations = combinations[combination]
+            if not species_variations:
+                print("    No species variations found.")
+                continue
+
+            # Sort species by absolute variation value (largest first)
+            sorted_species = sorted(
+                species_variations.items(),
+                key=lambda x: abs(x[1]["variation"]),
+                reverse=True,
+            )
+
+            displayed_any = False
+            for species, data in sorted_species:
+                variation = data["variation"]
+
+                # Skip zero variations if show_zero is False
+                if not show_zero and abs(variation) < 1e-10:
+                    continue
+
+                # Format the variation with appropriate sign and color indicators
+                if variation > 0:
+                    sign_indicator = "↑"
+                    variation_str = f"+{variation:.{precision}f}"
+                elif variation < 0:
+                    sign_indicator = "↓"
+                    variation_str = f"{variation:.{precision}f}"
+                else:
+                    sign_indicator = "="
+                    variation_str = f"{variation:.{precision}f}"
+
+                print(f"    {sign_indicator} {species:<20} {variation_str:>12}")
+                displayed_any = True
+
+            if not displayed_any:
+                print("    (All variations are zero)")
+
+    print("\n" + "=" * 80)
+    print("Legend: ↑ = Increase, ↓ = Decrease, = = No change")
+    print("=" * 80)
+
+
 # === DEBUG ====
