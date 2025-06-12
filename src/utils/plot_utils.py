@@ -25,7 +25,7 @@ def plot_results(
         img_dir_path: Directory where to save the image (default: "./imgs")
         img_name: Name of the image file without extension (default: "simulation")
     """
-    species_names = colnames
+    species_names = colnames[1:]
     # print(species_names)
 
     # Create directory if it doesn't exist
@@ -326,6 +326,7 @@ def plot_variations_heatmap(
     figsize=(12, 8),
     cmap="RdBu_r",
     save_path="./imgs",
+    variation_type="relative",
     show_averages=True,
     title=None,
     log_file=None,
@@ -352,14 +353,47 @@ def plot_variations_heatmap(
     ko_species_list = list(variations_dict.keys())
 
     heatmap_data, all_species = get_variations_mean(
-        variations_dict, all_species, ko_species_list, log_file
+        variations_dict,
+        all_species,
+        ko_species_list,
+        variation_type=variation_type,
+        log_file=log_file,
     )
+    
+    # Validate heatmap_data before proceeding
+    if heatmap_data.size == 0:
+        print("Error: Heatmap data is empty. No data to visualize.")
+        if log_file:
+            print_log(log_file, "Error: Heatmap data is empty. No data to visualize.")
+        return
+    
+    # Check for all NaN values
+    if np.all(np.isnan(heatmap_data)):
+        print("Error: All heatmap data values are NaN. No valid data to visualize.")
+        if log_file:
+            print_log(log_file, "Error: All heatmap data values are NaN. No valid data to visualize.")
+        return
+    
+    # Check if we have valid data for visualization
+    valid_data = heatmap_data[~np.isnan(heatmap_data)]
+    if len(valid_data) == 0:
+        print("Error: No valid (non-NaN) data points found.")
+        if log_file:
+            print_log(log_file, "Error: No valid (non-NaN) data points found.")
+        return
+    
     # Create the figure
     plt.figure(figsize=figsize)
 
-    # Color scale limits
-    vmax = heatmap_data.max()
-    vmin = 0  # minimum is zero (absolute values)
+    # Color scale limits - now safe to use .max() and .min()
+    vmax = valid_data.max()
+    vmin = 0 if variation_type.lower() == 'relative' else valid_data.min()
+    
+    # Log data range for debugging
+    if log_file:
+        print_log(log_file, f"Heatmap data shape: {heatmap_data.shape}")
+        print_log(log_file, f"Valid data points: {len(valid_data)}/{heatmap_data.size}")
+        print_log(log_file, f"Data range: {vmin:.6f} to {vmax:.6f}")
 
     # Draw the heatmap
     im = plt.imshow(heatmap_data, cmap=cmap, aspect="auto", vmin=vmin, vmax=vmax)
@@ -380,11 +414,15 @@ def plot_variations_heatmap(
 
     # Add colorbar
     cbar = plt.colorbar(im, shrink=0.8)
-    cbar.set_label("Mean Absolute Variation", rotation=270, labelpad=20)
+    cbar.set_label(
+        f"Mean {'Relative' if variation_type.lower() == 'relative' else ''} Variation",
+        rotation=270,
+        labelpad=20,
+    )
 
     # Title
     if title is None:
-        title = "Species Variations Heatmap\n(Mean absolute variation across all combinations)"
+        title = f"Species Variations Heatmap\n(Mean {'relative' if variation_type.lower() == 'relative' else ''} variation across all combinations)"
     plt.title(title, fontsize=14, fontweight="bold", pad=20)
 
     plt.xlabel("Species", fontweight="bold")
@@ -395,14 +433,21 @@ def plot_variations_heatmap(
     # Save if specified
     if save_path:
         os.makedirs(save_path, exist_ok=True)
-        plt.savefig(os.path.join(save_path, "Variation Heatmap.png"))
+        plt.savefig(
+            os.path.join(
+                save_path,
+                f"{'Relative variation' if variation_type.lower() == 'relative' else 'Variation'} Heatmap.png",
+            )
+        )
     plt.close()
 
-    # Summary statistics
+    # Summary statistics - now safe to use reduction operations
     print("\nHeatmap Summary:")
-    print(f"Max variation: {heatmap_data.max():.4f}")
-    print(f"Min variation: {heatmap_data.min():.4f}")
-    print(f"Mean absolute variation: {heatmap_data.mean():.4f}")
-    non_zero = np.count_nonzero(heatmap_data)
-    total = heatmap_data.size
+    print(f"Max variation: {valid_data.max():.4f}")
+    print(f"Min variation: {valid_data.min():.4f}")
+    print(
+        f"Mean {'relative' if variation_type.lower() == 'relative' else 'absolute'} variation: {valid_data.mean():.4f}"
+    )
+    non_zero = np.count_nonzero(valid_data)
+    total = len(valid_data)
     print(f"Non-zero variations: {non_zero}/{total} ({non_zero/total*100:.1f}%)")

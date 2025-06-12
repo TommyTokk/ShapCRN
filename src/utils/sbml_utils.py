@@ -645,9 +645,6 @@ def generate_species_samples(
 
 def create_samples_combination(input_samples, log_file=None):
     # input_samples is a 2D array: e.g., [[1, 2], [3, 4], [5, 6]]
-
-    print_log(log_file, f"Input samples: {input_samples}")
-
     combinations = list(itertools.product(*input_samples))
 
     # print_log(log_file, f"Combinations: {combinations}")
@@ -710,7 +707,7 @@ def get_selections(sbml_model, rr_model, target_ids, log_file=None):
 
     # Check if some target species are reaction
     for ts in target_ids:
-        # print_log(log_file, f"[GET SELECTIONS]{ts}")
+        print_log(log_file, f"[GET SELECTIONS]{ts}")
         if ts in [r.getId() for r in sbml_model.getListOfReactions()]:
             selections = selections + [f"{ts}"]
         elif (

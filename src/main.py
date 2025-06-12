@@ -74,7 +74,11 @@ def main():
             # ut.print_log(log_file, rr["[Px]"])
             ut.print_log(
                 log_file,
-                f"Concentration of species_0:\n {res[:, res.colnames.index('[species_0]')]}",
+                f"tolerances: abs {rr.integrator.absolute_tolerance} | rel {rr.integrator.relative_tolerance}",
+            )
+            ut.print_log(
+                log_file,
+                f"Concentration of species_4:\n {res[:, res.colnames.index('[species_4]')]}",
             )
             plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
 
@@ -91,6 +95,7 @@ def main():
             sbml_doc = sbml_ut.load_model(args.input_path)
             sbml_model = sbml_doc.getModel()
 
+            # Split all the reversible reactions in two different reactions
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
             file_name = os.path.basename(args.input_path)
@@ -101,6 +106,14 @@ def main():
                 target_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
             else:
                 target_ids = args.target_ids
+
+            target_ids = list(set(target_ids) - set(input_species_ids))
+            # ut.print_log(log_file, f"{target_ids}")
+
+            # ut.print_log(log_file, f"target ids: {target_ids}")
+            target_ids.sort()
+
+            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
             # Generate the samples
             samples = sbml_ut.generate_species_samples(
@@ -114,17 +127,23 @@ def main():
             # Create the combinations
             combinations = sbml_ut.create_samples_combination(samples, log_file)
 
-            # Load and simulate
+            # Load the model
             rr = sim_ut.load_roadrunner_model(sbml_model, integrator, log_file)
 
-            selections = sbml_ut.get_selections(sbml_model, rr, target_ids, log_file)
+            # Get the selections
+
+            selections = rr.selections
+            for s in species_list:
+                if f"[{s}]" not in selections:
+                    selections.append(f"[{s}]")
+
+            for ts in target_ids:
+                if ts in sbml_model.getListOfReactions().getId():
+                    selections.append(f"{ts}")
 
             rr.selections = selections
 
-            # ut.print_log(log_file, f"[MAIN] {rr.selections}")
-
-            # ut.print_log(log_file, f"[MAIN] {rr.selections}")
-
+            # Simulate the model
             ut.print_log(log_file, "Simulating original model")
             original_results, ss_time, colnames = sim_ut.simulate(
                 rr,
@@ -142,8 +161,8 @@ def main():
                 else min_ss_time
             )
 
+            # Simulate the original model with samples
             ut.print_log(log_file, "Simulating original model with samples")
-
             samples_simulations_results = sim_ut.simulate_combinations(
                 rr,
                 combinations,
@@ -155,39 +174,59 @@ def main():
                 log_file,
             )
 
-            # Get the information about the simulations
             ut.print_log(
                 log_file, "Getting simulations informations of the original model"
             )
 
+            ut.print_log(log_file, f"{len(species_list)}")
+            # Getting the information about the original model
             original_model_simulations_info = sim_ut.get_simulations_informations(
                 samples_simulations_results,
                 original_results,
                 combinations,
-                target_ids,
+                species_list,
                 colnames,
                 log_file,
             )
 
-            # TODO: Implement the knockout simulations
+            for combination, comb_info_dict in original_model_simulations_info.items():
+                ut.print_log(log_file, f"{combination}")
+                for species, value in comb_info_dict.items():
+                    ut.print_log(log_file, f"   {species}:{value}")
+
+            exit(1)
 
             knockout_data = []
 
             # FOR DEBUG ONLY
             early_stop = 0
 
+            # Copying the SBML model
+            sbml_str = libsbml.writeSBMLToString(sbml_doc)
+
+            # Create a dict of the ko models
+            model_dict = {}
             for species_to_knockout in target_ids:
+                doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
+                model_copy = doc_copy.getModel()
+                modified_model = sbml_ut.knockout_species(
+                    model_copy, species_to_knockout, log_file
+                )
+
+                model_dict[species_to_knockout] = modified_model
+
+            counter = 0
+
+            for species_to_knockout in target_ids:
+                ut.print_log(
+                    log_file,
+                    f"Working on species: {species_to_knockout} ({(counter/len(species_to_knockout))*100}%)",
+                )
+                counter += 1
 
                 # if early_stop == 3:
                 #     break
                 # early_stop += 1
-
-                doc_copy = sbml_doc.clone()
-                model = doc_copy.getModel()
-
-                modified_model = sbml_ut.knockout_species(
-                    model, species_to_knockout, log_file
-                )
 
                 # xml_string, output_filename = sbml_ut.save_file(
                 #     file_name,
@@ -197,15 +236,13 @@ def main():
                 #     log_file,
                 # )
 
+                modified_model = model_dict[species_to_knockout]
+
                 modified_rr = sim_ut.load_roadrunner_model(
                     modified_model, integrator, log_file
                 )
 
-                # TODO: CHECK FOR ERROR IN LOOP LOGIC
-
-                modified_rr.selections = sbml_ut.get_selections(
-                    modified_model, modified_rr, target_ids, log_file
-                )
+                modified_rr.selections = selections
 
                 knockout_model_results, ss_time, colnames = sim_ut.simulate(
                     modified_rr,
@@ -213,6 +250,10 @@ def main():
                     end_time=end_time,
                     steady_state=steady_state,
                     max_end_time=max_end_time,
+                )
+                ut.print_log(
+                    log_file,
+                    f"Concentration of {species_to_knockout}:\n {knockout_model_results[:, colnames.index(f'[{species_to_knockout}]')]}",
                 )
 
                 min_ss_time = (
@@ -239,7 +280,7 @@ def main():
                         combinations_knockout_model_results,
                         knockout_model_results,
                         combinations,
-                        target_ids,
+                        species_list,
                         colnames,
                         log_file,
                     )
@@ -249,13 +290,18 @@ def main():
                     (species_to_knockout, combinations_knockout_model_simualtions_info)
                 )
 
-            # TODO: Create a dictionary containing, for each combinations and foreach species, the variation
             variation_dict = sim_ut.get_simulations_variations(
                 original_model_simulations_info, knockout_data, log_file=None
             )
 
-            # ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
-            plt_ut.plot_variations_heatmap(variation_dict, title="Variations heatmap")
+            ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
+
+            plt_ut.plot_variations_heatmap(
+                variation_dict, title="Relative variations heatmap"
+            )
+            plt_ut.plot_variations_heatmap(
+                variation_dict, variation_type="absolute", title="variation heatmap"
+            )
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)
