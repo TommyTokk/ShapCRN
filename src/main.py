@@ -184,8 +184,7 @@ def main():
                 samples_simulations_results,
                 original_results,
                 combinations,
-                species_list,
-                colnames,
+                colnames[1:],
                 log_file,
             )
 
@@ -193,8 +192,7 @@ def main():
                 ut.print_log(log_file, f"{combination}")
                 for species, value in comb_info_dict.items():
                     ut.print_log(log_file, f"   {species}:{value}")
-
-            exit(1)
+                ut.print_log(log_file, f"================================")
 
             knockout_data = []
 
@@ -220,7 +218,7 @@ def main():
             for species_to_knockout in target_ids:
                 ut.print_log(
                     log_file,
-                    f"Working on species: {species_to_knockout} ({(counter/len(species_to_knockout))*100}%)",
+                    f"Working on species: {species_to_knockout} ({(counter/len(target_ids))*100}%)",
                 )
                 counter += 1
 
@@ -280,8 +278,7 @@ def main():
                         combinations_knockout_model_results,
                         knockout_model_results,
                         combinations,
-                        species_list,
-                        colnames,
+                        colnames[1:],
                         log_file,
                     )
                 )

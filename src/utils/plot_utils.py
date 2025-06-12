@@ -261,7 +261,7 @@ def plot_all_simulation_traces(
     original_data,
     perturbed_array,
     target_species,
-    species_dir,
+    species_dir="./imgs",
     max_traces=125,
     alpha=0.5,
 ):
@@ -359,21 +359,24 @@ def plot_variations_heatmap(
         variation_type=variation_type,
         log_file=log_file,
     )
-    
+
     # Validate heatmap_data before proceeding
     if heatmap_data.size == 0:
         print("Error: Heatmap data is empty. No data to visualize.")
         if log_file:
             print_log(log_file, "Error: Heatmap data is empty. No data to visualize.")
         return
-    
+
     # Check for all NaN values
     if np.all(np.isnan(heatmap_data)):
         print("Error: All heatmap data values are NaN. No valid data to visualize.")
         if log_file:
-            print_log(log_file, "Error: All heatmap data values are NaN. No valid data to visualize.")
+            print_log(
+                log_file,
+                "Error: All heatmap data values are NaN. No valid data to visualize.",
+            )
         return
-    
+
     # Check if we have valid data for visualization
     valid_data = heatmap_data[~np.isnan(heatmap_data)]
     if len(valid_data) == 0:
@@ -381,14 +384,14 @@ def plot_variations_heatmap(
         if log_file:
             print_log(log_file, "Error: No valid (non-NaN) data points found.")
         return
-    
+
     # Create the figure
     plt.figure(figsize=figsize)
 
     # Color scale limits - now safe to use .max() and .min()
     vmax = valid_data.max()
-    vmin = 0 if variation_type.lower() == 'relative' else valid_data.min()
-    
+    vmin = 0 if variation_type.lower() == "relative" else valid_data.min()
+
     # Log data range for debugging
     if log_file:
         print_log(log_file, f"Heatmap data shape: {heatmap_data.shape}")

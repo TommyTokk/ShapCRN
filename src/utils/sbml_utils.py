@@ -635,10 +635,12 @@ def generate_species_samples(
         for i in range(n_samples):
             # Sample multiplication factors between (1-variation/100) and (1+variation/100)
             factor = np.random.uniform(1 - variation / 100, 1 + variation / 100)
-            sample = t0_conc * factor
+            sample = t0_conc + factor
             tmp.append(sample)
 
         res.append(tmp)
+
+    print_log(log_file, f"[GENERATE SAMPLES]{res}")
 
     return res
 

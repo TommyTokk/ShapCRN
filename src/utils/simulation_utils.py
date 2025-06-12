@@ -1,10 +1,11 @@
 from decimal import *
+from logging import log
 import roadrunner as rr
 import libsbml
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-
+import re
 from collections import defaultdict
 
 from src.utils.utils import dict_pretty_print, print_log
@@ -407,7 +408,6 @@ def get_simulations_informations(
     samples_simulations_results,
     original_results,
     combinations,
-    species_list,
     colnames,
     log_file=None,
 ):
@@ -416,27 +416,21 @@ def get_simulations_informations(
     """
 
     target_indices = {}
+    target_ids = []
     missing_species = []
-    counter = 0
+
+    exp = r"[\[\]]"
 
     # Pre-compute column indices for all target species
-    for sp in species_list:
+    for cn in colnames:
+        s_id = re.sub(exp, "", cn)
+        target_indices[s_id] = colnames.index(cn)
         try:
-            # Try both formats in one go
-            for col_format in [f"[{sp}]", f"{sp}"]:
-                if col_format in colnames:
-                    # print_log(log_file, f"[GET SIMULATION INFO]{col_format}, {colnames}")
-
-                    target_indices[sp] = colnames.index(col_format)
-                    break
-            else:
-                missing_species.append(sp)
+            target_indices[s_id] = colnames.index(cn)
+            target_ids.append(s_id)
         except Exception as e:
-            print_log(log_file, f"Error finding column for species {sp}: {e}")
-            missing_species.append(sp)
-
-    if missing_species:
-        print_log(log_file, f"Missing species: {missing_species}")
+            print_log(log_file, f"Error finding column for species {s_id}: {e}")
+            missing_species.append(s_id)
 
     # Only process species that exist in the data
     # valid_target_ids = [ts for ts in target_ids if ts in target_indices]
@@ -450,7 +444,7 @@ def get_simulations_informations(
 
     # Add original results (vectorized)
     table_results["original"] = {}
-    for ts in species_list:
+    for ts in target_ids:
         ts_index = target_indices[ts]
         table_results["original"][ts] = original_results[
             -1, ts_index
@@ -483,7 +477,7 @@ def get_simulations_informations(
         simulation_results = samples_simulations_results[i]
 
         # Extract final concentrations for all target species at once
-        for ts in species_list:
+        for ts in target_ids:
             ts_index = target_indices[ts]
             try:
                 table_results[combo_key][ts] = simulation_results[-1, ts_index]
@@ -497,7 +491,7 @@ def get_simulations_informations(
 
     print_log(
         log_file,
-        f"Processed {processed_count} simulations for {len(species_list)} species",
+        f"Processed {processed_count} simulations for {len(target_ids)} species",
     )
 
     return table_results
@@ -629,29 +623,36 @@ def get_simulations_variations(
         for combination, original_info_dict in final_results_original_model.items():
             variations_dict[ko_species][combination] = {}
             for species, original_value in original_info_dict.items():
-                print_log(
-                    log_file,
-                    f"[GET SIMULATIONS VARIATIONS] ko_species: {ko_species} | species: {species}",
-                )
+
                 if species == ko_species:
                     continue
 
-                ko_species_value = species_dict[combination][species]
+                if species not in species_dict[combination]:
+                    continue
 
-                variations_dict[ko_species][combination][species] = {
-                    "variation": Decimal(ko_species_value) - Decimal(original_value),
-                    "relative-variation": (
-                        Decimal(ko_species_value) - Decimal(original_value)
+                original_val = np.float64(original_value)
+                ko_value = np.float64(species_dict[combination][species])
+
+                variation = ko_value - original_value
+
+                try:
+                    if np.isclose(original_val, 0, atol=1e-15):
+                        relative_variation = (
+                            np.inf
+                            if variation > 0
+                            else (-np.inf if variation < 0 else 0.0)
+                        )
+                    else:
+                        relative_variation = variation / original_val
+
+                    variations_dict[ko_species][combination][species] = {
+                        "variation": variation,
+                        "relative-variation": relative_variation,
+                    }
+                except Exception as e:
+                    print_log(
+                        log_file, f" Error in relative variation calculation: {e}"
                     )
-                    / Decimal(original_value),
-                }
-
-    for ko_species, ko_species_info_dict in variations_dict.items():
-        for combination, combination_info_dict in ko_species_info_dict.items():
-            # TODO: Ask if is necessary to remove the knocked out species from the mean
-            # print_log(log_file, f"N species: {len(combination_info_dict.keys())}")
-            combination_info_dict.pop(ko_species, "speices not in dict")
-            # print_log(log_file, f"N species: {len(combination_info_dict.keys())}")
 
     return variations_dict
 
@@ -688,7 +689,7 @@ def get_variations_mean(
                         variations.append(combination_data[species]["variation"])
 
             if variations:
-                heatmap_data[i, j] = np.sqrt(np.mean([v**2 for v in variations]))
+                heatmap_data[i, j] = np.mean([abs(v) for v in variations])
     return (heatmap_data, all_species)
 
 
