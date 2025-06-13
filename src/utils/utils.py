@@ -312,4 +312,17 @@ def pretty_print_variations(variations_dict, precision=4, show_zero=False):
     print("=" * 80)
 
 
-# === DEBUG ====
+# === DEBUG ===
+
+# === NORMALIZATION ===
+
+
+def normalize_variations_globally(heatmap_data, log_file=None):
+
+    global_min = heatmap_data.min()
+    global_max = heatmap_data.max()
+
+    if global_max - global_min > 1e-10:
+        heatmap_data = (heatmap_data - global_min) / (global_max - global_min)
+
+    return heatmap_data

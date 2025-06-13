@@ -671,6 +671,8 @@ def get_variations_mean(
 
     all_species = sorted(list(all_species))
 
+    print_log(log_file, f"[GET VARIATION MEAN]{all_species}")
+
     # Calculate the matrix of mean absolute variations
     heatmap_data = np.zeros((len(ko_species_list), len(all_species)))
 

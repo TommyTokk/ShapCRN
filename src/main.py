@@ -204,14 +204,21 @@ def main():
 
             # Create a dict of the ko models
             model_dict = {}
-            for species_to_knockout in target_ids:
+            for ids in target_ids:
                 doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
                 model_copy = doc_copy.getModel()
-                modified_model = sbml_ut.knockout_species(
-                    model_copy, species_to_knockout, log_file
-                )
+                if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
+                    modified_model = sbml_ut.knockout_species(model_copy, ids, log_file)
 
-                model_dict[species_to_knockout] = modified_model
+                    model_dict[ids] = modified_model
+                elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
+                    modified_model = sbml_ut.knockout_reaction(
+                        model_copy, ids, log_file
+                    )
+
+                    model_dict[ids] = modified_model
+                else:
+                    raise Exception("Id not present in the model")
 
             counter = 0
 
@@ -235,6 +242,7 @@ def main():
                 # )
 
                 modified_model = model_dict[species_to_knockout]
+                ut.print_log(log_file, f"model: {modified_model.getName()}")
 
                 modified_rr = sim_ut.load_roadrunner_model(
                     modified_model, integrator, log_file
@@ -248,10 +256,6 @@ def main():
                     end_time=end_time,
                     steady_state=steady_state,
                     max_end_time=max_end_time,
-                )
-                ut.print_log(
-                    log_file,
-                    f"Concentration of {species_to_knockout}:\n {knockout_model_results[:, colnames.index(f'[{species_to_knockout}]')]}",
                 )
 
                 min_ss_time = (
@@ -291,14 +295,47 @@ def main():
                 original_model_simulations_info, knockout_data, log_file=None
             )
 
-            ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
+            # Collect all species and knocked-out species
+            all_species = set()
+            ko_species_list = list(variation_dict.keys())
 
-            plt_ut.plot_variations_heatmap(
-                variation_dict, title="Relative variations heatmap"
+            relative_map, all_species_rel = sim_ut.get_variations_mean(
+                variation_dict,
+                all_species,
+                ko_species_list,
+                variation_type="relative",
+                log_file=log_file,
             )
-            plt_ut.plot_variations_heatmap(
-                variation_dict, variation_type="absolute", title="variation heatmap"
+
+            abs_map, all_species_abs = sim_ut.get_variations_mean(
+                variation_dict,
+                all_species,
+                ko_species_list,
+                variation_type="absolute",
+                log_file=log_file,
             )
+
+            for i in range(len(target_ids)):
+                ut.print_log(log_file, f"Id:{target_ids[i]}")
+                ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
+                ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
+                ut.print_log(log_file, "===========================")
+
+            # ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
+
+            # plt_ut.plot_variations_heatmap(
+            #     relative_map,
+            #     all_species_rel,
+            #     ko_species_list,
+            #     title="Relative variations heatmap",
+            # )
+            # plt_ut.plot_variations_heatmap(
+            #     abs_map,
+            #     all_species_abs,
+            #     ko_species_list,
+            #     variation_type="absolute",
+            #     title="Variation heatmap",
+            # )
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)

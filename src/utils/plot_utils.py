@@ -322,7 +322,9 @@ def plot_all_simulation_traces(
 
 
 def plot_variations_heatmap(
-    variations_dict,
+    heatmap_data,
+    all_species,
+    ko_species_list,
     figsize=(12, 8),
     cmap="RdBu_r",
     save_path="./imgs",
@@ -343,22 +345,6 @@ def plot_variations_heatmap(
         show_averages: Whether to show average variations (default: True)
         title: Custom title for the plot (optional)
     """
-
-    if not variations_dict:
-        print("No variations data to plot.")
-        return
-
-    # Collect all species and knocked-out species
-    all_species = set()
-    ko_species_list = list(variations_dict.keys())
-
-    heatmap_data, all_species = get_variations_mean(
-        variations_dict,
-        all_species,
-        ko_species_list,
-        variation_type=variation_type,
-        log_file=log_file,
-    )
 
     # Validate heatmap_data before proceeding
     if heatmap_data.size == 0:
@@ -429,7 +415,7 @@ def plot_variations_heatmap(
     plt.title(title, fontsize=14, fontweight="bold", pad=20)
 
     plt.xlabel("Species", fontweight="bold")
-    plt.ylabel("Knocked Out Species", fontweight="bold")
+    plt.ylabel("Knocked Out Ids", fontweight="bold")
 
     plt.tight_layout()
 
