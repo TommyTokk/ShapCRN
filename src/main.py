@@ -9,6 +9,7 @@ import roadrunner
 import libsbml
 import numpy as np
 from dotenv import load_dotenv
+import time
 
 
 # Add the src folder path to the Python path
@@ -188,12 +189,6 @@ def main():
                 log_file,
             )
 
-            for combination, comb_info_dict in original_model_simulations_info.items():
-                ut.print_log(log_file, f"{combination}")
-                for species, value in comb_info_dict.items():
-                    ut.print_log(log_file, f"   {species}:{value}")
-                ut.print_log(log_file, f"================================")
-
             knockout_data = []
 
             # FOR DEBUG ONLY
@@ -210,86 +205,99 @@ def main():
                 if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
                     modified_model = sbml_ut.knockout_species(model_copy, ids, log_file)
 
-                    model_dict[ids] = modified_model
                 elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
                     modified_model = sbml_ut.knockout_reaction(
                         model_copy, ids, log_file
                     )
 
-                    model_dict[ids] = modified_model
                 else:
                     raise Exception("Id not present in the model")
 
+                doc_copy.setModel(modified_model)
+                model_dict[ids] = libsbml.writeSBMLToString(doc_copy)
+
             counter = 0
 
-            for species_to_knockout in target_ids:
-                ut.print_log(
-                    log_file,
-                    f"Working on species: {species_to_knockout} ({(counter/len(target_ids))*100}%)",
-                )
-                counter += 1
+            start_time = time.perf_counter()
 
-                # if early_stop == 3:
-                #     break
-                # early_stop += 1
+            knockout_data = sim_ut.process_species_multiprocessing(
+                target_ids,
+                model_dict,
+                combinations,
+                input_species_ids,
+                selections,
+                integrator,
+                start_time=0,
+                end_time=end_time,
+                steady_state=steady_state,
+                max_end_time=max_end_time,
+                min_ss_time=min_ss_time,
+                log_file=log_file,
+            )
 
-                # xml_string, output_filename = sbml_ut.save_file(
-                #     file_name,
-                #     f"no_{species_to_knockout}",
-                #     modified_model,
-                #     True,
-                #     log_file,
-                # )
+            # for species_to_knockout in target_ids:
+            #     ut.print_log(
+            #         log_file,
+            #         f"Working on species: {species_to_knockout} ({(counter/len(target_ids))*100}%)",
+            #     )
+            #     counter += 1
+            #
+            #     modified_model = model_dict[species_to_knockout]
+            #
+            #     # ut.print_log(log_file, f"model: {modified_model.getName()}")
+            #
+            #     modified_rr = sim_ut.load_roadrunner_model(
+            #         modified_model, integrator, log_file
+            #     )
+            #
+            #     modified_rr.selections = selections
+            #
+            #     knockout_model_results, ss_time, colnames = sim_ut.simulate(
+            #         modified_rr,
+            #         start_time=0,
+            #         end_time=end_time,
+            #         steady_state=steady_state,
+            #         max_end_time=max_end_time,
+            #     )
+            #
+            #     min_ss_time = (
+            #         ss_time
+            #         if ss_time is not None and ss_time <= min_ss_time
+            #         else min_ss_time
+            #     )
+            #
+            #     combinations_knockout_model_results = sim_ut.simulate_combinations(
+            #         modified_rr,
+            #         combinations,
+            #         input_species_ids,
+            #         min_ss_time,
+            #         end_time,
+            #         max_end_time,
+            #         steady_state,
+            #         log_file,
+            #     )
+            #
+            #     # Contains information, for each knockedout species,
+            #     # and foreach combination, about the simulation's results
+            #     combinations_knockout_model_simualtions_info = (
+            #         sim_ut.get_simulations_informations(
+            #             combinations_knockout_model_results,
+            #             knockout_model_results,
+            #             combinations,
+            #             colnames[1:],
+            #             log_file,
+            #         )
+            #     )
+            #
+            #     knockout_data.append(
+            #         (species_to_knockout, combinations_knockout_model_simualtions_info)
+            #     )
 
-                modified_model = model_dict[species_to_knockout]
-                ut.print_log(log_file, f"model: {modified_model.getName()}")
+            end_time = time.perf_counter()
 
-                modified_rr = sim_ut.load_roadrunner_model(
-                    modified_model, integrator, log_file
-                )
-
-                modified_rr.selections = selections
-
-                knockout_model_results, ss_time, colnames = sim_ut.simulate(
-                    modified_rr,
-                    start_time=0,
-                    end_time=end_time,
-                    steady_state=steady_state,
-                    max_end_time=max_end_time,
-                )
-
-                min_ss_time = (
-                    ss_time
-                    if ss_time is not None and ss_time <= min_ss_time
-                    else min_ss_time
-                )
-
-                combinations_knockout_model_results = sim_ut.simulate_combinations(
-                    modified_rr,
-                    combinations,
-                    input_species_ids,
-                    min_ss_time,
-                    end_time,
-                    max_end_time,
-                    steady_state,
-                    log_file,
-                )
-
-                # Contains information, for each knockedout species,
-                # and foreach combination, about the simulation's results
-                combinations_knockout_model_simualtions_info = (
-                    sim_ut.get_simulations_informations(
-                        combinations_knockout_model_results,
-                        knockout_model_results,
-                        combinations,
-                        colnames[1:],
-                        log_file,
-                    )
-                )
-
-                knockout_data.append(
-                    (species_to_knockout, combinations_knockout_model_simualtions_info)
-                )
+            ut.print_log(
+                log_file, f"Time to process species: {(end_time-start_time):.2f}s"
+            )
 
             variation_dict = sim_ut.get_simulations_variations(
                 original_model_simulations_info, knockout_data, log_file=None
@@ -307,7 +315,7 @@ def main():
                 log_file=log_file,
             )
 
-            relative_log_map = np.log(relative_map + 1)
+            relative_log_map = np.log10(relative_map + 1)
 
             abs_map, all_species_abs = sim_ut.get_variations_mean(
                 variation_dict,
@@ -317,13 +325,13 @@ def main():
                 log_file=log_file,
             )
 
-            abs_log_map = np.log(abs_map + 1)
+            abs_log_map = np.log10(abs_map + 1)
 
-            for i in range(len(target_ids)):
-                ut.print_log(log_file, f"Id:{target_ids[i]}")
-                ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
-                ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
-                ut.print_log(log_file, "===========================")
+            # for i in range(len(target_ids)):
+            #     ut.print_log(log_file, f"Id:{target_ids[i]}")
+            #     ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
+            #     ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
+            #     ut.print_log(log_file, "===========================")
 
             # ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
 

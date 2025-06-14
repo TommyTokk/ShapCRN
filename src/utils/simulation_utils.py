@@ -1,5 +1,6 @@
 from decimal import *
 from logging import log
+
 import roadrunner as rr
 import libsbml
 import numpy as np
@@ -7,8 +8,11 @@ import matplotlib.pyplot as plt
 import os
 import re
 from collections import defaultdict
+import multiprocessing as mp
+from multiprocessing import Pool
 
-from src.utils.utils import dict_pretty_print, print_log
+
+from src.utils.utils import print_log
 from src.utils import plot_utils as plt_ut
 
 
@@ -152,6 +156,130 @@ def simulate_samples(
 
     return res
     # return rr_model.simulate(start_time, end_time, output_rows)
+
+
+def process_species(args):
+    try:
+        (
+            knockedout_species,
+            modified_model,
+            combinations,
+            input_species_ids,
+            selections,
+            integrator,
+            start_time,
+            end_time,
+            steady_state,
+            max_end_time,
+            min_ss_time,
+            log_file,
+        ) = args
+
+        print_log(log_file, f"Starting processing: {knockedout_species}")
+
+        modified_rr = load_roadrunner_model(modified_model, integrator, log_file)
+
+        modified_rr.selections = selections
+
+        knockout_model_results, ss_time, colnames = simulate(
+            modified_rr,
+            start_time=0,
+            end_time=end_time,
+            steady_state=steady_state,
+            max_end_time=max_end_time,
+        )
+
+        min_ss_time = (
+            ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
+        )
+
+        combinations_knockout_model_results = simulate_combinations(
+            modified_rr,
+            combinations,
+            input_species_ids,
+            min_ss_time,
+            end_time,
+            max_end_time,
+            steady_state,
+            log_file,
+        )
+
+        # Contains information, for each knockedout species,
+        # and foreach combination, about the simulation's results
+        combinations_knockout_model_simualtions_info = get_simulations_informations(
+            combinations_knockout_model_results,
+            knockout_model_results,
+            combinations,
+            colnames[1:],
+            log_file,
+        )
+
+        return (knockedout_species, combinations_knockout_model_simualtions_info)
+    except Exception as e:
+        raise Exception(f"Error during processing species:\n Error: {e}")
+
+
+def process_species_multiprocessing(
+    target_ids,
+    modified_models_dict,
+    combinations,
+    input_species_ids,
+    selections,
+    integrator,
+    start_time,
+    end_time,
+    steady_state,
+    max_end_time,
+    min_ss_time,
+    log_file=None,
+    max_workers=None,
+):
+    # Determine number of workers
+    if max_workers is None:
+        max_workers = min(len(target_ids), mp.cpu_count() - 1, 8)  # Don't use all CPUs
+
+    print_log(
+        log_file,
+        f"Starting multiprocessing with {max_workers} workers for {len(target_ids)} species",
+    )
+
+    # Prepare the arguments
+    process_args = []
+
+    for ts in target_ids:
+        if ts in modified_models_dict.keys():
+            args = (
+                ts,
+                modified_models_dict[ts],
+                combinations,
+                input_species_ids,
+                selections,
+                integrator,
+                start_time,
+                end_time,
+                steady_state,
+                max_end_time,
+                min_ss_time,
+                log_file,
+            )
+
+            process_args.append(args)
+        else:
+            print_log(log_file, f"Warning: No knockout model found for species {ts}")
+
+    print_log(log_file, f"[DEBUG]{len(process_args)}")
+
+    # Create and run the pool
+    try:
+        # Implement the logic using Pool and imap
+        print_log(log_file, f" Starting pool")
+        with Pool() as pool:
+            result = pool.map(process_species, process_args)
+    except Exception as e:
+        print_log(log_file, f"Critical error in multiprocessing: {e}")
+        return []
+
+    return result
 
 
 # FIX: Refactor the code
