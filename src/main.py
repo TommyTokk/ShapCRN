@@ -307,6 +307,8 @@ def main():
                 log_file=log_file,
             )
 
+            relative_log_map = np.log(relative_map + 1)
+
             abs_map, all_species_abs = sim_ut.get_variations_mean(
                 variation_dict,
                 all_species,
@@ -314,6 +316,8 @@ def main():
                 variation_type="absolute",
                 log_file=log_file,
             )
+
+            abs_log_map = np.log(abs_map + 1)
 
             for i in range(len(target_ids)):
                 ut.print_log(log_file, f"Id:{target_ids[i]}")
@@ -323,19 +327,19 @@ def main():
 
             # ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
 
-            # plt_ut.plot_variations_heatmap(
-            #     relative_map,
-            #     all_species_rel,
-            #     ko_species_list,
-            #     title="Relative variations heatmap",
-            # )
-            # plt_ut.plot_variations_heatmap(
-            #     abs_map,
-            #     all_species_abs,
-            #     ko_species_list,
-            #     variation_type="absolute",
-            #     title="Variation heatmap",
-            # )
+            plt_ut.plot_variations_heatmap(
+                relative_log_map,
+                all_species_rel,
+                ko_species_list,
+                title="Relative variations heatmap",
+            )
+            plt_ut.plot_variations_heatmap(
+                abs_log_map,
+                all_species_abs,
+                ko_species_list,
+                variation_type="absolute",
+                title="Variation heatmap",
+            )
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)

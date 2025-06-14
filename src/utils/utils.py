@@ -1,6 +1,7 @@
 import datetime
-
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import json
+import numpy as np
 
 
 def parse_args():
@@ -317,7 +318,7 @@ def pretty_print_variations(variations_dict, precision=4, show_zero=False):
 # === NORMALIZATION ===
 
 
-def normalize_variations_globally(heatmap_data, log_file=None):
+def minMax_normalize(heatmap_data, log_file=None):
 
     global_min = heatmap_data.min()
     global_max = heatmap_data.max()
@@ -326,3 +327,19 @@ def normalize_variations_globally(heatmap_data, log_file=None):
         heatmap_data = (heatmap_data - global_min) / (global_max - global_min)
 
     return heatmap_data
+
+
+def z_score_normalize(heatmap_data, log_file=None):
+
+    means = np.mean(heatmap_data, axis=0)
+    stds = np.std(heatmap_data, axis=0, ddof=0)
+
+    stds_safe = np.where(stds == 0, 1, stds)
+
+    z_scores = (heatmap_data - means) / 3 * stds_safe
+
+    if log_file:
+        log_file.write(f"Column means: {means}\n")
+        log_file.write(f"Column stds: {stds}\n")
+
+    return z_scores

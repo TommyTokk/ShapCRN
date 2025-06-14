@@ -1,11 +1,7 @@
 from logging import log
 import libsbml
 import numpy as np
-import itertools
 from typing import List, Dict, Tuple, Optional, Union
-from src.classes.species import Species
-from src.classes.reaction import Reaction
-from src.classes.function import Function
 from src.utils.utils import print_log
 
 
@@ -106,9 +102,31 @@ class SBMLHandler:
                 boundary_species.append(species.getId())
         return boundary_species
 
+    def generate_species_samples(
+        self, target_species: list[str], n_samples: int = 5, variation: float = 20.0
+    ) -> List[List[float]]:
+        samples = []
+
+        for ts in target_species:
+            t0_conc = (
+                self.model.getListOfSpecies()
+                .getElementById(ts)
+                .getInitialConcentration()
+            )
+
+            ts_samples = []
+
+            for i in range(n_samples):
+                factor = np.random.uniform(1 - variation / 100, 1 + variation / 100)
+                sample = t0_conc + factor
+                ts_samples.append(sample)
+
+            samples.append(ts_samples)
+
+        return samples
+
     def knockout_species(self, target_species_id: str) -> "SBMLHandler":
         copy_handler = self.create_copy()
-        modified_model: SBMLHandler
 
         in_rules = False
 
@@ -180,10 +198,8 @@ class SBMLHandler:
 
             # Knockout the reactions that need to be knocked out
             for reaction_id in reactions_to_knockout:
-                print_log(self.log_file, f"Calling knockout_reaction on {reaction_id}")
-                modified_model = self.knockout_reaction(
-                    copy_handler.model, reaction_id, self.log_file
-                )
+                reaction = copy_handler.model.getReaction(reaction_id)
+                self.set_reaction_kinetic_zero(reaction)
 
         # Set the initial concentration to 0.0 and make the species constant
         for species in copy_handler.model.getListOfSpecies():
@@ -196,12 +212,43 @@ class SBMLHandler:
                         f"Error setting concentration for {species.getId()}",
                     )
 
-        return modified_model
+        return copy_handler
 
-    def generate_species_samples(
-        self, target_species: list[str], n_samples: int = 5, variation: float = 20.0
-    ) -> List[List[float]]:
-        samples = []
-        pass
+    # === REACTION MANAGEMENT ===
 
-        # TODO: Complete the handler class
+    def knockout_reaction(self, target_reaction_id: str) -> "SBMLHandler":
+
+        copy_handler = self.create_copy()
+        reaction = self.model.getReaction(target_reaction_id)
+
+        if reaction:
+            success = self.set_reaction_kinetic_zero(reaction)
+            if success:
+                print_log(self.log_file, f"Knocked out reaction {target_reaction_id}")
+            else:
+                print_log(
+                    self.log_file, f"Failed to knockout reaction {target_reaction_id}"
+                )
+        return copy_handler
+
+    # === UTILS ===
+    def set_species_concentration_zero(self, model, species_id: str) -> bool:
+        species = model.getSpecies(species_id)
+        if species:
+            species.setInitialConcentration(0.0)
+            species.setConstant(True)
+            print_log(
+                self.log_file, f"Set {species_id} concentration to 0 and constant=True"
+            )
+            return True
+        return False
+
+    def set_reaction_kinetic_zero(self, reaction) -> bool:
+        if reaction is not None:
+            zero_ast = libsbml.ASTNode(libsbml.AST_INTEGER)
+            zero_ast.setValue(0)
+            kinetic_law = reaction.getKineticLaw()
+            if kinetic_law:
+                result = kinetic_law.setMath(zero_ast)
+                return result == libsbml.LIBSBML_OPERATION_SUCCESS
+        return False
