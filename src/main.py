@@ -5,6 +5,7 @@ import sys
 import networkx as nx
 import matplotlib.pyplot as plt
 from numpy._typing import _UnknownType
+from classes.SBMLHandler import SBMLHandler
 import roadrunner
 import libsbml
 import numpy as np
@@ -33,6 +34,13 @@ def main():
     try:
         # Process based on command
         if args.command == "simulate":
+
+            sbml_handler = SBMLHandler(args.input_path, log_file)
+
+            sbml_handler.split_reversible_reaction("reaction_0")
+
+            exit(1)
+
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
             sbml_model = sbml_doc.getModel()
@@ -77,10 +85,7 @@ def main():
                 log_file,
                 f"tolerances: abs {rr.integrator.absolute_tolerance} | rel {rr.integrator.relative_tolerance}",
             )
-            ut.print_log(
-                log_file,
-                f"Concentration of species_4:\n {res[:, res.colnames.index('[species_4]')]}",
-            )
+
             plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
 
         elif args.command == "simulate_samples":
@@ -216,7 +221,7 @@ def main():
                 doc_copy.setModel(modified_model)
                 model_dict[ids] = libsbml.writeSBMLToString(doc_copy)
 
-            counter = 0
+            # counter = 0
 
             start_time = time.perf_counter()
 
