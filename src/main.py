@@ -34,13 +34,6 @@ def main():
     try:
         # Process based on command
         if args.command == "simulate":
-
-            sbml_handler = SBMLHandler(args.input_path, log_file)
-
-            sbml_handler.split_reversible_reaction("reaction_0")
-
-            exit(1)
-
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
             sbml_model = sbml_doc.getModel()
@@ -101,8 +94,10 @@ def main():
             sbml_doc = sbml_ut.load_model(args.input_path)
             sbml_model = sbml_doc.getModel()
 
+            model_comps = [c.getId() for c in sbml_model.getListOfCompartments()]
+
             # Split all the reversible reactions in two different reactions
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model, model_comps)
 
             file_name = os.path.basename(args.input_path)
 
@@ -358,7 +353,9 @@ def main():
             sbml_doc = sbml_ut.load_model(args.input_path)
             sbml_model = sbml_doc.getModel()
 
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            model_comps = [c.getId() for c in sbml_model.getListOfCompartments()]
+
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model, model_comps)
 
             file_name = os.path.basename(args.input_path)
 
@@ -398,7 +395,9 @@ def main():
             sbml_model = sbml_doc.getModel()
             file_name = os.path.basename(args.input_path)
 
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            model_comps = [c.getId() for c in sbml_model.getListOfCompartments()]
+
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model, model_comps)
 
             ut.print_log(
                 log_file,

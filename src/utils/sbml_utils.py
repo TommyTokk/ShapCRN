@@ -1,3 +1,4 @@
+import enum
 import os
 
 import libsbml
@@ -11,6 +12,14 @@ from src.classes.function import Function
 
 
 from src.utils.utils import print_log
+
+from enum import Enum
+
+
+class Op(Enum):
+    MINUS = libsbml.AST_MINUS
+    PLUS = libsbml.AST_PLUS
+    PROD = libsbml.AST_TIMES
 
 
 def load_model(model_file_path):
@@ -297,7 +306,7 @@ def print_reactions_as_json(reactions_list):
     dict_pretty_print(reactions_dict)
 
 
-def split_all_reversible_reactions(model):
+def split_all_reversible_reactions(model, model_compartments):
     """
     Split all reversible reactions in a model into forward and reverse reactions
 
@@ -320,7 +329,7 @@ def split_all_reversible_reactions(model):
     # Split each reversible reaction
     for reaction_id in reversible_reaction_ids:
         forward_reaction, reverse_reaction = split_reversible_reaction(
-            model, reaction_id
+            model, reaction_id, model_compartments
         )
 
         model.addReaction(forward_reaction)
@@ -329,7 +338,37 @@ def split_all_reversible_reactions(model):
     return model
 
 
-def split_reversible_reaction(model, reaction_id, log_file=None):
+def parse_ast_tree(ast_node, log_file=None):
+    """
+    Recursively parses an ASTNode from libSBML and returns a dictionary representation.
+    """
+
+    if ast_node is None:
+        return None
+
+    # Base case: if node is a leaf (a number or a variable)
+    if ast_node.getNumChildren() == 0:
+        if ast_node.isName():
+            return {"type": "name", "value": ast_node.getName()}
+        elif ast_node.isNumber():
+            return {"type": "number", "value": ast_node.getValue()}
+        else:
+            return {"type": "unknown", "value": ast_node.toFormula()}
+
+    operator = ast_node.getName()
+    children = [
+        parse_ast_tree(ast_node.getChild(i)) for i in range(ast_node.getNumChildren())
+    ]
+
+    return {
+        "type": "operator",
+        "op": operator,
+        "op_type": ast_node.getType(),
+        "args": children,
+    }
+
+
+def split_reversible_reaction(model, reaction_id, model_compartments, log_file=None):
     """
     Split a reversible reaction into two irreversible reactions (forward and reverse)
 
@@ -367,6 +406,20 @@ def split_reversible_reaction(model, reaction_id, log_file=None):
 
     print_log(log_file, f"{parameters}")
 
+    # Extract the nodes values of AST
+    ast_nodes = kinetic_law.getMath().getListOfNodes()
+    reaction_comps = []
+
+    for i in range(ast_nodes.getSize()):
+        node = ast_nodes.get(i)
+        # print_log(log_file, node.isName())
+        if node.isName():
+            for c in model_compartments:
+                if c == node.getName():
+                    reaction_comps.append(c)
+
+    reaction_comps_string = " * ".join([c for c in reaction_comps])
+
     # TODO: Start the creation of the single reactions
 
     # Creation of forward reaction
@@ -374,7 +427,7 @@ def split_reversible_reaction(model, reaction_id, log_file=None):
     forward_reaction = model.createReaction()
     forward_reaction.setId(f"{reaction_id}_forward")
     forward_reaction.setReversible(False)
-    forward_reaction.setFast(False)
+    # forward_reaction.setFast(False)
 
     # Adding the reactants
     for reactant in reactants:
@@ -397,7 +450,9 @@ def split_reversible_reaction(model, reaction_id, log_file=None):
     k_forward_id = list(parameters.keys())[
         0
     ]  # Assuming the first parameter corresponds to the forward rate
-    math_ast_forward = libsbml.parseL3Formula(f"{k_forward_id} * {reactant_species}")
+    math_ast_forward = libsbml.parseL3Formula(
+        f"{reaction_comps_string} * {k_forward_id} * {reactant_species}"
+    )
     kl_forward.setMath(math_ast_forward)
 
     # Add parameter k_forward
@@ -410,7 +465,7 @@ def split_reversible_reaction(model, reaction_id, log_file=None):
     reverse_reaction = model.createReaction()
     reverse_reaction.setId(f"{reaction_id}_reverse")
     reverse_reaction.setReversible(False)
-    reverse_reaction.setFast(False)
+    # reverse_reaction.setFast(False)
 
     for product in products:
         sr = reverse_reaction.createReactant()
@@ -431,7 +486,9 @@ def split_reversible_reaction(model, reaction_id, log_file=None):
     k_reverse_id = list(parameters.keys())[
         1
     ]  # Assuming the second parameter corresponds to the reverse rate
-    math_ast_reverse = libsbml.parseL3Formula(f"{k_reverse_id} * {product_species}")
+    math_ast_reverse = libsbml.parseL3Formula(
+        f"{reaction_comps_string} * {k_reverse_id} * {product_species}"
+    )
     kl_reverse.setMath(math_ast_reverse)
 
     # Add parameter k_reverse
