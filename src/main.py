@@ -372,6 +372,14 @@ def main():
             modified_model = sbml_ut.knockout_species(
                 sbml_model, args.species_id, log_file
             )
+
+            # modified_model, r = sbml_ut.knockout_species_via_reaction(
+            #     sbml_model, args.species_id, log_file
+            # )
+
+            # if r is None:
+            #     raise Exception("Knockout species failed")
+
             operation_name = f"no_species_{args.species_id}"
 
             ut.print_log(

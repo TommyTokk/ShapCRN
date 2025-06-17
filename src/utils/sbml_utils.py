@@ -212,6 +212,54 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
     return sbml_model
 
 
+def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
+
+    species = sbml_model.getSpecies(target_species_id)
+    species_comp = species.getCompartment()
+
+    # Create the new product species
+
+    p_species = sbml_model.createSpecies()
+    p_species.setId(f"ko_{target_species_id}")
+    p_species.setCompartment(species.getCompartment())
+    p_species.setInitialConcentration(0)
+    # p_species.setStoichiometry(1)
+
+    # Create the new reaction
+    new_reaction = sbml_model.createReaction()
+    new_reaction.setId(f"d_{target_species_id}")
+    new_reaction.setName(f"deactivation_of_{target_species_id}")
+    new_reaction.setReversible(False)
+
+    # Create the reactant
+    react = new_reaction.createReactant()
+    react.setSpecies(species.getId())
+    react.setStoichiometry(1)
+    react.setConstant(species.getConstant())
+
+    # Create the product
+    prod = new_reaction.createProduct()
+    prod.setSpecies(p_species.getId())
+    prod.setStoichiometry(1)
+    prod.setConstant(False)
+
+    # Create the kinetic law of the new reaction
+    kl_deactivation = new_reaction.createKineticLaw()
+    # Create the parameter Id
+    ko_id = "k_ko"
+    param_ko = kl_deactivation.createParameter()
+    param_ko.setId(ko_id)
+    param_ko.setValue(1e10)
+    param_ko.setConstant(True)
+    # Create MathMlL for the reaction
+    math_ast = libsbml.parseL3Formula(f"{ko_id} * {species_comp} * {species.getId()}")
+    kl_deactivation.setMath(math_ast)
+
+    sbml_model.addReaction(new_reaction)
+
+    return (sbml_model, new_reaction)
+
+
 # ============
 # REACTIONS
 # ============
