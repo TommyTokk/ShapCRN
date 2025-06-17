@@ -122,7 +122,7 @@ class SBMLHandler:
 
             for i in range(n_samples):
                 factor = np.random.uniform(1 - variation / 100, 1 + variation / 100)
-                sample = t0_conc + factor
+                sample = t0_conc + (t0_conc * factor)
                 ts_samples.append(sample)
 
             samples.append(ts_samples)
@@ -253,9 +253,9 @@ class SBMLHandler:
 
         kl_math = kinetic_law.getMath()
 
-        nodes = self.parse_ast_tree(kl_math)
+        node_list = []
 
-        self._log(f"{nodes}")
+        # TODO: Complete splitting
 
     def create_reaction(
         self,

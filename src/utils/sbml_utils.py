@@ -354,7 +354,7 @@ def print_reactions_as_json(reactions_list):
     dict_pretty_print(reactions_dict)
 
 
-def split_all_reversible_reactions(model, model_compartments):
+def split_all_reversible_reactions(model):
     """
     Split all reversible reactions in a model into forward and reverse reactions
 
@@ -364,6 +364,13 @@ def split_all_reversible_reactions(model, model_compartments):
     Returns:
         libSBML Model object: The modified model with all reversible reactions split
     """
+
+    model_comps = [c.getId() for c in model.getListOfCompartments()]
+
+    model_params_dict = {}
+
+    for p in model.getListOfParameters():
+        model_params_dict[p.getId()] = p.getValue()
 
     # Get list of reversible reaction IDs (make a copy since we'll be modifying the model)
     reversible_reaction_ids = []
@@ -377,7 +384,7 @@ def split_all_reversible_reactions(model, model_compartments):
     # Split each reversible reaction
     for reaction_id in reversible_reaction_ids:
         forward_reaction, reverse_reaction = split_reversible_reaction(
-            model, reaction_id, model_compartments
+            model, reaction_id, model_comps, model_params_dict
         )
 
         model.addReaction(forward_reaction)
@@ -416,7 +423,9 @@ def parse_ast_tree(ast_node, log_file=None):
     }
 
 
-def split_reversible_reaction(model, reaction_id, model_compartments, log_file=None):
+def split_reversible_reaction(
+    model, reaction_id, model_compartments, model_parameters_dict, log_file=None
+):
     """
     Split a reversible reaction into two irreversible reactions (forward and reverse)
 
@@ -427,6 +436,8 @@ def split_reversible_reaction(model, reaction_id, model_compartments, log_file=N
     Returns:
         Tuple containing the two reactions
     """
+
+    # TODO: Takes all the parameters and not only the local ones
 
     reaction = model.getReaction(reaction_id)
 
@@ -452,8 +463,6 @@ def split_reversible_reaction(model, reaction_id, model_compartments, log_file=N
         param = kinetic_law.getParameter(i)
         parameters[param.getId()] = param.getValue()
 
-    print_log(log_file, f"{parameters}")
-
     # Extract the nodes values of AST
     ast_nodes = kinetic_law.getMath().getListOfNodes()
     reaction_comps = []
@@ -462,16 +471,18 @@ def split_reversible_reaction(model, reaction_id, model_compartments, log_file=N
         node = ast_nodes.get(i)
         # print_log(log_file, node.isName())
         if node.isName():
-            for c in model_compartments:
-                if c == node.getName():
-                    reaction_comps.append(c)
+            if node.getName() in model_parameters_dict.keys():
+                parameters[node.getName()] = model_parameters_dict[node.getName()]
+            else:
+                for c in model_compartments:
+                    if c == node.getName():
+                        reaction_comps.append(c)
+
+    print_log(log_file, f"{parameters}")
 
     reaction_comps_string = " * ".join([c for c in reaction_comps])
 
-    # TODO: Start the creation of the single reactions
-
     # Creation of forward reaction
-
     forward_reaction = model.createReaction()
     forward_reaction.setId(f"{reaction_id}_forward")
     forward_reaction.setReversible(False)
