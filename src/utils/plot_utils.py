@@ -384,8 +384,12 @@ def plot_variations_heatmap(
         print_log(log_file, f"Valid data points: {len(valid_data)}/{heatmap_data.size}")
         print_log(log_file, f"Data range: {vmin:.6f} to {vmax:.6f}")
 
+    masked_data = np.ma.masked_invalid(heatmap_data)
+    cmap = plt.get_cmap(cmap).copy()
+    cmap.set_bad(color="black")  # Optional: makes NaNs visible
+
     # Draw the heatmap
-    im = plt.imshow(heatmap_data, cmap=cmap, aspect="auto", vmin=vmin, vmax=vmax)
+    im = plt.imshow(masked_data, cmap=cmap, aspect="auto", vmin=vmin, vmax=vmax)
 
     # Set x- and y-axis labels
     plt.xticks(range(len(all_species)), all_species, rotation=45, ha="right")

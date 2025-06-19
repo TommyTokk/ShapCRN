@@ -1,5 +1,9 @@
 from decimal import *
+import enum
+from itertools import combinations
 from logging import log
+
+from matplotlib.cbook import print_cycles
 
 import roadrunner as rr
 import libsbml
@@ -193,7 +197,7 @@ def process_species(args):
             ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
         )
 
-        combinations_knockout_model_results = simulate_combinations(
+        combinations_knockout_model_results, colnames = simulate_combinations(
             modified_rr,
             combinations,
             input_species_ids,
@@ -215,6 +219,46 @@ def process_species(args):
         )
 
         return (knockedout_species, combinations_knockout_model_simualtions_info)
+    except Exception as e:
+        raise Exception(f"Error during processing species:\n Error: {e}")
+
+
+def process_species_no_samples(args):
+    try:
+        (
+            knockedout_species,
+            modified_model,
+            combinations,
+            input_species_ids,
+            selections,
+            integrator,
+            start_time,
+            end_time,
+            steady_state,
+            max_end_time,
+            min_ss_time,
+            log_file,
+        ) = args
+
+        print_log(log_file, f"Starting processing: {knockedout_species}")
+
+        modified_rr = load_roadrunner_model(modified_model, integrator, log_file)
+
+        modified_rr.selections = selections
+
+        knockout_model_results, ss_time, colnames = simulate(
+            modified_rr,
+            start_time=0,
+            end_time=end_time,
+            steady_state=steady_state,
+            max_end_time=max_end_time,
+        )
+
+        min_ss_time = (
+            ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
+        )
+
+        return (knockedout_species, knockout_model_results)
     except Exception as e:
         raise Exception(f"Error during processing species:\n Error: {e}")
 
@@ -274,12 +318,62 @@ def process_species_multiprocessing(
         # Implement the logic using Pool and imap
         print_log(log_file, f" Starting pool")
         with Pool() as pool:
+            # result = pool.map(process_species, process_args)
             result = pool.map(process_species, process_args)
     except Exception as e:
         print_log(log_file, f"Critical error in multiprocessing: {e}")
         return []
 
     return result
+
+
+def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
+    variations_dict = {}
+    species_idxs = {}
+    exp = r"[\[\]]"
+
+    getcontext().prec = 15
+
+    # taking the indices
+
+    for cn in colnames:
+        id = re.sub(exp, "", cn)
+        species_idxs[id] = colnames.index(cn)
+
+        # print_log(log_file, f"{cn}, {species_idx[cn]}")
+
+    for i in range(len(ko_models)):
+
+        ko_species, ko_spec_result = ko_models[i]
+
+        variations_dict[ko_species] = {}
+
+        for species in species_idxs.keys():
+
+            # if species == ko_species:
+            #     continue
+
+            original_last_value = np.float64(original_model[-1, species_idxs[species]])
+            ko_last_value = np.float64(ko_spec_result[-1, species_idxs[species]])
+
+            variation = ko_last_value - original_last_value
+
+            try:
+                if np.isclose(original_last_value, 0, atol=1e-15):
+                    relative_variation = (
+                        np.inf if variation > 0 else (-np.inf if variation < 0 else 0.0)
+                    )
+                else:
+                    relative_variation = variation / original_last_value
+
+                variations_dict[ko_species][species] = {
+                    "variation": variation,
+                    "relative-variation": relative_variation,
+                }
+            except Exception as e:
+                print_log(log_file, f" Error in relative variation calculation: {e}")
+
+    return variations_dict
 
 
 # FIX: Refactor the code
@@ -753,34 +847,38 @@ def get_simulations_variations(
             for species, original_value in original_info_dict.items():
 
                 if species == ko_species:
-                    continue
+                    variation = np.nan
+                    relative_variation = np.nan
 
-                if species not in species_dict[combination]:
-                    continue
+                elif species not in species_dict[combination]:
+                    variation = np.nan
+                    relative_variation = np.nan
+                else:
 
-                original_val = np.float64(original_value)
-                ko_value = np.float64(species_dict[combination][species])
+                    original_val = np.float64(original_value)
+                    ko_value = np.float64(species_dict[combination][species])
 
-                variation = ko_value - original_value
+                    variation = ko_value - original_value
+                    relative_variation = np.nan
 
-                try:
-                    if np.isclose(original_val, 0, atol=1e-15):
-                        relative_variation = (
-                            np.inf
-                            if variation > 0
-                            else (-np.inf if variation < 0 else 0.0)
+                    try:
+                        if np.isclose(original_val, 0, atol=1e-15):
+                            relative_variation = (
+                                np.inf
+                                if variation > 0
+                                else (-np.inf if variation < 0 else 0.0)
+                            )
+                        else:
+                            relative_variation = variation / original_val
+                    except Exception as e:
+                        print_log(
+                            log_file, f" Error in relative variation calculation: {e}"
                         )
-                    else:
-                        relative_variation = variation / original_val
 
-                    variations_dict[ko_species][combination][species] = {
-                        "variation": variation,
-                        "relative-variation": relative_variation,
-                    }
-                except Exception as e:
-                    print_log(
-                        log_file, f" Error in relative variation calculation: {e}"
-                    )
+                variations_dict[ko_species][combination][species] = {
+                    "variation": variation,
+                    "relative-variation": relative_variation,
+                }
 
     return variations_dict
 
@@ -823,6 +921,48 @@ def get_variations_mean(
     return (heatmap_data, all_species)
 
 
+def get_variations_hm_no_samples(
+    variations_dict,
+    all_species,
+    ko_species_list,
+    variation_type="relative",
+    log_file=None,
+):
+
+    for ko_spec, obj in variations_dict.items():
+        all_species.update(obj.keys())
+
+    all_species = sorted(list(all_species))
+
+    # Calculate the matrix of mean absolute variations
+    heatmap_data = np.zeros((len(ko_species_list), len(all_species)))
+
+    for i, ko_species in enumerate(ko_species_list):
+        for j, species in enumerate(all_species):
+            if ko_species == species:
+                # Automatically skip self-variation (KO species vs itself)
+                heatmap_data[i, j] = np.nan
+                print_log(log_file, f"Skipping KO species {ko_species} for itself.")
+            else:
+                try:
+                    variation_entry = variations_dict[ko_species][species]
+                    key = (
+                        "relative-variation"
+                        if variation_type.lower() == "relative"
+                        else "variation"
+                    )
+                    heatmap_data[i, j] = variation_entry[key]
+                except KeyError:
+                    # If missing from variations_dict, fill with NaN
+                    heatmap_data[i, j] = np.nan
+                    print_log(
+                        log_file,
+                        f"Missing data for KO {ko_species}, species {species}.",
+                    )
+
+    return heatmap_data, all_species
+
+
 def simulate_combinations(
     rr,
     combinations,
@@ -857,7 +997,7 @@ def simulate_combinations(
     if steady_state:
         print_log(log_file, f"Min ss_time: {min_ss_time}")
 
-    return samples_simulations_results
+    return samples_simulations_results, colnames
 
 
 def get_importance_informations(

@@ -120,7 +120,16 @@ def species_dict_list(species_list):
 
 def knockout_species(sbml_model, target_species_id, log_file=None):
     """
-    Removes a species from the products of reactions and sets its initial concentration to 0.
+    Knockout the target species with the following logic:
+        - If the target species is a reactant then remove the reaction
+        - If the target species is a product, then remove the species from the products
+        - Set the initial concentration of the species to 0
+
+    Args:
+        - sbml_model: SBML model to use
+        - target_species_id: Target species's id
+        - log_file: File used to print information
+            - stdout if None
     """
     in_rules = False
 
@@ -185,14 +194,15 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
 
         for reaction_id, indices in products_by_reaction.items():
             reaction = sbml_model.getReaction(reaction_id)
+
             # Sort indices in descending order to remove from end to beginning
             for idx in sorted(indices, reverse=True):
                 print_log(
                     log_file, f"Removing product at index {idx} from {reaction_id}"
                 )
                 reaction.removeProduct(idx)
-                # if reaction.getNumProducts() == 0:
-                #     reactions_to_knockout.append(reaction_id)
+                if reaction.getNumProducts() == 0:
+                    reactions_to_knockout.append(reaction_id)
 
         # Knockout the reactions that need to be knocked out
         for reaction_id in reactions_to_knockout:
@@ -213,7 +223,17 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
 
 
 def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
+    """
+    Knockout the target species creating a new, fast reaction that consume the species
 
+    Args:
+        - sbml_model: SBML model to use
+        - target_species_id: Target species's id
+        - log_file: File to use to print informations
+            - stdout if None
+    """
+
+    # Get the species obj from the model
     species = sbml_model.getSpecies(target_species_id)
     species_comp = species.getCompartment()
 
@@ -354,7 +374,7 @@ def print_reactions_as_json(reactions_list):
     dict_pretty_print(reactions_dict)
 
 
-def split_all_reversible_reactions(model):
+def split_all_reversible_reactions(model, log_file=None):
     """
     Split all reversible reactions in a model into forward and reverse reactions
 
@@ -365,10 +385,12 @@ def split_all_reversible_reactions(model):
         libSBML Model object: The modified model with all reversible reactions split
     """
 
+    # Get the model compartments
     model_comps = [c.getId() for c in model.getListOfCompartments()]
 
     model_params_dict = {}
 
+    # Get the model parameters
     for p in model.getListOfParameters():
         model_params_dict[p.getId()] = p.getValue()
 
@@ -379,7 +401,9 @@ def split_all_reversible_reactions(model):
         if reaction.getReversible():
             reversible_reaction_ids.append(reaction.getId())
 
-    print(f"Found {len(reversible_reaction_ids)} reversible reactions to split")
+    print_log(
+        log_file, f"Found {len(reversible_reaction_ids)} reversible reactions to split"
+    )
 
     # Split each reversible reaction
     for reaction_id in reversible_reaction_ids:
@@ -429,6 +453,9 @@ def split_reversible_reaction(
     """
     Split a reversible reaction into two irreversible reactions (forward and reverse)
 
+    This method asssumes that the kinetic_law corresponding to reaction_id has the form:
+        k_forward * [reactants] - k_reverse[products]
+
     Args:
         model: libSBML Model object
         reaction_id: ID of the reversible reaction to split
@@ -437,8 +464,7 @@ def split_reversible_reaction(
         Tuple containing the two reactions
     """
 
-    # TODO: Takes all the parameters and not only the local ones
-
+    # Get the reaction from the model
     reaction = model.getReaction(reaction_id)
 
     if reaction is None:
@@ -447,9 +473,11 @@ def split_reversible_reaction(
     if not reaction.getReversible():
         raise ValueError(f"Reaction '{reaction_id}' is already irreversible.")
 
+    # Get reactants and products
     reactants = reaction.getListOfReactants()
     products = reaction.getListOfProducts()
 
+    # Get kinetic law
     kinetic_law = reaction.getKineticLaw()
 
     if kinetic_law is None:
@@ -457,26 +485,32 @@ def split_reversible_reaction(
             f"Reaction '{reaction_id}' does not have a kinetic law defined."
         )
 
-    # Extract parameters from the kinetic law
     parameters = {}
-    for i in range(kinetic_law.getNumParameters()):
-        param = kinetic_law.getParameter(i)
-        parameters[param.getId()] = param.getValue()
 
     # Extract the nodes values of AST
     ast_nodes = kinetic_law.getMath().getListOfNodes()
     reaction_comps = []
 
+    # Extract reaction parameters and compartments
+    # TODO: Improve compartments and parameters load
     for i in range(ast_nodes.getSize()):
+        # Get the AST node
         node = ast_nodes.get(i)
         # print_log(log_file, node.isName())
         if node.isName():
+            # Check if the node is a parameter
             if node.getName() in model_parameters_dict.keys():
                 parameters[node.getName()] = model_parameters_dict[node.getName()]
             else:
                 for c in model_compartments:
+                    # check if the node is a compartment
                     if c == node.getName():
                         reaction_comps.append(c)
+
+    # Extract parameters from the kinetic law
+    for i in range(kinetic_law.getNumParameters()):
+        param = kinetic_law.getParameter(i)
+        parameters[param.getId()] = param.getValue()
 
     print_log(log_file, f"{parameters}")
 
@@ -526,12 +560,14 @@ def split_reversible_reaction(
     reverse_reaction.setReversible(False)
     # reverse_reaction.setFast(False)
 
+    # Create the reactants for reverse reaction
     for product in products:
         sr = reverse_reaction.createReactant()
         sr.setSpecies(product.getSpecies())
         sr.setStoichiometry(product.getStoichiometry())
         sr.setConstant(product.getConstant())
 
+    # Create the products for reverse reaction
     for reactant in reactants:
         sr = reverse_reaction.createProduct()
         sr.setSpecies(reactant.getSpecies())
@@ -590,8 +626,6 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
             result = kinetic_law.setMath(zero_ast)
 
             if result == libsbml.LIBSBML_OPERATION_SUCCESS:
-                # Force model validation/consistency check
-                # sbml_model.checkConsistency()
                 print_log(
                     log_file, f"Successfully knocked out reaction {target_reaction_id}"
                 )
@@ -751,7 +785,7 @@ def generate_species_samples(
         for i in range(n_samples):
             # Sample multiplication factors between (1-variation/100) and (1+variation/100)
             factor = np.random.uniform(1 - variation / 100, 1 + variation / 100)
-            sample = t0_conc + factor
+            sample = t0_conc + (factor * t0_conc)
             tmp.append(sample)
 
         res.append(tmp)

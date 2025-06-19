@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from math import log
+from math import log, nan
 import os
 import sys
 import networkx as nx
@@ -74,10 +74,10 @@ def main():
             # ut.print_log(log_file, f"Colnames: {colnames}")
 
             # ut.print_log(log_file, rr["[Px]"])
-            ut.print_log(
-                log_file,
-                f"tolerances: abs {rr.integrator.absolute_tolerance} | rel {rr.integrator.relative_tolerance}",
-            )
+            # ut.print_log(
+            #     log_file,
+            #     f"tolerances: abs {rr.integrator.absolute_tolerance} | rel {rr.integrator.relative_tolerance}",
+            # )
 
             plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
 
@@ -162,7 +162,7 @@ def main():
 
             # Simulate the original model with samples
             ut.print_log(log_file, "Simulating original model with samples")
-            samples_simulations_results = sim_ut.simulate_combinations(
+            samples_simulations_results, _ = sim_ut.simulate_combinations(
                 rr,
                 combinations,
                 input_species_ids,
@@ -293,6 +293,54 @@ def main():
 
             end_time = time.perf_counter()
 
+            # === IF NO SAMPLES ===
+            # sim_variations = sim_ut.get_knockout_variation(
+            #     original_results, knockout_data, colnames[1:], log_file
+            # )
+            #
+            # for ko_species, obj in sim_variations.items():
+            #     ut.print_log(log_file, f"{ko_species}")
+            #     for species, var_obj in obj.items():
+            #         ut.print_log(log_file, f"   {species}")
+            #         ut.print_log(log_file, f"       var: {var_obj['variation']}")
+            #         ut.print_log(
+            #             log_file, f"       rel-var: {var_obj['relative-variation']}"
+            #         )
+            #
+            # ko_species_list = list(sim_variations.keys())
+            #
+            # all_species = set()
+            #
+            # relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
+            #     sim_variations, all_species, ko_species_list, log_file=log_file
+            # )
+            #
+            # abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
+            #     sim_variations, all_species, ko_species_list, "absolute", log_file
+            # )
+            #
+            # log_rel_map = np.log(relative_map + 1)
+            # log_abs_map = np.log(abs_map + 1)
+            #
+            # for i in range(len(log_rel_map)):
+            #     for j in range(len(log_rel_map[i])):
+            #         ut.print_log(log_file, f"{i}, {j}: {log_rel_map[i,j]}")
+            #
+            # plt_ut.plot_variations_heatmap(
+            #     log_rel_map,
+            #     all_species_rel,
+            #     ko_species_list,
+            #     title="Relative variations heatmap",
+            # )
+            # plt_ut.plot_variations_heatmap(
+            #     log_abs_map,
+            #     all_species_abs,
+            #     ko_species_list,
+            #     variation_type="absolute",
+            #     title="Variation heatmap",
+            # )
+            # ====================
+
             ut.print_log(
                 log_file, f"Time to process species: {(end_time-start_time):.2f}s"
             )
@@ -313,7 +361,7 @@ def main():
                 log_file=log_file,
             )
 
-            relative_log_map = np.log10(relative_map + 1)
+            relative_log_map = np.log(relative_map + 1)
 
             abs_map, all_species_abs = sim_ut.get_variations_mean(
                 variation_dict,
@@ -323,7 +371,7 @@ def main():
                 log_file=log_file,
             )
 
-            abs_log_map = np.log10(abs_map + 1)
+            abs_log_map = np.log(abs_map + 1)
 
             # for i in range(len(target_ids)):
             #     ut.print_log(log_file, f"Id:{target_ids[i]}")
