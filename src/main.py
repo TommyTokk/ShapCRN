@@ -233,64 +233,6 @@ def main():
                 log_file=log_file,
             )
 
-            # for species_to_knockout in target_ids:
-            #     ut.print_log(
-            #         log_file,
-            #         f"Working on species: {species_to_knockout} ({(counter/len(target_ids))*100}%)",
-            #     )
-            #     counter += 1
-            #
-            #     modified_model = model_dict[species_to_knockout]
-            #
-            #     # ut.print_log(log_file, f"model: {modified_model.getName()}")
-            #
-            #     modified_rr = sim_ut.load_roadrunner_model(
-            #         modified_model, integrator, log_file
-            #     )
-            #
-            #     modified_rr.selections = selections
-            #
-            #     knockout_model_results, ss_time, colnames = sim_ut.simulate(
-            #         modified_rr,
-            #         start_time=0,
-            #         end_time=end_time,
-            #         steady_state=steady_state,
-            #         max_end_time=max_end_time,
-            #     )
-            #
-            #     min_ss_time = (
-            #         ss_time
-            #         if ss_time is not None and ss_time <= min_ss_time
-            #         else min_ss_time
-            #     )
-            #
-            #     combinations_knockout_model_results = sim_ut.simulate_combinations(
-            #         modified_rr,
-            #         combinations,
-            #         input_species_ids,
-            #         min_ss_time,
-            #         end_time,
-            #         max_end_time,
-            #         steady_state,
-            #         log_file,
-            #     )
-            #
-            #     # Contains information, for each knockedout species,
-            #     # and foreach combination, about the simulation's results
-            #     combinations_knockout_model_simualtions_info = (
-            #         sim_ut.get_simulations_informations(
-            #             combinations_knockout_model_results,
-            #             knockout_model_results,
-            #             combinations,
-            #             colnames[1:],
-            #             log_file,
-            #         )
-            #     )
-            #
-            #     knockout_data.append(
-            #         (species_to_knockout, combinations_knockout_model_simualtions_info)
-            #     )
-
             end_time = time.perf_counter()
 
             # === IF NO SAMPLES ===
@@ -353,7 +295,7 @@ def main():
             all_species = set()
             ko_species_list = list(variation_dict.keys())
 
-            relative_map, all_species_rel = sim_ut.get_variations_mean(
+            relative_map, all_species_rel = sim_ut.get_variations_hm_samples(
                 variation_dict,
                 all_species,
                 ko_species_list,
@@ -363,7 +305,11 @@ def main():
 
             relative_log_map = np.log(relative_map + 1)
 
-            abs_map, all_species_abs = sim_ut.get_variations_mean(
+            for i in range(len(relative_log_map)):
+                for j in range(len(relative_log_map[i])):
+                    ut.print_log(log_file, f"{i}, {j}: {relative_log_map[i,j]}")
+
+            abs_map, all_species_abs = sim_ut.get_variations_hm_samples(
                 variation_dict,
                 all_species,
                 ko_species_list,

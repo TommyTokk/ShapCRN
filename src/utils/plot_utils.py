@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.colors as colors
 import os  # needed for saving
 from collections import defaultdict
-from utils.simulation_utils import get_variations_mean
+
 from utils.utils import print_log
 
 

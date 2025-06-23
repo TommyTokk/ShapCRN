@@ -837,7 +837,6 @@ def get_simulations_variations(
         Dict: Nested dictionary with variations per species and combination
     """
     variations_dict = {}
-    getcontext().prec = 15
 
     for ko_species, species_dict in final_results_knocked_model:
         variations_dict[ko_species] = {}
@@ -862,7 +861,7 @@ def get_simulations_variations(
                     relative_variation = np.nan
 
                     try:
-                        if np.isclose(original_val, 0, atol=1e-15):
+                        if np.isclose(original_val, 0, atol=1e-20):
                             relative_variation = (
                                 np.inf
                                 if variation > 0
@@ -883,7 +882,7 @@ def get_simulations_variations(
     return variations_dict
 
 
-def get_variations_mean(
+def get_variations_hm_samples(
     variations_dict,
     all_species,
     ko_species_list,
@@ -917,7 +916,7 @@ def get_variations_mean(
                         variations.append(combination_data[species]["variation"])
 
             if variations:
-                heatmap_data[i, j] = np.mean([abs(v) for v in variations])
+                heatmap_data[i, j] = np.square(np.mean([v**2 for v in variations]))
     return (heatmap_data, all_species)
 
 
@@ -951,7 +950,7 @@ def get_variations_hm_no_samples(
                         if variation_type.lower() == "relative"
                         else "variation"
                     )
-                    heatmap_data[i, j] = variation_entry[key]
+                    heatmap_data[i, j] = np.sqrt(variation_entry[key] ** 2)
                 except KeyError:
                     # If missing from variations_dict, fill with NaN
                     heatmap_data[i, j] = np.nan

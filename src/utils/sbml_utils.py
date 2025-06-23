@@ -399,6 +399,9 @@ def split_all_reversible_reactions(model, log_file=None):
     for i in range(model.getNumReactions()):
         reaction = model.getReaction(i)
         if reaction.getReversible():
+            print_log(
+                log_file, f"Found {reaction.getName()}, rev: {reaction.getReversible()}"
+            )
             reversible_reaction_ids.append(reaction.getId())
 
     print_log(
@@ -469,6 +472,8 @@ def split_reversible_reaction(
 
     if reaction is None:
         raise ValueError(f"Reaction with ID '{reaction_id}' not found in the model.")
+
+    print_log(log_file, f"is reversible: {reaction.getReversible()}")
 
     if not reaction.getReversible():
         raise ValueError(f"Reaction '{reaction_id}' is already irreversible.")
@@ -543,9 +548,23 @@ def split_reversible_reaction(
     k_forward_id = list(parameters.keys())[
         0
     ]  # Assuming the first parameter corresponds to the forward rate
-    math_ast_forward = libsbml.parseL3Formula(
-        f"{reaction_comps_string} * {k_forward_id} * {reactant_species}"
+
+    print_log(
+        log_file,
+        f"ast string: {reaction_comps_string}, {k_forward_id}, {reactant_species}",
     )
+
+    parts = []
+    if reaction_comps_string:
+        parts.append(reaction_comps_string)
+    if k_forward_id:
+        parts.append(k_forward_id)
+    if reactant_species:
+        parts.append(reactant_species)
+
+    expr = " * ".join(parts)
+    math_ast_forward = libsbml.parseL3Formula(expr)
+
     kl_forward.setMath(math_ast_forward)
 
     # Add parameter k_forward
@@ -581,9 +600,17 @@ def split_reversible_reaction(
     k_reverse_id = list(parameters.keys())[
         1
     ]  # Assuming the second parameter corresponds to the reverse rate
-    math_ast_reverse = libsbml.parseL3Formula(
-        f"{reaction_comps_string} * {k_reverse_id} * {product_species}"
-    )
+    parts = []
+    if reaction_comps_string:
+        parts.append(reaction_comps_string)
+    if k_reverse_id:
+        parts.append(k_reverse_id)
+    if product_species:
+        parts.append(product_species)
+
+    expr = " * ".join(parts)
+    math_ast_reverse = libsbml.parseL3Formula(expr)
+
     kl_reverse.setMath(math_ast_reverse)
 
     # Add parameter k_reverse
