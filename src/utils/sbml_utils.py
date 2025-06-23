@@ -802,10 +802,16 @@ def generate_species_samples(
     res = []
 
     for ts in target_species:
+        species = sbml_model.getListOfSpecies().getElementBySId(ts)
         # taking initial concentration
-        t0_conc = (
-            sbml_model.getListOfSpecies().getElementBySId(ts).getInitialConcentration()
-        )
+        try:
+            t0_conc = species.getInitialConcentration()
+        except Exception as e:
+            if species.getHasOnlySubstanceUnits():
+                print_log(log_file, f" Using amount for {ts}")
+                t0_conc = species.getInitialAmount()
+            else:
+                raise Exception(f"Invalid format for species {ts}")
 
         tmp = []
 
