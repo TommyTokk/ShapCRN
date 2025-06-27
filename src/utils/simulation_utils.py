@@ -162,7 +162,7 @@ def simulate_samples(
     # return rr_model.simulate(start_time, end_time, output_rows)
 
 
-def process_species(args):
+def process_species_samples(args):
     try:
         (
             knockedout_species,
@@ -311,7 +311,7 @@ def process_species_multiprocessing(
         else:
             print_log(log_file, f"Warning: No knockout model found for species {ts}")
 
-    print_log(log_file, f"[DEBUG]{len(process_args)}")
+    # print_log(log_file, f"[DEBUG]{len(process_args)}")
 
     # Create and run the pool
     try:
@@ -319,7 +319,13 @@ def process_species_multiprocessing(
         print_log(log_file, f" Starting pool")
         with Pool() as pool:
             # result = pool.map(process_species, process_args)
-            result = pool.map(process_species, process_args)
+            if input_species_ids is not None and combinations is not None:
+                operation = process_species_samples
+            else:
+                operation = process_species_no_samples
+
+            print_log(log_file, f"[PROCESS] {operation}")
+            result = pool.map(operation, process_args)
     except Exception as e:
         print_log(log_file, f"Critical error in multiprocessing: {e}")
         return []
@@ -331,8 +337,6 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
     variations_dict = {}
     species_idxs = {}
     exp = r"[\[\]]"
-
-    getcontext().prec = 15
 
     # taking the indices
 
@@ -359,7 +363,7 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
             variation = ko_last_value - original_last_value
 
             try:
-                if np.isclose(original_last_value, 0, atol=1e-15):
+                if np.isclose(original_last_value, 0, atol=1e-20):
                     relative_variation = (
                         np.inf if variation > 0 else (-np.inf if variation < 0 else 0.0)
                     )
@@ -635,6 +639,13 @@ def get_simulations_informations(
 ):
     """
     Returns a dictionary with original and perturbation results for each target species.
+
+    Args:
+        - samples_simulations_results: Dictionary containing, for each combination, the results of the simulation
+        - original_results: Structured array containing the results from the original model
+        - combinations: List of combinations
+        - colnames: List of colnames of the model
+        - log_file: File used to print log informations
     """
 
     target_indices = {}
@@ -822,7 +833,7 @@ def get_simulations_informations_with_detailed_data(
     return table_results
 
 
-def get_simulations_variations(
+def get_knockout_variations_samples(
     final_results_original_model, final_results_knocked_model, log_file=None
 ):
     """
@@ -889,6 +900,16 @@ def get_variations_hm_samples(
     variation_type="relative",
     log_file=None,
 ):
+    """
+    Create the variation's heatmap when samples are needed
+
+    Args:
+        - variations_dict: Dictionary containing the variations information
+        - all_species: List of all the species in the model
+        - ko_species_list: List of species that has been knocked out
+        - variation_type: Type of variation to plot
+        - log_file: File where to print the debug information
+    """
 
     for combinations in variations_dict.values():
         for species_data in combinations.values():
@@ -898,7 +919,7 @@ def get_variations_hm_samples(
 
     # print_log(log_file, f"[GET VARIATION MEAN]{all_species}")
 
-    # Calculate the matrix of mean absolute variations
+    # Calculate the variation's matrix
     heatmap_data = np.zeros((len(ko_species_list), len(all_species)))
 
     for i, ko_species in enumerate(ko_species_list):
@@ -916,6 +937,7 @@ def get_variations_hm_samples(
                         variations.append(combination_data[species]["variation"])
 
             if variations:
+                # Use the RMS to avoid the lost of information
                 heatmap_data[i, j] = np.square(np.mean([v**2 for v in variations]))
     return (heatmap_data, all_species)
 
@@ -927,13 +949,25 @@ def get_variations_hm_no_samples(
     variation_type="relative",
     log_file=None,
 ):
+    """
+    Create the heatmap with the variations information when no samples are needed.
+
+    Args:
+        - variation_dict: Dictionary containing the variation for each species
+        - all_species: List of all the species in the model
+        - ko_species_list: List of species that has been knocked out
+        - variation_type: Variation type to use to build the heatmap
+        - log_file: File where to print the debug informations
+    Returns:
+        - A couple (heatmap, all_species)
+    """
 
     for ko_spec, obj in variations_dict.items():
         all_species.update(obj.keys())
 
     all_species = sorted(list(all_species))
 
-    # Calculate the matrix of mean absolute variations
+    # Calculate the variation's matrix
     heatmap_data = np.zeros((len(ko_species_list), len(all_species)))
 
     for i, ko_species in enumerate(ko_species_list):

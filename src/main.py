@@ -106,36 +106,43 @@ def main():
             else:
                 target_ids = args.target_ids
 
-            target_ids = list(set(target_ids) - set(input_species_ids))
-            # ut.print_log(log_file, f"{target_ids}")
+            if input_species_ids is not None:
+                target_ids = list(set(target_ids) - set(input_species_ids))
+                # ut.print_log(log_file, f"{target_ids}")
 
             # ut.print_log(log_file, f"target ids: {target_ids}")
             target_ids.sort()
 
+            # Get the list of species
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
-            # Generate the samples
-            samples = sbml_ut.generate_species_samples(
-                sbml_model,
-                target_species=input_species_ids,
-                log_file=log_file,
-                n_samples=args.num_samples,
-                variation=args.variation,
-            )
+            combinations = None
 
-            # Create the combinations
-            combinations = sbml_ut.create_samples_combination(samples, log_file)
+            if input_species_ids is not None:
+                ut.print_log(log_file, "Running with samples generations")
+                # Generate the samples
+                samples = sbml_ut.generate_species_samples(
+                    sbml_model,
+                    target_species=input_species_ids,
+                    log_file=log_file,
+                    n_samples=args.num_samples,
+                    variation=args.variation,
+                )
 
+                # Create the combinations
+                combinations = sbml_ut.create_samples_combination(samples, log_file)
+            else:
+                ut.print_log(log_file, "Running without samples generations")
             # Load the model
             rr = sim_ut.load_roadrunner_model(sbml_model, integrator, log_file)
 
             # Get the selections
-
             selections = rr.selections
             for s in species_list:
                 if f"[{s}]" not in selections:
                     selections.append(f"[{s}]")
 
+            # Add also the reactions in the selections if target
             for ts in target_ids:
                 if ts in sbml_model.getListOfReactions().getId():
                     selections.append(f"{ts}")
@@ -160,32 +167,33 @@ def main():
                 else min_ss_time
             )
 
-            # Simulate the original model with samples
-            ut.print_log(log_file, "Simulating original model with samples")
-            samples_simulations_results, _ = sim_ut.simulate_combinations(
-                rr,
-                combinations,
-                input_species_ids,
-                min_ss_time,
-                end_time,
-                max_end_time,
-                steady_state,
-                log_file,
-            )
+            if input_species_ids is not None:
+                # Simulate the original model with samples
+                ut.print_log(log_file, "Simulating original model with samples")
+                samples_simulations_results, _ = sim_ut.simulate_combinations(
+                    rr,
+                    combinations,
+                    input_species_ids,
+                    min_ss_time,
+                    end_time,
+                    max_end_time,
+                    steady_state,
+                    log_file,
+                )
 
-            ut.print_log(
-                log_file, "Getting simulations informations of the original model"
-            )
+                ut.print_log(
+                    log_file, "Getting simulations informations of the original model"
+                )
 
-            ut.print_log(log_file, f"{len(species_list)}")
-            # Getting the information about the original model
-            original_model_simulations_info = sim_ut.get_simulations_informations(
-                samples_simulations_results,
-                original_results,
-                combinations,
-                colnames[1:],
-                log_file,
-            )
+                ut.print_log(log_file, f"{len(species_list)}")
+                # Getting the information about the original model
+                original_model_simulations_info = sim_ut.get_simulations_informations(
+                    samples_simulations_results,
+                    original_results,
+                    combinations,
+                    colnames[1:],
+                    log_file,
+                )
 
             knockout_data = []
 
@@ -236,110 +244,104 @@ def main():
             end_time = time.perf_counter()
 
             # === IF NO SAMPLES ===
-            # sim_variations = sim_ut.get_knockout_variation(
-            #     original_results, knockout_data, colnames[1:], log_file
-            # )
-            #
-            # for ko_species, obj in sim_variations.items():
-            #     ut.print_log(log_file, f"{ko_species}")
-            #     for species, var_obj in obj.items():
-            #         ut.print_log(log_file, f"   {species}")
-            #         ut.print_log(log_file, f"       var: {var_obj['variation']}")
-            #         ut.print_log(
-            #             log_file, f"       rel-var: {var_obj['relative-variation']}"
-            #         )
-            #
-            # ko_species_list = list(sim_variations.keys())
-            #
-            # all_species = set()
-            #
-            # relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
-            #     sim_variations, all_species, ko_species_list, log_file=log_file
-            # )
-            #
-            # abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
-            #     sim_variations, all_species, ko_species_list, "absolute", log_file
-            # )
-            #
-            # log_rel_map = np.log(relative_map + 1)
-            # log_abs_map = np.log(abs_map + 1)
-            #
-            # for i in range(len(log_rel_map)):
-            #     for j in range(len(log_rel_map[i])):
-            #         ut.print_log(log_file, f"{i}, {j}: {log_rel_map[i,j]}")
-            #
-            # plt_ut.plot_variations_heatmap(
-            #     log_rel_map,
-            #     all_species_rel,
-            #     ko_species_list,
-            #     title="Relative variations heatmap",
-            # )
-            # plt_ut.plot_variations_heatmap(
-            #     log_abs_map,
-            #     all_species_abs,
-            #     ko_species_list,
-            #     variation_type="absolute",
-            #     title="Variation heatmap",
-            # )
-            # ====================
+            if input_species_ids is None:
 
-            ut.print_log(
-                log_file, f"Time to process species: {(end_time-start_time):.2f}s"
-            )
+                ut.print_log(log_file, "Printing without samples")
 
-            variation_dict = sim_ut.get_simulations_variations(
-                original_model_simulations_info, knockout_data, log_file=None
-            )
+                sim_variations = sim_ut.get_knockout_variation(
+                    original_results, knockout_data, colnames[1:], log_file
+                )
 
-            # Collect all species and knocked-out species
-            all_species = set()
-            ko_species_list = list(variation_dict.keys())
+                ko_species_list = list(sim_variations.keys())
 
-            relative_map, all_species_rel = sim_ut.get_variations_hm_samples(
-                variation_dict,
-                all_species,
-                ko_species_list,
-                variation_type="relative",
-                log_file=log_file,
-            )
+                all_species = set()
 
-            relative_log_map = np.log(relative_map + 1)
+                relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
+                    sim_variations, all_species, ko_species_list, log_file=log_file
+                )
 
-            for i in range(len(relative_log_map)):
-                for j in range(len(relative_log_map[i])):
-                    ut.print_log(log_file, f"{i}, {j}: {relative_log_map[i,j]}")
+                abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
+                    sim_variations, all_species, ko_species_list, "absolute", log_file
+                )
 
-            abs_map, all_species_abs = sim_ut.get_variations_hm_samples(
-                variation_dict,
-                all_species,
-                ko_species_list,
-                variation_type="absolute",
-                log_file=log_file,
-            )
+                log_rel_map = np.log(relative_map + 1)
+                log_abs_map = np.log(abs_map + 1)
 
-            abs_log_map = np.log(abs_map + 1)
+                plt_ut.plot_variations_heatmap(
+                    log_rel_map,
+                    all_species_rel,
+                    ko_species_list,
+                    title="Relative variations heatmap",
+                )
+                plt_ut.plot_variations_heatmap(
+                    log_abs_map,
+                    all_species_abs,
+                    ko_species_list,
+                    variation_type="absolute",
+                    title="Variation heatmap",
+                )
 
-            # for i in range(len(target_ids)):
-            #     ut.print_log(log_file, f"Id:{target_ids[i]}")
-            #     ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
-            #     ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
-            #     ut.print_log(log_file, "===========================")
+            else:  # === IF SAMPLES ===
+                try:
+                    assert original_model_simulations_info is not None
+                    ut.print_log(log_file, f"Printing with samples")
+                    ut.print_log(
+                        log_file,
+                        f"Time to process species: {(end_time-start_time):.2f}s",
+                    )
 
-            # ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
+                    variation_dict = sim_ut.get_knockout_variations_samples(
+                        original_model_simulations_info, knockout_data, log_file=None
+                    )
 
-            plt_ut.plot_variations_heatmap(
-                relative_log_map,
-                all_species_rel,
-                ko_species_list,
-                title="Relative variations heatmap",
-            )
-            plt_ut.plot_variations_heatmap(
-                abs_log_map,
-                all_species_abs,
-                ko_species_list,
-                variation_type="absolute",
-                title="Variation heatmap",
-            )
+                    # Collect all species and knocked-out species
+                    all_species = set()
+                    ko_species_list = list(variation_dict.keys())
+
+                    relative_map, all_species_rel = sim_ut.get_variations_hm_samples(
+                        variation_dict,
+                        all_species,
+                        ko_species_list,
+                        variation_type="relative",
+                        log_file=log_file,
+                    )
+
+                    relative_log_map = np.log(relative_map + 1)
+                    abs_map, all_species_abs = sim_ut.get_variations_hm_samples(
+                        variation_dict,
+                        all_species,
+                        ko_species_list,
+                        variation_type="absolute",
+                        log_file=log_file,
+                    )
+
+                    abs_log_map = np.log(abs_map + 1)
+
+                    # for i in range(len(target_ids)):
+                    #     ut.print_log(log_file, f"Id:{target_ids[i]}")
+                    #     ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
+                    #     ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
+                    #     ut.print_log(log_file, "===========================")
+
+                    # ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
+
+                    plt_ut.plot_variations_heatmap(
+                        relative_log_map,
+                        all_species_rel,
+                        ko_species_list,
+                        title="Relative variations heatmap",
+                    )
+                    plt_ut.plot_variations_heatmap(
+                        abs_log_map,
+                        all_species_abs,
+                        ko_species_list,
+                        variation_type="absolute",
+                        title="Variation heatmap",
+                    )
+                except AssertionError as ae:
+                    ut.print_log(
+                        log_file, f"Error during samples results elaboration: {ae}"
+                    )
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)

@@ -84,15 +84,22 @@ def parse_args():
         "-is",
         "--input_species",
         nargs="+",
-        required=True,
-        help="One or more species IDs to vary (e.g. -s ACEx GLCx P)",
+        default=None,
+        help="One or more species IDs to vary (e.g. -s ACEx GLCx P). If None no samples will be generated",
     )
     simulate_samples_parser.add_argument(
         "-tids",
         "--target_ids",
         nargs="+",
         default=None,
-        help="One or more IDs to check",
+        help="One or more IDs to check, can also be empty",
+    )
+    simulate_samples_parser.add_argument(
+        "--mko",
+        "--multi_ko",
+        nargs="+",
+        default=None,
+        help="Multiple species to Knockout in the same model",
     )
     simulate_samples_parser.add_argument(
         "-n",
