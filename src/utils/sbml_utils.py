@@ -803,12 +803,16 @@ def generate_species_samples(
 
     for ts in target_species:
         species = sbml_model.getListOfSpecies().getElementBySId(ts)
+
         # taking initial concentration
         try:
             t0_conc = species.getInitialConcentration()
+            print_log(log_file, f" Using conc for {ts}")
         except Exception as e:
+            print_log(log_file, f" Using amount for {ts}")
+
             if species.getHasOnlySubstanceUnits():
-                print_log(log_file, f" Using amount for {ts}")
+
                 t0_conc = species.getInitialAmount()
             else:
                 raise Exception(f"Invalid format for species {ts}")
@@ -818,7 +822,7 @@ def generate_species_samples(
         for i in range(n_samples):
             # Sample multiplication factors between (1-variation/100) and (1+variation/100)
             factor = np.random.uniform(1 - variation / 100, 1 + variation / 100)
-            sample = t0_conc + (factor * t0_conc)
+            sample = t0_conc + (factor)
             tmp.append(sample)
 
         res.append(tmp)

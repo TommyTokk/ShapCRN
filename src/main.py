@@ -191,7 +191,7 @@ def main():
                     samples_simulations_results,
                     original_results,
                     combinations,
-                    colnames[1:],
+                    colnames,
                     log_file,
                 )
 
@@ -267,6 +267,12 @@ def main():
                 log_rel_map = np.log(relative_map + 1)
                 log_abs_map = np.log(abs_map + 1)
 
+                for i in range(len(target_ids)):
+                    ut.print_log(log_file, f"Id:{target_ids[i]}")
+                    ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
+                    ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
+                    ut.print_log(log_file, "===========================")
+
                 plt_ut.plot_variations_heatmap(
                     log_rel_map,
                     all_species_rel,
@@ -307,6 +313,14 @@ def main():
                     )
 
                     relative_log_map = np.log(relative_map + 1)
+                    for i in range(len(relative_log_map)):
+                        for j in range(len(relative_log_map[i])):
+                            ut.print_log(
+                                log_file, f"[{i},{j}]: {relative_log_map[i,j]}"
+                            )
+
+                    ut.print_log(log_file, "====================")
+
                     abs_map, all_species_abs = sim_ut.get_variations_hm_samples(
                         variation_dict,
                         all_species,
@@ -317,13 +331,9 @@ def main():
 
                     abs_log_map = np.log(abs_map + 1)
 
-                    # for i in range(len(target_ids)):
-                    #     ut.print_log(log_file, f"Id:{target_ids[i]}")
-                    #     ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
-                    #     ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
-                    #     ut.print_log(log_file, "===========================")
-
-                    # ut.pretty_print_variations(variation_dict, precision=10, show_zero=True)
+                    for i in range(len(abs_log_map)):
+                        for j in range(len(abs_log_map[i])):
+                            ut.print_log(log_file, f"[{i},{j}]: {abs_log_map[i,j]}")
 
                     plt_ut.plot_variations_heatmap(
                         relative_log_map,

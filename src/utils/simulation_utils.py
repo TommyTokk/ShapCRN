@@ -43,7 +43,7 @@ def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
     # Configure integrator settings
     # rr_model.integrator.nonnegative = True
     rr_model.getIntegrator().setValue("relative_tolerance", 1e-8)
-    rr_model.getIntegrator().setValue("absolute_tolerance", 1e-10)
+    rr_model.getIntegrator().setValue("absolute_tolerance", 1e-12)
 
     if integrator is not None:
         rr_model.setIntegrator(integrator)
@@ -135,7 +135,7 @@ def simulate_samples(
     # rr_model.reset()
     # Save the current selections
     current_selections = rr_model.selections
-
+    rr_model.reset()
     # Set the new concentrations
     if rr_model.getIntegrator().getName() == "gillespie":
         rr_model.getIntegrator().nonnegative = True
@@ -193,6 +193,12 @@ def process_species_samples(args):
             max_end_time=max_end_time,
         )
 
+        print_log(
+            log_file,
+            f"[DEBUG]knockout_model_results({knockedout_species}: {knockout_model_results[-1, colnames.index(f'[{knockedout_species}]')]})",
+        )
+
+        modified_rr.reset()
         min_ss_time = (
             ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
         )
@@ -208,15 +214,32 @@ def process_species_samples(args):
             log_file,
         )
 
+        print_log(log_file, f"[DEBUG] combinations results:")
+
+        for i in range(len(combinations_knockout_model_results)):
+            res = combinations_knockout_model_results[i]
+            print_log(log_file, f"  {combinations[i]}")
+            print_log(
+                log_file,
+                f"  {knockedout_species}: {res[-1, colnames.index(f'[{knockedout_species}]')]}",
+            )
+
+        print_log(log_file, f"[DEBUG] colnames: {colnames}")
+
         # Contains information, for each knockedout species,
         # and foreach combination, about the simulation's results
         combinations_knockout_model_simualtions_info = get_simulations_informations(
             combinations_knockout_model_results,
             knockout_model_results,
             combinations,
-            colnames[1:],
+            colnames,
             log_file,
         )
+
+        # for combo_key, info_d in combinations_knockout_model_simualtions_info.items():
+        #     print_log(log_file, f"{combo_key}:")
+        #     for species, value in info_d.items():
+        #         print_log(log_file, f"{species}: {value}")
 
         return (knockedout_species, combinations_knockout_model_simualtions_info)
     except Exception as e:
@@ -665,6 +688,15 @@ def get_simulations_informations(
             print_log(log_file, f"Error finding column for species {s_id}: {e}")
             missing_species.append(s_id)
 
+    # Remove time
+
+    try:
+        _ = target_indices.pop("time")
+    except Exception as e:
+        print_log(log_file, f"Time not present: {e}")
+
+    print_log(log_file, target_indices)
+
     # Only process species that exist in the data
     # valid_target_ids = [ts for ts in target_ids if ts in target_indices]
 
@@ -678,10 +710,17 @@ def get_simulations_informations(
     # Add original results (vectorized)
     table_results["original"] = {}
     for ts in target_ids:
+        if ts == "time":
+            continue
         ts_index = target_indices[ts]
+        print_log(log_file, f"[DEBUG] ts_index: {ts_index} ({ts})")
         table_results["original"][ts] = original_results[
             -1, ts_index
         ]  # Final concentration
+
+    print_log(
+        log_file, f"[DEBUG] original LR: {original_results[-1, target_indices['LR']]}"
+    )
 
     # Process simulations in batch
     if not combinations or not samples_simulations_results:
@@ -689,9 +728,7 @@ def get_simulations_informations(
         return table_results
 
     # Pre-compute combination keys
-    combination_keys = [
-        "_".join([f"{val:.3f}" for val in combo]) for combo in combinations
-    ]
+    combination_keys = ["_".join([f"{val}" for val in combo]) for combo in combinations]
 
     # Process all simulations at once
     processed_count = 0
@@ -711,6 +748,8 @@ def get_simulations_informations(
 
         # Extract final concentrations for all target species at once
         for ts in target_ids:
+            if ts == "time":
+                continue
             ts_index = target_indices[ts]
             try:
                 table_results[combo_key][ts] = simulation_results[-1, ts_index]
@@ -1008,7 +1047,7 @@ def simulate_combinations(
 ):
     samples_simulations_results = []
     for i in range(len(combinations)):
-        rr.reset()
+        # rr.reset()
         # print_log(log_file, f"Simulation nr. {i}")
 
         sim_res, ss_time, colnames = simulate_samples(
