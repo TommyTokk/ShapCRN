@@ -1,5 +1,8 @@
 import datetime
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from scipy.stats import pearsonr
+
+
 import json
 import numpy as np
 
@@ -323,6 +326,38 @@ def pretty_print_variations(variations_dict, precision=4, show_zero=False):
 # === DEBUG ===
 
 # === ANALYSIS ===
+
+
+def pearson_correlation(
+    matrix_1, matrix_2, permutations=999, seed=None, alternative="two-sided"
+):
+    rng = np.random.RandomState(seed)
+    a = matrix_1.ravel()
+    b = matrix_2.ravel()
+
+    valid = ~np.isnan(a) & ~np.isnan(b)
+    a_valid, b_valid = a[valid], b[valid]
+
+    r_obs = pearsonr(a_valid, b_valid)[0]
+
+    count = 0
+    for _ in range(permutations):
+        b_perm = rng.permutation(b_valid)
+        r_perm = pearsonr(a_valid, b_perm)[0]
+
+        # Correct logic based on alternative hypothesis
+        if alternative == "two-sided":
+            if abs(r_perm) >= abs(r_obs):
+                count += 1
+        elif alternative == "greater":
+            if r_perm >= r_obs:
+                count += 1
+        elif alternative == "less":
+            if r_perm <= r_obs:
+                count += 1
+
+    pvalue = (count + 1) / (permutations + 1)
+    return r_obs, pvalue
 
 
 def get_ko_species_importance(matrix, ko_species_list, log_file=None):

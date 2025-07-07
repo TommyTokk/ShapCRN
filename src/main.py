@@ -5,6 +5,7 @@ import os
 import sys
 import networkx as nx
 import matplotlib.pyplot as plt
+from networkx.algorithms.assortativity import correlation
 from numpy._typing import _UnknownType
 from pandas._libs import iNaT
 from classes.SBMLHandler import SBMLHandler
@@ -364,6 +365,9 @@ def main():
                     )
 
                     relative_log_map = np.log(relative_map + 1)
+                    normalized_samples_relative_log_map = ut.minMax_normalize(
+                        relative_log_map
+                    )
 
                     plt_ut.plot_variations_heatmap(
                         relative_log_map,
@@ -383,6 +387,9 @@ def main():
                     )
 
                     abs_log_map = np.log(abs_map + 1)
+                    normalized_samples_absolute_log_map = ut.minMax_normalize(
+                        abs_log_map
+                    )
 
                     plt_ut.plot_variations_heatmap(
                         abs_log_map,
@@ -392,6 +399,8 @@ def main():
                         variation_type="absolute",
                         title="Variations with samples",
                     )
+
+                    correlation_type = "two-sided"
 
                     if np.any(np.isposinf(no_samples_log_relative_map)) or np.any(
                         np.isposinf(relative_log_map)
@@ -405,20 +414,22 @@ def main():
                             no_samples_log_absolute_map, log_file
                         )
 
-                        normalized_samples = ut.minMax_normalize(abs_log_map, log_file)
-
-                        if np.any(normalized_no_samples > 1) or np.any(
-                            normalized_samples > 1
-                        ):
-                            ut.print_log(log_file, "TRUE")
-
                         absolute_distance = np.abs(
-                            normalized_samples - normalized_no_samples
+                            normalized_no_samples - normalized_samples_absolute_log_map
+                        )
+
+                        pearson_coefficient, p_value = ut.pearson_correlation(
+                            normalized_no_samples,
+                            normalized_samples_absolute_log_map,
+                            alternative=correlation_type,
                         )
 
                         # === SAMPLING IMPORTANCE ANALYSIS ===
                         sim_ut.generate_distance_report(
                             absolute_distance,
+                            pearson_coefficient,
+                            p_value,
+                            correlation_type,
                             ko_species_list,
                             file_name,
                             f"./report/{file_name}",
@@ -442,18 +453,22 @@ def main():
                             no_samples_log_relative_map, log_file
                         )
 
-                        normalized_samples = ut.minMax_normalize(
-                            relative_log_map, log_file
+                        relative_distance = np.abs(
+                            normalized_no_samples - normalized_samples_relative_log_map
                         )
 
                         # Getting the distances
-                        relative_distance = np.abs(
-                            normalized_samples - normalized_no_samples
+                        pearson_coefficient, p_value = ut.pearson_correlation(
+                            normalized_no_samples,
+                            normalized_samples_relative_log_map,
+                            alternative=correlation_type,
                         )
 
-                        # === SAMPLING IMPORTANCE ANALYSIS ===
                         sim_ut.generate_distance_report(
                             relative_distance,
+                            pearson_coefficient,
+                            p_value,
+                            correlation_type,
                             ko_species_list,
                             file_name,
                             f"./report/{file_name}",
@@ -466,8 +481,8 @@ def main():
                             ko_species_list,
                             save_path=f"./imgs/{file_name}",
                             variation_type="relative",
-                            title="Absolute relative variation distance samples VS no samples",
-                            imgs_name="Relative distance heatmap",
+                            title="Relative variation distance samples VS no samples",
+                            imgs_name="Variations distance",
                         )
 
                     # === FIXED SAMPLES ANALYSIS ===
@@ -572,16 +587,25 @@ def main():
                                 "[WARNING] Infinite value detected, using absolute variation",
                             )
                             normalized_fixed_samples_log_absolute = ut.minMax_normalize(
-                                fixed_absolute_map
+                                fixed_log_absolute_map
                             )
 
                             distance_fixed = np.abs(
                                 normalized_fixed_samples_log_absolute
-                                - normalized_fixed_samples_log_absolute
+                                - normalized_samples_absolute_log_map
+                            )
+
+                            pearson_coefficient, p_value = ut.pearson_correlation(
+                                normalized_fixed_samples_log_absolute,
+                                normalized_samples_absolute_log_map,
+                                alternative=correlation_type,
                             )
 
                             _ = sim_ut.generate_distance_report(
                                 distance_fixed,
+                                pearson_coefficient,
+                                p_value,
+                                correlation_type,
                                 ko_species_list,
                                 f"fixed_{file_name}",
                                 f"./report/{file_name}",
@@ -596,11 +620,20 @@ def main():
 
                             distance_fixed = np.abs(
                                 normalized_fixed_samples_log_relative
-                                - normalized_fixed_samples_log_relative
+                                - normalized_samples_relative_log_map
+                            )
+
+                            pearson_coefficient, p_value = ut.pearson_correlation(
+                                normalized_fixed_samples_log_relative,
+                                normalized_samples_relative_log_map,
+                                alternative=correlation_type,
                             )
 
                             _ = sim_ut.generate_distance_report(
                                 distance_fixed,
+                                pearson_coefficient,
+                                p_value,
+                                correlation_type,
                                 ko_species_list,
                                 f"fixed_{file_name}",
                                 f"./report/{file_name}",

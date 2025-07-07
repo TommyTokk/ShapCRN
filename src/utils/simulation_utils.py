@@ -402,10 +402,14 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
 
 def generate_distance_report(
     distance_matrix,
+    correlation_coefficient,
+    p_value,
+    alternative,
     ko_species_list,
     model_name,
     saving_path,
     threshold=0.2,
+    alpha=0.05,
     log_file=None,
 ):
     """
@@ -424,8 +428,67 @@ def generate_distance_report(
         os.makedirs(saving_path, exist_ok=True)
         print_log(log_file, f"Created directory: {saving_path}")
 
-    # Calculate matrix metrics
-    matrix_forbenius_norm = frobenius_norm(distance_matrix)
+    # Determine correlation strength
+    abs_r = abs(correlation_coefficient)
+    if abs_r >= 0.9:
+        strength = "very strong"
+    elif abs_r >= 0.7:
+        strength = "strong"
+    elif abs_r >= 0.5:
+        strength = "moderate"
+    elif abs_r >= 0.3:
+        strength = "weak"
+    else:
+        strength = "very weak"
+
+    # Determine direction
+    if correlation_coefficient > 0:
+        direction = "positive"
+    elif correlation_coefficient < 0:
+        direction = "negative"
+    else:
+        direction = "no"
+
+    # Statistical significance
+    is_significant = p_value < alpha
+    significance_level = (
+        "highly significant"
+        if p_value < 0.001
+        else "significant" if p_value < 0.01 else "marginally significant"
+    )
+
+    # Hypothesis description
+    if alternative == "two-sided":
+        null_hyp = "H₀: No linear relationship exists (r = 0)"
+        alt_hyp = "H₁: Linear relationship exists (r ≠ 0)"
+        p_interpretation = f"probability of observing a correlation this extreme (in either direction) by chance"
+    elif alternative == "greater":
+        null_hyp = "H₀: No positive relationship (r ≤ 0)"
+        alt_hyp = "H₁: Positive relationship exists (r > 0)"
+        p_interpretation = (
+            f"probability of observing a correlation this large or larger by chance"
+        )
+    elif alternative == "less":
+        null_hyp = "H₀: No negative relationship (r ≥ 0)"
+        alt_hyp = "H₁: Negative relationship exists (r < 0)"
+        p_interpretation = f"probability of observing a correlation this negative or more negative by chance"
+    else:
+        raise Exception("Alternative not valid")
+
+    # Build report
+    report = f"""CORRELATION RESULTS:
+    -------------------
+    Correlation coefficient (r): {correlation_coefficient:.6f}
+    P-value: {p_value:.6f}
+    Test type: {alternative} 
+    Significance level (α): {alpha}
+
+    STATISTICAL INTERPRETATION:
+    --------------------------
+    • Correlation strength: {strength.title()} {direction} correlation
+    • Statistical significance: {"" if is_significant else "Not "}{significance_level}
+    • Null hypothesis: {null_hyp}
+    • Alternative hypothesis: {alt_hyp}\n\n"""
 
     # Getting additional metrics
     max_diff = np.nanmax(distance_matrix)
@@ -435,27 +498,6 @@ def generate_distance_report(
 
     significant_differences = np.sum(distance_matrix > threshold)
     total_comparisons = distance_matrix.size
-
-    # Determine importance level
-    importance_level = ""
-    recommendation = ""
-
-    if matrix_forbenius_norm < 0.05:
-        importance_level = "LOW"
-        recommendation = "Parameter uncertainty has minimal impact on knockout effects."
-    elif matrix_forbenius_norm < 0.2:
-        importance_level = "MODERATE"
-        recommendation = (
-            "Parameter uncertainty shows moderate impact on knockout effects."
-        )
-    elif matrix_forbenius_norm < 0.5:
-        importance_level = "HIGH"
-        recommendation = "Parameter uncertainty significantly affects knockout effects."
-    else:
-        importance_level = "CRITICAL"
-        recommendation = (
-            "Parameter uncertainty has critical impact on knockout effects."
-        )
 
     # Calculate knockout importance
     ko_impact, ko_ranking = get_ko_species_importance(
@@ -468,20 +510,30 @@ def generate_distance_report(
 
     # Write the report - CORREZIONE: modalità scrittura
     try:
-        with open(report_path, "w") as f:  # ← CORRETTO: modalità scrittura
+        with open(report_path, "w") as f:
             f.write("=" * 80 + "\n")
-            f.write("DISTANCE MATRIX ANALYSIS REPORT\n")
+            f.write("ANALYSIS REPORT\n")
             f.write("=" * 80 + "\n\n")
 
             f.write(f"Model: {model_name}\n")
             f.write(
-                f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             )
+
+            f.write("=" * 80 + "\n")
+            f.write("PEARSON ANALYSIS REPORT\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(report)
+
+            f.write("=" * 80 + "\n")
+            f.write("DISTANCE MATRIX ANALYSIS REPORT\n")
+            f.write("=" * 80 + "\n\n")
+
             f.write(f"Threshold: {threshold}\n\n")
 
             f.write("MATRIX STATISTICS:\n")
             f.write("-" * 40 + "\n")
-            f.write(f"Frobenius Norm: {matrix_forbenius_norm:.6f}\n")
             f.write(f"Maximum Distance: {max_diff:.6f}\n")
             f.write(f"Minimum Distance: {min_diff:.6f}\n")
             f.write(f"Mean Distance: {mean_diff:.6f}\n")
@@ -492,16 +544,6 @@ def generate_distance_report(
             f.write(
                 f"Significance Rate: {(significant_differences/total_comparisons)*100:.2f}%\n\n"
             )
-
-            f.write("IMPACT ASSESSMENT:\n")
-            f.write("-" * 40 + "\n")
-            f.write("REFERENCE:\n")
-            f.write("Frobenius norm < 0.05: LOW\n")
-            f.write("0.05 <= Frobenius norm < 0.2: MODERATE\n")
-            f.write("0.2 <= Frobenius norm < 0.5: HIGH\n")
-            f.write("frobenius >= 0.5: CRITICAL\n\n")
-            f.write(f"Importance Level: {importance_level}\n")
-            f.write(f"Recommendation: {recommendation}\n\n")
 
             if ko_impact is not None and ko_ranking is not None:
                 f.write("KNOCKOUT SPECIES RANKING:\n")
