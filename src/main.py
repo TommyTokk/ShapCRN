@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+import enum
 from math import log, nan
 import os
 import sys
 import networkx as nx
 import matplotlib.pyplot as plt
 from numpy._typing import _UnknownType
+from pandas._libs import iNaT
 from classes.SBMLHandler import SBMLHandler
 import roadrunner
 import libsbml
@@ -195,6 +197,11 @@ def main():
                     log_file,
                 )
 
+                for combination, info_dict in original_model_simulations_info.items():
+                    ut.print_log("orig", f"{combination}:")
+                    for species, values in info_dict.items():
+                        ut.print_log("orig", f" {species}: {values}")
+
             knockout_data = []
 
             # FOR DEBUG ONLY
@@ -241,6 +248,13 @@ def main():
                 log_file=log_file,
             )
 
+            # for ko_species, comb_dict in knockout_data:
+            #     ut.print_log("samples", f"{ko_species}:")
+            #     for combination, info_dict in comb_dict.items():
+            #         ut.print_log("samples", f"  {combination}:")
+            #         for species, value in info_dict.items():
+            #             ut.print_log("samples", f"      {species}: {value}")
+
             end_time = time.perf_counter()
 
             # === IF NO SAMPLES ===
@@ -249,7 +263,7 @@ def main():
                 ut.print_log(log_file, "Printing without samples")
 
                 sim_variations = sim_ut.get_knockout_variation(
-                    original_results, knockout_data, colnames[1:], log_file
+                    original_results, knockout_data, colnames, log_file
                 )
 
                 ko_species_list = list(sim_variations.keys())
@@ -267,18 +281,20 @@ def main():
                 log_rel_map = np.log(relative_map + 1)
                 log_abs_map = np.log(abs_map + 1)
 
-                for i in range(len(target_ids)):
-                    ut.print_log(log_file, f"Id:{target_ids[i]}")
-                    ut.print_log(log_file, f"Relative-Data: {relative_map[i]}")
-                    ut.print_log(log_file, f"Absolute-Data: {abs_map[i]}")
-                    ut.print_log(log_file, "===========================")
-
                 plt_ut.plot_variations_heatmap(
                     log_rel_map,
                     all_species_rel,
                     ko_species_list,
                     title="Relative variations heatmap",
                 )
+
+                for i, ko_species in enumerate(ko_species_list):
+                    for j, species in enumerate(all_species_rel):
+                        ut.print_log(
+                            "no_samples",
+                            f"({ko_species}, {species}) {log_rel_map[i,j]}",
+                        )
+
                 plt_ut.plot_variations_heatmap(
                     log_abs_map,
                     all_species_abs,
@@ -289,21 +305,56 @@ def main():
 
             else:  # === IF SAMPLES ===
                 try:
-                    assert original_model_simulations_info is not None
-                    ut.print_log(log_file, f"Printing with samples")
+                    assert original_model_simulations_info is not None  # pyright:ignore
+                    ut.print_log(log_file, "Printing with samples")
                     ut.print_log(
                         log_file,
                         f"Time to process species: {(end_time-start_time):.2f}s",
                     )
 
                     variation_dict = sim_ut.get_knockout_variations_samples(
-                        original_model_simulations_info, knockout_data, log_file=None
+                        original_model_simulations_info,  # pyright:ignore
+                        knockout_data,
+                        log_file=None,
                     )
 
                     # Collect all species and knocked-out species
                     all_species = set()
                     ko_species_list = list(variation_dict.keys())
 
+                    # Getting the informations about the original model with samples
+                    no_samples_relative_map, all_species_rel = (
+                        sim_ut.get_no_samples_variations(
+                            variation_dict,
+                            all_species,
+                            ko_species_list,
+                            variation_type="relative",
+                            log_file=log_file,
+                        )
+                    )
+
+                    no_samples_log_relative_map = np.log(no_samples_relative_map + 1)
+
+                    # for i, ko_species in enumerate(ko_species_list):
+                    #     for j, species in enumerate(all_species_rel):
+                    #         ut.print_log(
+                    #             "samples",
+                    #             f"{ko_species, species} {no_samples_log_relative_map[i,j]}",
+                    #         )
+
+                    no_samples_absolute_map, all_species_abs = (
+                        sim_ut.get_no_samples_variations(
+                            variation_dict,
+                            all_species,
+                            ko_species_list,
+                            variation_type="absolute",
+                            log_file=log_file,
+                        )
+                    )
+
+                    no_samples_log_absolute_map = np.log(no_samples_absolute_map + 1)
+
+                    # Getting the samples informations
                     relative_map, all_species_rel = sim_ut.get_variations_hm_samples(
                         variation_dict,
                         all_species,
@@ -313,13 +364,15 @@ def main():
                     )
 
                     relative_log_map = np.log(relative_map + 1)
-                    for i in range(len(relative_log_map)):
-                        for j in range(len(relative_log_map[i])):
-                            ut.print_log(
-                                log_file, f"[{i},{j}]: {relative_log_map[i,j]}"
-                            )
 
-                    ut.print_log(log_file, "====================")
+                    plt_ut.plot_variations_heatmap(
+                        relative_log_map,
+                        all_species_rel,
+                        ko_species_list,
+                        save_path=f"./imgs/{file_name}",
+                        variation_type="relative",
+                        title="Relative variations with samples",
+                    )
 
                     abs_map, all_species_abs = sim_ut.get_variations_hm_samples(
                         variation_dict,
@@ -331,23 +384,229 @@ def main():
 
                     abs_log_map = np.log(abs_map + 1)
 
-                    for i in range(len(abs_log_map)):
-                        for j in range(len(abs_log_map[i])):
-                            ut.print_log(log_file, f"[{i},{j}]: {abs_log_map[i,j]}")
-
-                    plt_ut.plot_variations_heatmap(
-                        relative_log_map,
-                        all_species_rel,
-                        ko_species_list,
-                        title="Relative variations heatmap",
-                    )
                     plt_ut.plot_variations_heatmap(
                         abs_log_map,
-                        all_species_abs,
+                        all_species_rel,
                         ko_species_list,
+                        save_path=f"./imgs/{file_name}",
                         variation_type="absolute",
-                        title="Variation heatmap",
+                        title="Variations with samples",
                     )
+
+                    if np.any(np.isposinf(no_samples_log_relative_map)) or np.any(
+                        np.isposinf(relative_log_map)
+                    ):
+                        ut.print_log(
+                            log_file,
+                            "[WARNING] Infinite value detected, using absolute variation",
+                        )
+
+                        normalized_no_samples = ut.minMax_normalize(
+                            no_samples_log_absolute_map, log_file
+                        )
+
+                        normalized_samples = ut.minMax_normalize(abs_log_map, log_file)
+
+                        if np.any(normalized_no_samples > 1) or np.any(
+                            normalized_samples > 1
+                        ):
+                            ut.print_log(log_file, "TRUE")
+
+                        absolute_distance = np.abs(
+                            normalized_samples - normalized_no_samples
+                        )
+
+                        # === SAMPLING IMPORTANCE ANALYSIS ===
+                        sim_ut.generate_distance_report(
+                            absolute_distance,
+                            ko_species_list,
+                            file_name,
+                            f"./report/{file_name}",
+                            log_file=log_file,
+                        )
+
+                        plt_ut.plot_variations_heatmap(
+                            absolute_distance,
+                            all_species_abs,
+                            ko_species_list,
+                            save_path=f"./imgs/{file_name}",
+                            variation_type="absolute",
+                            title="Absolute variation distance samples VS no samples",
+                            imgs_name="Variations distance",
+                        )
+                    else:
+                        ut.print_log(log_file, "[WARNING] Using relative variation")
+
+                        # Normalize the matices in range [0,1]
+                        normalized_no_samples = ut.minMax_normalize(
+                            no_samples_log_relative_map, log_file
+                        )
+
+                        normalized_samples = ut.minMax_normalize(
+                            relative_log_map, log_file
+                        )
+
+                        # Getting the distances
+                        relative_distance = np.abs(
+                            normalized_samples - normalized_no_samples
+                        )
+
+                        # === SAMPLING IMPORTANCE ANALYSIS ===
+                        sim_ut.generate_distance_report(
+                            relative_distance,
+                            ko_species_list,
+                            file_name,
+                            f"./report/{file_name}",
+                            log_file=log_file,
+                        )
+
+                        plt_ut.plot_variations_heatmap(
+                            relative_distance,
+                            all_species_abs,
+                            ko_species_list,
+                            save_path=f"./imgs/{file_name}",
+                            variation_type="relative",
+                            title="Absolute relative variation distance samples VS no samples",
+                            imgs_name="Relative distance heatmap",
+                        )
+
+                    # === FIXED SAMPLES ANALYSIS ===
+                    ut.print_log(
+                        log_file, "Do you want to perform fixed samples analysis? [y/n]"
+                    )
+                    user_choice = input()
+
+                    if user_choice.lower() == "y":
+                        ut.print_log(log_file, "STARTING FIXED SAMPLES ANALYSIS")
+                        ut.print_log(
+                            log_file, "Please insert the fixed variations (v1 v2 ...)"
+                        )
+                        ut.print_log(
+                            log_file,
+                            "[WARNING] Notice that the number of samples will equals to the number of variations",
+                        )
+
+                        fixed_variations = [float(inp) for inp in input().split(" ")]
+
+                        ut.print_log(log_file, f"{fixed_variations}")
+
+                        ut.print_log(log_file, "Generating fixed combinations")
+
+                        fixed_combinations = sbml_ut.get_fixed_combinations(
+                            sbml_model, input_species_ids, fixed_variations, log_file
+                        )
+
+                        fixed_samples_results, _ = sim_ut.simulate_combinations(
+                            rr,
+                            fixed_combinations,
+                            input_species_ids,
+                            min_ss_time,
+                            end_time,
+                            max_end_time,
+                            steady_state,
+                            log_file,
+                        )
+
+                        fixed_samples_original_model_informations = (
+                            sim_ut.get_simulations_informations(
+                                fixed_samples_results,
+                                original_results,
+                                fixed_combinations,
+                                colnames,
+                                log_file,
+                            )
+                        )
+
+                        ut.print_log(
+                            log_file, " Simulating multiporcessing with fixed samples"
+                        )
+
+                        fixed_knockout_data = sim_ut.process_species_multiprocessing(
+                            target_ids,
+                            model_dict,
+                            fixed_combinations,
+                            input_species_ids,
+                            selections,
+                            integrator,
+                            start_time=0,
+                            end_time=end_time,
+                            steady_state=steady_state,
+                            max_end_time=max_end_time,
+                            min_ss_time=min_ss_time,
+                            log_file=log_file,
+                        )
+
+                        fixed_variation_dict = sim_ut.get_knockout_variations_samples(
+                            fixed_samples_original_model_informations,  # pyright:ignore
+                            fixed_knockout_data,
+                            log_file=None,
+                        )
+
+                        fixed_relative_map, _ = sim_ut.get_variations_hm_samples(
+                            fixed_variation_dict,
+                            all_species,
+                            ko_species_list,
+                            variation_type="relative",
+                            log_file=log_file,
+                        )
+
+                        fixed_absolute_map, _ = sim_ut.get_variations_hm_samples(
+                            fixed_variation_dict,
+                            all_species,
+                            ko_species_list,
+                            variation_type="absolute",
+                            log_file=log_file,
+                        )
+
+                        fixed_log_relative_map = np.log(fixed_relative_map + 1)
+
+                        fixed_log_absolute_map = np.log(fixed_absolute_map + 1)
+
+                        # === DIFFERENCE ANALYSIS WITH SAMPLES ===
+
+                        if np.any(np.isposinf(fixed_log_relative_map)) or np.any(
+                            np.isposinf(relative_log_map)
+                        ):
+                            ut.print_log(
+                                log_file,
+                                "[WARNING] Infinite value detected, using absolute variation",
+                            )
+                            normalized_fixed_samples_log_absolute = ut.minMax_normalize(
+                                fixed_absolute_map
+                            )
+
+                            distance_fixed = np.abs(
+                                normalized_fixed_samples_log_absolute
+                                - normalized_fixed_samples_log_absolute
+                            )
+
+                            _ = sim_ut.generate_distance_report(
+                                distance_fixed,
+                                ko_species_list,
+                                f"fixed_{file_name}",
+                                f"./report/{file_name}",
+                                log_file=log_file,
+                            )
+                        else:
+                            ut.print_log(log_file, "[WARNING] Using relative variation")
+
+                            normalized_fixed_samples_log_relative = ut.minMax_normalize(
+                                fixed_log_relative_map, log_file
+                            )
+
+                            distance_fixed = np.abs(
+                                normalized_fixed_samples_log_relative
+                                - normalized_fixed_samples_log_relative
+                            )
+
+                            _ = sim_ut.generate_distance_report(
+                                distance_fixed,
+                                ko_species_list,
+                                f"fixed_{file_name}",
+                                f"./report/{file_name}",
+                                log_file=log_file,
+                            )
+
                 except AssertionError as ae:
                     ut.print_log(
                         log_file, f"Error during samples results elaboration: {ae}"

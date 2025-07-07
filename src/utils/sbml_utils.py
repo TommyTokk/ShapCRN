@@ -804,30 +804,46 @@ def generate_species_samples(
     for ts in target_species:
         species = sbml_model.getListOfSpecies().getElementBySId(ts)
 
-        # taking initial concentration
-        try:
+        if species.getHasOnlySubstanceUnits():
+
+            print_log(log_file, f"Using amounts for {ts}")
+            t0_conc = species.getInitialAmount()
+        elif species.isSetInitialAmount():
+            print_log(log_file, f"Using amounts for {ts}")
+            t0_conc = species.getInitialAmount()
+        elif species.isSetInitialConcentration():
+            print_log(log_file, f"Using concentration for {ts}")
             t0_conc = species.getInitialConcentration()
-            print_log(log_file, f" Using conc for {ts}")
-        except Exception as e:
-            print_log(log_file, f" Using amount for {ts}")
-
-            if species.getHasOnlySubstanceUnits():
-
-                t0_conc = species.getInitialAmount()
-            else:
-                raise Exception(f"Invalid format for species {ts}")
+        else:
+            raise Exception("Cannot access species initial values")
 
         tmp = []
 
         for i in range(n_samples):
-            # Sample multiplication factors between (1-variation/100) and (1+variation/100)
-            factor = np.random.uniform(1 - variation / 100, 1 + variation / 100)
-            sample = t0_conc + (factor)
+            if t0_conc == 0:
+                print_log(
+                    log_file,
+                    f"[WARNING] initial value is 0 for species {ts}, using a small value",
+                )
+                # Use a small absolute range instead of percentage
+                lower_bound = 0
+                upper_bound = 1e-10
+            else:
+                lower_bound = t0_conc * (1 - (variation / 100))
+                upper_bound = t0_conc * (1 + (variation / 100))
+
+            print_log(
+                log_file,
+                f"[GENERATE_SAMPLES] t0:value: {t0_conc} | lower-bound: {lower_bound} | upper-bound: {upper_bound}",
+            )
+
+            sample = np.random.uniform(lower_bound, upper_bound)
+
             tmp.append(sample)
 
         res.append(tmp)
 
-    print_log(log_file, f"[GENERATE SAMPLES]{res}")
+    # print_log(log_file, f"[GENERATE SAMPLES]{res}")
 
     return res
 
@@ -838,6 +854,67 @@ def create_samples_combination(input_samples, log_file=None):
 
     # print_log(log_file, f"Combinations: {combinations}")
     return combinations
+
+
+def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file=None):
+    """
+    Generate fixed combinations for specified species with given variation percentages.
+
+    Args:
+        sbml_model: SBML model object
+        input_species: List of species IDs to vary
+        fixed_variations: List of percentage variations to apply
+        log_file: Optional log file for output
+
+    Returns:
+        List of tuples representing all combinations of varied species concentrations
+    """
+    samples = []
+
+    for s_id in input_species:
+        species = sbml_model.getListOfSpecies().getElementBySId(s_id)
+
+        # Get initial concentration/amount using the same logic as generate_species_samples
+        if species.getHasOnlySubstanceUnits():
+            print_log(log_file, f"Using amounts for {s_id}")
+            t0_conc = species.getInitialAmount()
+        elif species.isSetInitialAmount():
+            print_log(log_file, f"Using amounts for {s_id}")
+            t0_conc = species.getInitialAmount()
+        elif species.isSetInitialConcentration():
+            print_log(log_file, f"Using concentration for {s_id}")
+            t0_conc = species.getInitialConcentration()
+        else:
+            raise Exception("Cannot access species initial values")
+
+        tmp = []
+
+        # Handle zero initial concentration case (similar to generate_species_samples)
+        if t0_conc == 0:
+            print_log(
+                log_file,
+                f"[WARNING] initial value is 0 for species {s_id}, using small absolute values",
+            )
+            # For zero concentrations, use small absolute values based on variations
+            for v in sorted(fixed_variations):
+                # Use small absolute range instead of percentage
+                sample = (
+                    abs(v) * 1e-10
+                )  # Small absolute value proportional to variation
+                tmp.append(sample)
+        else:
+            # Apply percentage variations (same as before but with better logging)
+            for v in sorted(fixed_variations):
+                sample = t0_conc + (t0_conc * v / 100)
+                print_log(
+                    log_file,
+                    f"[FIXED_COMBINATIONS] Species: {s_id} | t0_value: {t0_conc} | variation: {v}% | sample: {sample}",
+                )
+                tmp.append(sample)
+
+        samples.append(tmp)
+
+    return create_samples_combination(samples, log_file)
 
 
 # FOR DEBUG ONLY

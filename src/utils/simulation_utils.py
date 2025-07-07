@@ -1,9 +1,4 @@
 from decimal import *
-import enum
-from itertools import combinations
-from logging import log
-
-from matplotlib.cbook import print_cycles
 
 import roadrunner as rr
 import libsbml
@@ -14,9 +9,9 @@ import re
 from collections import defaultdict
 import multiprocessing as mp
 from multiprocessing import Pool
+import datetime
 
-
-from src.utils.utils import print_log
+from src.utils.utils import get_ko_species_importance, print_log, frobenius_norm
 from src.utils import plot_utils as plt_ut
 
 
@@ -193,10 +188,10 @@ def process_species_samples(args):
             max_end_time=max_end_time,
         )
 
-        print_log(
-            log_file,
-            f"[DEBUG]knockout_model_results({knockedout_species}: {knockout_model_results[-1, colnames.index(f'[{knockedout_species}]')]})",
-        )
+        # print_log(
+        #     log_file,
+        #     f"[DEBUG]knockout_model_results({knockedout_species}: {knockout_model_results[-1, colnames.index(f'[{knockedout_species}]')]})",
+        # )
 
         modified_rr.reset()
         min_ss_time = (
@@ -214,17 +209,17 @@ def process_species_samples(args):
             log_file,
         )
 
-        print_log(log_file, f"[DEBUG] combinations results:")
+        # print_log(log_file, f"[DEBUG] combinations results:")
 
-        for i in range(len(combinations_knockout_model_results)):
-            res = combinations_knockout_model_results[i]
-            print_log(log_file, f"  {combinations[i]}")
-            print_log(
-                log_file,
-                f"  {knockedout_species}: {res[-1, colnames.index(f'[{knockedout_species}]')]}",
-            )
+        # for i in range(len(combinations_knockout_model_results)):
+        #     res = combinations_knockout_model_results[i]
+        # print_log(log_file, f"  {combinations[i]}")
+        # print_log(
+        #     log_file,
+        #     f"  [DEBUG]{knockedout_species}: {res[-1, colnames.index(f'[{knockedout_species}]')]}",
+        # )
 
-        print_log(log_file, f"[DEBUG] colnames: {colnames}")
+        # print_log(log_file, f"[DEBUG] colnames: {colnames}")
 
         # Contains information, for each knockedout species,
         # and foreach combination, about the simulation's results
@@ -303,7 +298,7 @@ def process_species_multiprocessing(
 ):
     # Determine number of workers
     if max_workers is None:
-        max_workers = min(len(target_ids), mp.cpu_count() - 1, 8)  # Don't use all CPUs
+        max_workers = min(len(target_ids), mp.cpu_count() - 2, 8)  # Don't use all CPUs
 
     print_log(
         log_file,
@@ -364,10 +359,12 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
     # taking the indices
 
     for cn in colnames:
+        if cn == "time":
+            continue
         id = re.sub(exp, "", cn)
         species_idxs[id] = colnames.index(cn)
 
-        # print_log(log_file, f"{cn}, {species_idx[cn]}")
+        print_log(log_file, f"{cn}, {species_idxs[id]}")
 
     for i in range(len(ko_models)):
 
@@ -403,7 +400,135 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
     return variations_dict
 
 
-# FIX: Refactor the code
+def generate_distance_report(
+    distance_matrix,
+    ko_species_list,
+    model_name,
+    saving_path,
+    threshold=0.2,
+    log_file=None,
+):
+    """
+    Generate a comprehensive distance report.
+
+    Args:
+        distance_matrix: 2D numpy array with distance values
+        ko_species_list: List of knockout species names
+        model_name: Name of the model (for the report filename)
+        saving_path: Directory where to save the report
+        threshold: Threshold for significant differences
+        log_file: Optional log file
+    """
+    # Check if the destinations folder exists otherwise create it
+    if not os.path.exists(saving_path):
+        os.makedirs(saving_path, exist_ok=True)
+        print_log(log_file, f"Created directory: {saving_path}")
+
+    # Calculate matrix metrics
+    matrix_forbenius_norm = frobenius_norm(distance_matrix)
+
+    # Getting additional metrics
+    max_diff = np.nanmax(distance_matrix)
+    min_diff = np.nanmin(distance_matrix)
+    mean_diff = np.nanmean(distance_matrix)
+    std_diff = np.nanstd(distance_matrix)
+
+    significant_differences = np.sum(distance_matrix > threshold)
+    total_comparisons = distance_matrix.size
+
+    # Determine importance level
+    importance_level = ""
+    recommendation = ""
+
+    if matrix_forbenius_norm < 0.05:
+        importance_level = "LOW"
+        recommendation = "Parameter uncertainty has minimal impact on knockout effects."
+    elif matrix_forbenius_norm < 0.2:
+        importance_level = "MODERATE"
+        recommendation = (
+            "Parameter uncertainty shows moderate impact on knockout effects."
+        )
+    elif matrix_forbenius_norm < 0.5:
+        importance_level = "HIGH"
+        recommendation = "Parameter uncertainty significantly affects knockout effects."
+    else:
+        importance_level = "CRITICAL"
+        recommendation = (
+            "Parameter uncertainty has critical impact on knockout effects."
+        )
+
+    # Calculate knockout importance
+    ko_impact, ko_ranking = get_ko_species_importance(
+        distance_matrix, ko_species_list, log_file
+    )
+
+    # Generate report filename
+    report_filename = f"{model_name}_distance_report.txt"
+    report_path = os.path.join(saving_path, report_filename)
+
+    # Write the report - CORREZIONE: modalità scrittura
+    try:
+        with open(report_path, "w") as f:  # ← CORRETTO: modalità scrittura
+            f.write("=" * 80 + "\n")
+            f.write("DISTANCE MATRIX ANALYSIS REPORT\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(f"Model: {model_name}\n")
+            f.write(
+                f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            )
+            f.write(f"Threshold: {threshold}\n\n")
+
+            f.write("MATRIX STATISTICS:\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"Frobenius Norm: {matrix_forbenius_norm:.6f}\n")
+            f.write(f"Maximum Distance: {max_diff:.6f}\n")
+            f.write(f"Minimum Distance: {min_diff:.6f}\n")
+            f.write(f"Mean Distance: {mean_diff:.6f}\n")
+            f.write(f"Standard Deviation: {std_diff:.6f}\n")
+            f.write(
+                f"Significant Differences: {significant_differences}/{total_comparisons}\n"
+            )
+            f.write(
+                f"Significance Rate: {(significant_differences/total_comparisons)*100:.2f}%\n\n"
+            )
+
+            f.write("IMPACT ASSESSMENT:\n")
+            f.write("-" * 40 + "\n")
+            f.write("REFERENCE:\n")
+            f.write("Frobenius norm < 0.05: LOW\n")
+            f.write("0.05 <= Frobenius norm < 0.2: MODERATE\n")
+            f.write("0.2 <= Frobenius norm < 0.5: HIGH\n")
+            f.write("frobenius >= 0.5: CRITICAL\n\n")
+            f.write(f"Importance Level: {importance_level}\n")
+            f.write(f"Recommendation: {recommendation}\n\n")
+
+            if ko_impact is not None and ko_ranking is not None:
+                f.write("KNOCKOUT SPECIES RANKING:\n")
+                f.write("-" * 40 + "\n")
+                f.write("Top 10 knockouts most sensitive to parameter uncertainty:\n")
+                for i in range(min(10, len(ko_ranking))):
+                    ko_idx = ko_ranking[i]
+                    ko_name = ko_species_list[ko_idx]
+                    impact_score = ko_impact[ko_idx]
+                    if np.isnan(impact_score):
+                        f.write(f"  {i+1:2d}. {ko_name:<20} NaN (no valid data)\n")
+                    else:
+                        f.write(f"  {i+1:2d}. {ko_name:<20} {impact_score:.6f}\n")
+            else:
+                f.write("KNOCKOUT SPECIES RANKING: Unable to calculate\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+
+        print_log(log_file, f"Distance report saved to: {report_path}")
+
+    except Exception as e:
+        print_log(log_file, f"Error writing report to {report_path}: {e}")
+        raise
+
+    return report_path
+
+
 def analyze_simulation_variations(  # TODO: Check correctness
     target_data, original_results, output_dir, log_file=None, target_type=0
 ):
@@ -689,7 +814,6 @@ def get_simulations_informations(
             missing_species.append(s_id)
 
     # Remove time
-
     try:
         _ = target_indices.pop("time")
     except Exception as e:
@@ -713,14 +837,10 @@ def get_simulations_informations(
         if ts == "time":
             continue
         ts_index = target_indices[ts]
-        print_log(log_file, f"[DEBUG] ts_index: {ts_index} ({ts})")
+        # print_log(log_file, f"[DEBUG] ts_index: {ts_index} ({ts})")
         table_results["original"][ts] = original_results[
             -1, ts_index
         ]  # Final concentration
-
-    print_log(
-        log_file, f"[DEBUG] original LR: {original_results[-1, target_indices['LR']]}"
-    )
 
     # Process simulations in batch
     if not combinations or not samples_simulations_results:
@@ -889,11 +1009,14 @@ def get_knockout_variations_samples(
     variations_dict = {}
 
     for ko_species, species_dict in final_results_knocked_model:
+        print_log("test", f"[G_KO_V_S]{ko_species}")
         variations_dict[ko_species] = {}
 
         for combination, original_info_dict in final_results_original_model.items():
+            print_log("test", f"[G_KO_V_S]    {combination}")
             variations_dict[ko_species][combination] = {}
             for species, original_value in original_info_dict.items():
+                print_log("test", f"[G_KO_V_S]        {species}")
 
                 if species == ko_species:
                     variation = np.nan
@@ -923,6 +1046,10 @@ def get_knockout_variations_samples(
                         print_log(
                             log_file, f" Error in relative variation calculation: {e}"
                         )
+                    print_log("test", f"[G_KO_V_S]        ov:{original_value}")
+                    print_log("test", f"[G_KO_V_S]        ko_v:{ko_value}")
+                print_log("test", f"[G_KO_V_S]            var:{variation}")
+                print_log("test", f"[G_KO_V_S]            rel-var:{relative_variation}")
 
                 variations_dict[ko_species][combination][species] = {
                     "variation": variation,
@@ -930,6 +1057,37 @@ def get_knockout_variations_samples(
                 }
 
     return variations_dict
+
+
+def get_no_samples_variations(
+    variations_dict,
+    all_species,
+    ko_species_list,
+    variation_type="relative",
+    log_file=None,
+):
+
+    for combinations in variations_dict.values():
+        for species_data in combinations.values():
+            all_species.update(species_data.keys())
+
+    all_species = sorted(list(all_species))
+    res_matrix = np.zeros((len(ko_species_list), len(all_species)))
+
+    for i, ko_species in enumerate(ko_species_list):
+        no_sample_combinations = variations_dict[ko_species]["original"]
+
+        for j, species in enumerate(all_species):
+            if variation_type.lower() == "relative":
+                res_matrix[i, j] = np.sqrt(
+                    no_sample_combinations[species]["relative-variation"] ** 2
+                )
+            else:
+                res_matrix[i, j] = np.sqrt(
+                    no_sample_combinations[species]["variation"] ** 2
+                )
+
+    return res_matrix, all_species
 
 
 def get_variations_hm_samples(
@@ -963,11 +1121,12 @@ def get_variations_hm_samples(
 
     for i, ko_species in enumerate(ko_species_list):
         combinations = variations_dict[ko_species]
-
         for j, species in enumerate(all_species):
             variations = []
-            for combination_data in combinations.values():
+            for combination, combination_data in combinations.items():
+
                 if species in combination_data:
+
                     if variation_type.lower() == "relative":
                         variations.append(
                             combination_data[species]["relative-variation"]
@@ -977,7 +1136,7 @@ def get_variations_hm_samples(
 
             if variations:
                 # Use the RMS to avoid the lost of information
-                heatmap_data[i, j] = np.square(np.mean([v**2 for v in variations]))
+                heatmap_data[i, j] = np.sqrt(np.mean([v**2 for v in variations]))
     return (heatmap_data, all_species)
 
 

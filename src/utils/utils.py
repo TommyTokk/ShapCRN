@@ -322,18 +322,38 @@ def pretty_print_variations(variations_dict, precision=4, show_zero=False):
 
 # === DEBUG ===
 
+# === ANALYSIS ===
+
+
+def get_ko_species_importance(matrix, ko_species_list, log_file=None):
+    ko_impact = np.nanmean(matrix, axis=1)
+    ko_ranking = np.argsort(ko_impact)[::-1]
+
+    print_log(log_file, "Top 5 knockouts most sensitive to parameter uncertainty:")
+    for i in range(min(5, len(ko_ranking))):
+        ko_idx = ko_ranking[i]
+        ko_name = ko_species_list[ko_idx]
+        impact_score = ko_impact[ko_idx]
+        print_log(log_file, f"  {i+1}. {ko_name}: {impact_score:.20f}")
+
+    return ko_impact, ko_ranking
+
+
 # === NORMALIZATION ===
 
 
 def minMax_normalize(heatmap_data, log_file=None):
 
-    global_min = heatmap_data.min()
-    global_max = heatmap_data.max()
+    global_min = np.nanmax(heatmap_data)
+    global_max = np.nanmin(heatmap_data)
 
-    if global_max - global_min > 1e-10:
+    if global_max == global_min:
+        return np.zeros_like(heatmap_data)
+
+    if global_max - global_min > 1e-20:
         heatmap_data = (heatmap_data - global_min) / (global_max - global_min)
 
-    return heatmap_data
+    return np.clip(heatmap_data, 0.0, 1.0)
 
 
 def z_score_normalize(heatmap_data, log_file=None):
@@ -350,3 +370,28 @@ def z_score_normalize(heatmap_data, log_file=None):
         log_file.write(f"Column stds: {stds}\n")
 
     return z_scores
+
+
+def frobenius_norm(matrix, ignore_nan=True):
+    """
+    Calculate Frobenius norm with robust NaN handling
+
+    Parameters:
+    matrix: numpy array
+    ignore_nan: if True, ignore NaN values; if False, return NaN if any NaN present
+    """
+
+    if not ignore_nan and np.any(np.isnan(matrix)):
+        return np.nan
+
+    # Create a mask for valid (non-NaN) values
+    valid_mask = ~np.isnan(matrix)
+
+    if not np.any(valid_mask):
+        # All values are NaN
+        return np.nan
+
+    # Calculate Frobenius norm only for valid values
+    valid_values = matrix[valid_mask]
+
+    return np.linalg.norm(valid_values)

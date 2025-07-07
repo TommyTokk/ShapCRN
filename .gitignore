@@ -181,4 +181,6 @@ models/*
 
 log
 
+report/*
+
 .DS_Store

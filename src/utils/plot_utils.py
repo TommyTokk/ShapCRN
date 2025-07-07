@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
 
 import math
-from networkx.algorithms.bipartite import color
+
 import numpy as np
-import matplotlib.colors as colors
+
+import pandas as pd
+
 import os  # needed for saving
-from collections import defaultdict
+
 
 from utils.utils import print_log
 
@@ -331,6 +333,7 @@ def plot_variations_heatmap(
     variation_type="relative",
     show_averages=True,
     title=None,
+    imgs_name=None,
     log_file=None,
 ):
     """
@@ -382,7 +385,7 @@ def plot_variations_heatmap(
     if log_file:
         print_log(log_file, f"Heatmap data shape: {heatmap_data.shape}")
         print_log(log_file, f"Valid data points: {len(valid_data)}/{heatmap_data.size}")
-        print_log(log_file, f"Data range: {vmin:.6f} to {vmax:.6f}")
+        print_log(log_file, f"Data range: {vmin:.10f} to {vmax:.10f}")
 
     masked_data = np.ma.masked_invalid(heatmap_data)
     cmap = plt.get_cmap(cmap).copy()
@@ -426,21 +429,65 @@ def plot_variations_heatmap(
     # Save if specified
     if save_path:
         os.makedirs(save_path, exist_ok=True)
-        plt.savefig(
-            os.path.join(
-                save_path,
-                f"{'Relative variation' if variation_type.lower() == 'relative' else 'Variation'} Heatmap.png",
+        if imgs_name is None:
+            plt.savefig(
+                os.path.join(
+                    save_path,
+                    f"{'Relative variation' if variation_type.lower() == 'relative' else 'Variation'} Heatmap.png",
+                )
             )
-        )
+        else:
+            plt.savefig(
+                os.path.join(
+                    save_path,
+                    f"{imgs_name} Heatmap.png",
+                )
+            )
+
     plt.close()
 
-    # Summary statistics - now safe to use reduction operations
-    print("\nHeatmap Summary:")
-    print(f"Max variation: {valid_data.max():.4f}")
-    print(f"Min variation: {valid_data.min():.4f}")
-    print(
-        f"Mean {'relative' if variation_type.lower() == 'relative' else 'absolute'} variation: {valid_data.mean():.4f}"
+
+def plot_matrix_table(
+    matrix,
+    row_headers,
+    column_headers,
+    show_index,
+    show_columns,
+    title,
+    precision=20,
+    log_file=None,
+):
+    # Validate dimensions
+    if matrix.ndim != 2:
+        raise ValueError("Matrix must be 2-dimensional")
+
+    rows, cols = matrix.shape
+
+    if len(row_headers) != rows:
+        raise ValueError(
+            f"Number of row headers ({len(row_headers)}) must match matrix rows ({rows})"
+        )
+
+    if len(column_headers) != cols:
+        raise ValueError(
+            f"Number of column headers ({len(column_headers)}) must match matrix columns ({cols})"
+        )
+
+    # Create DataFrame
+    df = pd.DataFrame(
+        matrix,
+        index=row_headers if show_index else None,
+        columns=column_headers if show_columns else None,
     )
-    non_zero = np.count_nonzero(valid_data)
-    total = len(valid_data)
-    print(f"Non-zero variations: {non_zero}/{total} ({non_zero/total*100:.1f}%)")
+
+    # Format floating point numbers
+    if np.issubdtype(matrix.dtype, np.floating):
+        df = df.round(precision)
+
+    # Display with title
+    print_log(log_file, f"\n{title}")
+    print_log(log_file, "=" * len(title))
+    print_log(log_file, df.to_string())
+    print_log(log_file, "")
+
+    return df
