@@ -249,12 +249,12 @@ def main():
                 log_file=log_file,
             )
 
-            # for ko_species, comb_dict in knockout_data:
-            #     ut.print_log("samples", f"{ko_species}:")
-            #     for combination, info_dict in comb_dict.items():
-            #         ut.print_log("samples", f"  {combination}:")
-            #         for species, value in info_dict.items():
-            #             ut.print_log("samples", f"      {species}: {value}")
+            for ko_species, comb_dict in knockout_data:
+                ut.print_log("samples", f"{ko_species}:")
+                for combination, info_dict in comb_dict.items():
+                    ut.print_log("samples", f"  {combination}:")
+                    for species, value in info_dict.items():
+                        ut.print_log("samples", f"      {species}: {value}")
 
             end_time = time.perf_counter()
 
@@ -289,12 +289,12 @@ def main():
                     title="Relative variations heatmap",
                 )
 
-                for i, ko_species in enumerate(ko_species_list):
-                    for j, species in enumerate(all_species_rel):
-                        ut.print_log(
-                            "no_samples",
-                            f"({ko_species}, {species}) {log_rel_map[i,j]}",
-                        )
+                # for i, ko_species in enumerate(ko_species_list):
+                #     for j, species in enumerate(all_species_rel):
+                #         ut.print_log(
+                #             "no_samples",
+                #             f"({ko_species}, {species}) {log_rel_map[i,j]}",
+                #         )
 
                 plt_ut.plot_variations_heatmap(
                     log_abs_map,
@@ -313,6 +313,7 @@ def main():
                         f"Time to process species: {(end_time-start_time):.2f}s",
                     )
 
+                    # Get the variation informations
                     variation_dict = sim_ut.get_knockout_variations_samples(
                         original_model_simulations_info,  # pyright:ignore
                         knockout_data,
@@ -323,7 +324,7 @@ def main():
                     all_species = set()
                     ko_species_list = list(variation_dict.keys())
 
-                    # Getting the informations about the original model with samples
+                    # Getting the informations about the original relative variations
                     no_samples_relative_map, all_species_rel = (
                         sim_ut.get_no_samples_variations(
                             variation_dict,
@@ -334,8 +335,6 @@ def main():
                         )
                     )
 
-                    no_samples_log_relative_map = np.log(no_samples_relative_map + 1)
-
                     # for i, ko_species in enumerate(ko_species_list):
                     #     for j, species in enumerate(all_species_rel):
                     #         ut.print_log(
@@ -343,6 +342,7 @@ def main():
                     #             f"{ko_species, species} {no_samples_log_relative_map[i,j]}",
                     #         )
 
+                    # Get the informations about the original absolute variations
                     no_samples_absolute_map, all_species_abs = (
                         sim_ut.get_no_samples_variations(
                             variation_dict,
@@ -353,8 +353,6 @@ def main():
                         )
                     )
 
-                    no_samples_log_absolute_map = np.log(no_samples_absolute_map + 1)
-
                     # Getting the samples informations
                     relative_map, all_species_rel = sim_ut.get_variations_hm_samples(
                         variation_dict,
@@ -362,20 +360,6 @@ def main():
                         ko_species_list,
                         variation_type="relative",
                         log_file=log_file,
-                    )
-
-                    relative_log_map = np.log(relative_map + 1)
-                    normalized_samples_relative_log_map = ut.minMax_normalize(
-                        relative_log_map
-                    )
-
-                    plt_ut.plot_variations_heatmap(
-                        relative_log_map,
-                        all_species_rel,
-                        ko_species_list,
-                        save_path=f"./imgs/{file_name}",
-                        variation_type="relative",
-                        title="Relative variations with samples",
                     )
 
                     abs_map, all_species_abs = sim_ut.get_variations_hm_samples(
@@ -386,13 +370,45 @@ def main():
                         log_file=log_file,
                     )
 
-                    abs_log_map = np.log(abs_map + 1)
-                    normalized_samples_absolute_log_map = ut.minMax_normalize(
-                        abs_log_map
+                    # Normaliziing with logs
+                    no_samples_log_relative_map = np.log(no_samples_relative_map + 1)
+                    no_samples_log_absolute_map = np.log(no_samples_absolute_map + 1)
+
+                    samples_log_relative_map = np.log(relative_map + 1)
+                    samples_log_absolute_map = np.log(abs_map + 1)
+
+                    # Normalizing with minMax
+                    normalized_no_samples_relative = ut.minMax_normalize(
+                        no_samples_log_relative_map
+                    )
+                    normalized_no_samples_absolute = ut.minMax_normalize(
+                        no_samples_log_absolute_map
+                    )
+
+                    normalized_samples_relative_map = ut.minMax_normalize(
+                        samples_log_relative_map
+                    )
+                    normalized_samples_absolute_map = ut.minMax_normalize(
+                        samples_log_absolute_map
+                    )
+
+                    ut.print_log(
+                        log_file,
+                        f" PEARSON: {ut.pearson_correlation(normalized_no_samples_relative, normalized_samples_relative_map)}",
+                    )
+
+                    # Heatmap plotting
+                    plt_ut.plot_variations_heatmap(
+                        samples_log_relative_map,
+                        all_species_rel,
+                        ko_species_list,
+                        save_path=f"./imgs/{file_name}",
+                        variation_type="relative",
+                        title="Relative variations with samples",
                     )
 
                     plt_ut.plot_variations_heatmap(
-                        abs_log_map,
+                        samples_log_absolute_map,
                         all_species_rel,
                         ko_species_list,
                         save_path=f"./imgs/{file_name}",
@@ -400,96 +416,63 @@ def main():
                         title="Variations with samples",
                     )
 
+                    # === SAMPLING IMPORTANCE ANALYSIS ===
+
                     correlation_type = "two-sided"
 
-                    if np.any(np.isposinf(no_samples_log_relative_map)) or np.any(
-                        np.isposinf(relative_log_map)
-                    ):
-                        ut.print_log(
-                            log_file,
-                            "[WARNING] Infinite value detected, using absolute variation",
-                        )
+                    # Getting the relative distance
+                    relative_distance = np.abs(
+                        samples_log_relative_map - no_samples_log_relative_map
+                    )
 
-                        normalized_no_samples = ut.minMax_normalize(
-                            no_samples_log_absolute_map, log_file
-                        )
+                    # Getting the pearson_coefficient
+                    pearson_coefficient, p_value = ut.pearson_correlation(
+                        samples_log_relative_map, no_samples_log_relative_map
+                    )
 
-                        absolute_distance = np.abs(
-                            normalized_no_samples - normalized_samples_absolute_log_map
-                        )
+                    # TODO: Create two type of report:
+                    # 1: Pattern distance report
+                    # 2: Values distance report
 
-                        pearson_coefficient, p_value = ut.pearson_correlation(
-                            normalized_no_samples,
-                            normalized_samples_absolute_log_map,
-                            alternative=correlation_type,
-                        )
+                    # Getting the report
+                    _ = sim_ut.generate_distance_report(
+                        relative_distance,
+                        pearson_coefficient,
+                        p_value,
+                        correlation_type,
+                        ko_species_list,
+                        file_name,
+                        f"./report/{file_name}",
+                        log_file=log_file,
+                    )
 
-                        # === SAMPLING IMPORTANCE ANALYSIS ===
-                        sim_ut.generate_distance_report(
-                            absolute_distance,
-                            pearson_coefficient,
-                            p_value,
-                            correlation_type,
-                            ko_species_list,
-                            file_name,
-                            f"./report/{file_name}",
-                            log_file=log_file,
-                        )
+                    # Plotting the distance of log normalized matrices
+                    plt_ut.plot_variations_heatmap(
+                        relative_distance,
+                        all_species_rel,
+                        ko_species_list,
+                        save_path=f"./imgs/{file_name}",
+                        title="Perturbations VS No Perturbations Distance",
+                        imgs_name="Perturbations VS No Perturbations distance",
+                    )
 
-                        plt_ut.plot_variations_heatmap(
-                            absolute_distance,
-                            all_species_abs,
-                            ko_species_list,
-                            save_path=f"./imgs/{file_name}",
-                            variation_type="absolute",
-                            title="Absolute variation distance samples VS no samples",
-                            imgs_name="Variations distance",
-                        )
-                    else:
-                        ut.print_log(log_file, "[WARNING] Using relative variation")
-
-                        # Normalize the matices in range [0,1]
-                        normalized_no_samples = ut.minMax_normalize(
-                            no_samples_log_relative_map, log_file
-                        )
-
-                        relative_distance = np.abs(
-                            normalized_no_samples - normalized_samples_relative_log_map
-                        )
-
-                        # Getting the distances
-                        pearson_coefficient, p_value = ut.pearson_correlation(
-                            normalized_no_samples,
-                            normalized_samples_relative_log_map,
-                            alternative=correlation_type,
-                        )
-
-                        sim_ut.generate_distance_report(
-                            relative_distance,
-                            pearson_coefficient,
-                            p_value,
-                            correlation_type,
-                            ko_species_list,
-                            file_name,
-                            f"./report/{file_name}",
-                            log_file=log_file,
-                        )
-
-                        plt_ut.plot_variations_heatmap(
-                            relative_distance,
-                            all_species_abs,
-                            ko_species_list,
-                            save_path=f"./imgs/{file_name}",
-                            variation_type="relative",
-                            title="Relative variation distance samples VS no samples",
-                            imgs_name="Variations distance",
-                        )
+                    # TODO: Check the fixed samples analysis
 
                     # === FIXED SAMPLES ANALYSIS ===
                     ut.print_log(
                         log_file, "Do you want to perform fixed samples analysis? [y/n]"
                     )
+
                     user_choice = input()
+
+                    valids_input = ["y", "n"]
+
+                    while user_choice.lower() not in valids_input:
+                        ut.print_log(
+                            log_file,
+                            "[WARNING] Invalid input, please insert a valid value (y/n)",
+                        )
+                        user_choice = input()
 
                     if user_choice.lower() == "y":
                         ut.print_log(log_file, "STARTING FIXED SAMPLES ANALYSIS")
@@ -501,7 +484,9 @@ def main():
                             "[WARNING] Notice that the number of samples will equals to the number of variations",
                         )
 
-                        fixed_variations = [float(inp) for inp in input().split(" ")]
+                        fixed_variations = [
+                            float(inp) for inp in input().strip().split(" ")
+                        ]
 
                         ut.print_log(log_file, f"{fixed_variations}")
 
@@ -580,7 +565,7 @@ def main():
                         # === DIFFERENCE ANALYSIS WITH SAMPLES ===
 
                         if np.any(np.isposinf(fixed_log_relative_map)) or np.any(
-                            np.isposinf(relative_log_map)
+                            np.isposinf(samples_log_relative_map)
                         ):
                             ut.print_log(
                                 log_file,
@@ -592,12 +577,12 @@ def main():
 
                             distance_fixed = np.abs(
                                 normalized_fixed_samples_log_absolute
-                                - normalized_samples_absolute_log_map
+                                - normalized_samples_absolute_map
                             )
 
                             pearson_coefficient, p_value = ut.pearson_correlation(
                                 normalized_fixed_samples_log_absolute,
-                                normalized_samples_absolute_log_map,
+                                normalized_samples_absolute_map,
                                 alternative=correlation_type,
                             )
 
@@ -610,6 +595,16 @@ def main():
                                 f"fixed_{file_name}",
                                 f"./report/{file_name}",
                                 log_file=log_file,
+                            )
+
+                            plt_ut.plot_variations_heatmap(
+                                distance_fixed,
+                                all_species_abs,
+                                ko_species_list,
+                                save_path=f"./imgs/{file_name}",
+                                variation_type="absolute",
+                                title="Absolute variation distance fixed samples VS random samples",
+                                imgs_name="Fixed Variations distance",
                             )
                         else:
                             ut.print_log(log_file, "[WARNING] Using relative variation")
@@ -620,12 +615,12 @@ def main():
 
                             distance_fixed = np.abs(
                                 normalized_fixed_samples_log_relative
-                                - normalized_samples_relative_log_map
+                                - normalized_samples_relative_map,
                             )
 
                             pearson_coefficient, p_value = ut.pearson_correlation(
                                 normalized_fixed_samples_log_relative,
-                                normalized_samples_relative_log_map,
+                                normalized_samples_relative_map,
                                 alternative=correlation_type,
                             )
 
@@ -638,6 +633,16 @@ def main():
                                 f"fixed_{file_name}",
                                 f"./report/{file_name}",
                                 log_file=log_file,
+                            )
+
+                            plt_ut.plot_variations_heatmap(
+                                distance_fixed,
+                                all_species_abs,
+                                ko_species_list,
+                                save_path=f"./imgs/{file_name}",
+                                variation_type="relative",
+                                title="Absolute variation distance fixed samples VS random samples",
+                                imgs_name="Fixed Variations distance",
                             )
 
                 except AssertionError as ae:

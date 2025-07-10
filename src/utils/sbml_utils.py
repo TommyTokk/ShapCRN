@@ -832,10 +832,10 @@ def generate_species_samples(
                 lower_bound = t0_conc * (1 - (variation / 100))
                 upper_bound = t0_conc * (1 + (variation / 100))
 
-            print_log(
-                log_file,
-                f"[GENERATE_SAMPLES] t0:value: {t0_conc} | lower-bound: {lower_bound} | upper-bound: {upper_bound}",
-            )
+            # print_log(
+            #     log_file,
+            #     f"[GENERATE_SAMPLES] t0:value: {t0_conc} | lower-bound: {lower_bound} | upper-bound: {upper_bound}",
+            # )
 
             sample = np.random.uniform(lower_bound, upper_bound)
 

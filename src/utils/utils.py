@@ -347,17 +347,29 @@ def pearson_correlation(
 
         # Correct logic based on alternative hypothesis
         if alternative == "two-sided":
-            if abs(r_perm) >= abs(r_obs):
+            if abs(r_perm) >= abs(r_obs):  # pyright:ignore
                 count += 1
         elif alternative == "greater":
-            if r_perm >= r_obs:
+            if r_perm >= r_obs:  # pyright:ignore
                 count += 1
         elif alternative == "less":
-            if r_perm <= r_obs:
+            if r_perm <= r_obs:  # pyright:ignore
                 count += 1
 
     pvalue = (count + 1) / (permutations + 1)
     return r_obs, pvalue
+
+
+def truncate_small_values(value, threshold=1e-20):
+    val = np.float64(value)
+    return np.where(np.abs(val) < threshold, 0, val)
+
+
+def get_active_cells(matrix, log_file=None):
+
+    res = np.where((matrix > 0) & np.isfinite(matrix), 1, 0)
+
+    return res
 
 
 def get_ko_species_importance(matrix, ko_species_list, log_file=None):

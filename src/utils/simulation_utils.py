@@ -11,7 +11,12 @@ import multiprocessing as mp
 from multiprocessing import Pool
 import datetime
 
-from src.utils.utils import get_ko_species_importance, print_log, frobenius_norm
+from src.utils.utils import (
+    get_ko_species_importance,
+    print_log,
+    frobenius_norm,
+    truncate_small_values,
+)
 from src.utils import plot_utils as plt_ut
 
 
@@ -63,8 +68,7 @@ def simulate(
     Simulate the model with optional steady state detection.
     """
     # Setting nonnegative for stochastic simulations
-    if rr_model.getIntegrator().getName() == "gillespie":
-        rr_model.getIntegrator().nonnegative = True
+    rr_model.getIntegrator().nonnegative = True
 
     if steady_state:
         print_log(
@@ -861,7 +865,7 @@ def get_simulations_informations(
     except Exception as e:
         print_log(log_file, f"Time not present: {e}")
 
-    print_log(log_file, target_indices)
+    # print_log(log_file, target_indices)
 
     # Only process species that exist in the data
     # valid_target_ids = [ts for ts in target_ids if ts in target_indices]
@@ -880,9 +884,9 @@ def get_simulations_informations(
             continue
         ts_index = target_indices[ts]
         # print_log(log_file, f"[DEBUG] ts_index: {ts_index} ({ts})")
-        table_results["original"][ts] = original_results[
-            -1, ts_index
-        ]  # Final concentration
+        table_results["original"][ts] = truncate_small_values(
+            original_results[-1, ts_index]
+        )  # Final concentration
 
     # Process simulations in batch
     if not combinations or not samples_simulations_results:
@@ -914,7 +918,9 @@ def get_simulations_informations(
                 continue
             ts_index = target_indices[ts]
             try:
-                table_results[combo_key][ts] = simulation_results[-1, ts_index]
+                table_results[combo_key][ts] = truncate_small_values(
+                    simulation_results[-1, ts_index]
+                )
             except (IndexError, TypeError) as e:
                 print_log(
                     log_file, f"Error extracting results for sim {i}, species {ts}: {e}"
@@ -1049,6 +1055,7 @@ def get_knockout_variations_samples(
         Dict: Nested dictionary with variations per species and combination
     """
     variations_dict = {}
+    epsilon = 1e-20
 
     for ko_species, species_dict in final_results_knocked_model:
         print_log("test", f"[G_KO_V_S]{ko_species}")
@@ -1069,26 +1076,24 @@ def get_knockout_variations_samples(
                     relative_variation = np.nan
                 else:
 
-                    original_val = np.float64(original_value)
-                    ko_value = np.float64(species_dict[combination][species])
+                    original_val = np.where(
+                        np.abs(np.float64(original_value)) < 1e-20,
+                        0,
+                        np.float64(original_value),
+                    )
+                    ko_value = np.where(
+                        np.abs(np.float64(species_dict[combination][species])) < 1e-20,
+                        0,
+                        np.float64(species_dict[combination][species]),
+                    )
 
-                    variation = ko_value - original_value
-                    relative_variation = np.nan
+                    variation = ko_value - original_val
 
-                    try:
-                        if np.isclose(original_val, 0, atol=1e-20):
-                            relative_variation = (
-                                np.inf
-                                if variation > 0
-                                else (-np.inf if variation < 0 else 0.0)
-                            )
-                        else:
-                            relative_variation = variation / original_val
-                    except Exception as e:
-                        print_log(
-                            log_file, f" Error in relative variation calculation: {e}"
-                        )
-                    print_log("test", f"[G_KO_V_S]        ov:{original_value}")
+                    relative_variation = (ko_value - original_val) / np.maximum(
+                        np.abs(original_val), epsilon
+                    )
+
+                    print_log("test", f"[G_KO_V_S]        ov:{original_val}")
                     print_log("test", f"[G_KO_V_S]        ko_v:{ko_value}")
                 print_log("test", f"[G_KO_V_S]            var:{variation}")
                 print_log("test", f"[G_KO_V_S]            rel-var:{relative_variation}")
@@ -1155,8 +1160,6 @@ def get_variations_hm_samples(
             all_species.update(species_data.keys())
 
     all_species = sorted(list(all_species))
-
-    # print_log(log_file, f"[GET VARIATION MEAN]{all_species}")
 
     # Calculate the variation's matrix
     heatmap_data = np.zeros((len(ko_species_list), len(all_species)))
