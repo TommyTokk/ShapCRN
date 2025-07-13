@@ -392,11 +392,6 @@ def main():
                         samples_log_absolute_map
                     )
 
-                    ut.print_log(
-                        log_file,
-                        f" PEARSON: {ut.pearson_correlation(normalized_no_samples_relative, normalized_samples_relative_map)}",
-                    )
-
                     # Heatmap plotting
                     plt_ut.plot_variations_heatmap(
                         samples_log_relative_map,
@@ -420,40 +415,80 @@ def main():
 
                     correlation_type = "two-sided"
 
-                    # Getting the relative distance
-                    relative_distance = np.abs(
+                    # Getting the values relative distance
+                    relative_values_distance = np.abs(
                         samples_log_relative_map - no_samples_log_relative_map
                     )
+
+                    ut.print_log(log_file, relative_values_distance[0, 1])
 
                     # Getting the pearson_coefficient
                     pearson_coefficient, p_value = ut.pearson_correlation(
                         samples_log_relative_map, no_samples_log_relative_map
                     )
 
-                    # TODO: Create two type of report:
-                    # 1: Pattern distance report
-                    # 2: Values distance report
-
-                    # Getting the report
-                    _ = sim_ut.generate_distance_report(
-                        relative_distance,
+                    # Getting the values distance report
+                    _ = sim_ut.generate_values_distance_report(
+                        relative_values_distance,
                         pearson_coefficient,
                         p_value,
                         correlation_type,
                         ko_species_list,
                         file_name,
-                        f"./report/{file_name}",
+                        f"./report/{file_name}/Perturbations importance analysis",
+                        report_title="Values distance report analysis",
                         log_file=log_file,
                     )
 
                     # Plotting the distance of log normalized matrices
                     plt_ut.plot_variations_heatmap(
-                        relative_distance,
+                        relative_values_distance,
                         all_species_rel,
                         ko_species_list,
-                        save_path=f"./imgs/{file_name}",
+                        save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                         title="Perturbations VS No Perturbations Distance",
                         imgs_name="Perturbations VS No Perturbations distance",
+                    )
+
+                    # Get the active cells of the matrices
+                    active_cells_no_samples_map = ut.get_active_cells(
+                        normalized_no_samples_relative, log_file
+                    )
+                    active_cells_samples_map = ut.get_active_cells(
+                        normalized_samples_relative_map, log_file
+                    )
+
+                    # Getting the pattern distance report
+                    relative_pattern_distance = np.abs(
+                        active_cells_no_samples_map - active_cells_samples_map
+                    )
+
+                    pattern_pearson_coefficient, pattern_p_value = (
+                        ut.pearson_correlation(
+                            active_cells_no_samples_map, active_cells_samples_map
+                        )
+                    )
+
+                    _ = sim_ut.generate_pattern_distance_report(
+                        relative_pattern_distance,
+                        pattern_pearson_coefficient,
+                        pattern_p_value,
+                        correlation_type,
+                        ko_species_list,
+                        file_name,
+                        f"./report/{file_name}/Perturbations importance analysis",
+                        report_title="Pattern distance report analysis",
+                        log_file=log_file,
+                    )
+
+                    # Plotting the pattern distnace's matrix
+                    plt_ut.plot_variations_heatmap(
+                        relative_pattern_distance,
+                        all_species_rel,
+                        ko_species_list,
+                        save_path=f"./imgs/{file_name}/Perturbations importance analysis",
+                        title="Relative patterns distance's heatmap",
+                        imgs_name="Relative pattern distance's heatmap",
                     )
 
                     # TODO: Check the fixed samples analysis
@@ -475,6 +510,9 @@ def main():
                         user_choice = input()
 
                     if user_choice.lower() == "y":
+
+                        rr.reset()
+
                         ut.print_log(log_file, "STARTING FIXED SAMPLES ANALYSIS")
                         ut.print_log(
                             log_file, "Please insert the fixed variations (v1 v2 ...)"
@@ -542,12 +580,14 @@ def main():
                             log_file=None,
                         )
 
-                        fixed_relative_map, _ = sim_ut.get_variations_hm_samples(
-                            fixed_variation_dict,
-                            all_species,
-                            ko_species_list,
-                            variation_type="relative",
-                            log_file=log_file,
+                        fixed_relative_map, fixed_all_species_rel = (
+                            sim_ut.get_variations_hm_samples(
+                                fixed_variation_dict,
+                                all_species,
+                                ko_species_list,
+                                variation_type="relative",
+                                log_file=log_file,
+                            )
                         )
 
                         fixed_absolute_map, _ = sim_ut.get_variations_hm_samples(
@@ -564,86 +604,83 @@ def main():
 
                         # === DIFFERENCE ANALYSIS WITH SAMPLES ===
 
-                        if np.any(np.isposinf(fixed_log_relative_map)) or np.any(
-                            np.isposinf(samples_log_relative_map)
-                        ):
-                            ut.print_log(
-                                log_file,
-                                "[WARNING] Infinite value detected, using absolute variation",
-                            )
-                            normalized_fixed_samples_log_absolute = ut.minMax_normalize(
-                                fixed_log_absolute_map
-                            )
+                        # Getting the relative distance
+                        fixed_relative_values_distance = np.abs(
+                            fixed_log_relative_map - samples_log_relative_map
+                        )
 
-                            distance_fixed = np.abs(
-                                normalized_fixed_samples_log_absolute
-                                - normalized_samples_absolute_map
-                            )
+                        normalized_fixed_relative_map = ut.minMax_normalize(
+                            fixed_log_relative_map
+                        )
 
-                            pearson_coefficient, p_value = ut.pearson_correlation(
-                                normalized_fixed_samples_log_absolute,
-                                normalized_samples_absolute_map,
-                                alternative=correlation_type,
+                        # Getting the pearson_coefficient
+                        fixed_pearson_coefficient, fixed_p_value = (
+                            ut.pearson_correlation(
+                                fixed_log_relative_map, samples_log_relative_map
                             )
+                        )
 
-                            _ = sim_ut.generate_distance_report(
-                                distance_fixed,
-                                pearson_coefficient,
-                                p_value,
-                                correlation_type,
-                                ko_species_list,
-                                f"fixed_{file_name}",
-                                f"./report/{file_name}",
-                                log_file=log_file,
-                            )
+                        # Getting the values distance report
+                        _ = sim_ut.generate_values_distance_report(
+                            fixed_relative_values_distance,
+                            fixed_pearson_coefficient,
+                            fixed_p_value,
+                            correlation_type,
+                            ko_species_list,
+                            file_name,
+                            f"./report/{file_name}/Fixed perturbations importance analysis",
+                            report_title="Fixed perturbations values distance report analysis",
+                            log_file=log_file,
+                        )
 
-                            plt_ut.plot_variations_heatmap(
-                                distance_fixed,
-                                all_species_abs,
-                                ko_species_list,
-                                save_path=f"./imgs/{file_name}",
-                                variation_type="absolute",
-                                title="Absolute variation distance fixed samples VS random samples",
-                                imgs_name="Fixed Variations distance",
-                            )
-                        else:
-                            ut.print_log(log_file, "[WARNING] Using relative variation")
+                        # Plotting the distance of log normalized matrices
+                        plt_ut.plot_variations_heatmap(
+                            fixed_relative_values_distance,
+                            fixed_all_species_rel,
+                            ko_species_list,
+                            save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
+                            title="Random Perturbations VS Fixed Perturbations Distance",
+                            imgs_name="Random Perturbations VS Fixed Perturbations distance",
+                        )
 
-                            normalized_fixed_samples_log_relative = ut.minMax_normalize(
-                                fixed_log_relative_map, log_file
-                            )
+                        # Getting active cells of fixed_relative_map
+                        fixed_active_cells = ut.get_active_cells(
+                            normalized_fixed_relative_map, log_file
+                        )
 
-                            distance_fixed = np.abs(
-                                normalized_fixed_samples_log_relative
-                                - normalized_samples_relative_map,
-                            )
+                        # Doing pattern analysis
+                        fixed_pattern_distance = np.abs(
+                            fixed_active_cells - active_cells_samples_map
+                        )
 
-                            pearson_coefficient, p_value = ut.pearson_correlation(
-                                normalized_fixed_samples_log_relative,
-                                normalized_samples_relative_map,
-                                alternative=correlation_type,
+                        fixed_pattern_pearson_coefficient, fixed_p_value = (
+                            ut.pearson_correlation(
+                                fixed_active_cells,
+                                active_cells_samples_map,
                             )
+                        )
 
-                            _ = sim_ut.generate_distance_report(
-                                distance_fixed,
-                                pearson_coefficient,
-                                p_value,
-                                correlation_type,
-                                ko_species_list,
-                                f"fixed_{file_name}",
-                                f"./report/{file_name}",
-                                log_file=log_file,
-                            )
+                        _ = sim_ut.generate_pattern_distance_report(
+                            fixed_pattern_distance,
+                            fixed_pattern_pearson_coefficient,
+                            fixed_p_value,
+                            correlation_type,
+                            ko_species_list,
+                            file_name,
+                            f"./report/{file_name}/Fixed perturbations importance analysis",
+                            report_title="Fixed perturbations pattern distance report analysis",
+                            log_file=log_file,
+                        )
 
-                            plt_ut.plot_variations_heatmap(
-                                distance_fixed,
-                                all_species_abs,
-                                ko_species_list,
-                                save_path=f"./imgs/{file_name}",
-                                variation_type="relative",
-                                title="Absolute variation distance fixed samples VS random samples",
-                                imgs_name="Fixed Variations distance",
-                            )
+                        # Plotting the pattern distance's matrix
+                        plt_ut.plot_variations_heatmap(
+                            fixed_pattern_distance,
+                            fixed_all_species_rel,
+                            ko_species_list,
+                            save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
+                            title="Fixed perturbations patterns distance's heatmap",
+                            imgs_name="Fixed perturbations pattern distance's heatmap",
+                        )
 
                 except AssertionError as ae:
                     ut.print_log(

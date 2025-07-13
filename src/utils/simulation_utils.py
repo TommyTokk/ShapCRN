@@ -404,7 +404,7 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
     return variations_dict
 
 
-def generate_distance_report(
+def generate_values_distance_report(
     distance_matrix,
     correlation_coefficient,
     p_value,
@@ -414,6 +414,7 @@ def generate_distance_report(
     saving_path,
     threshold=0.2,
     alpha=0.05,
+    report_title="VALUES DISTANCE REPORT",
     log_file=None,
 ):
     """
@@ -509,14 +510,14 @@ def generate_distance_report(
     )
 
     # Generate report filename
-    report_filename = f"{model_name}_distance_report.txt"
+    report_filename = f"{model_name}_values_distance_report.txt"
     report_path = os.path.join(saving_path, report_filename)
 
-    # Write the report - CORREZIONE: modalità scrittura
+    # Write the report
     try:
         with open(report_path, "w") as f:
             f.write("=" * 80 + "\n")
-            f.write("ANALYSIS REPORT\n")
+            f.write(f"{report_title.upper()}\n")
             f.write("=" * 80 + "\n\n")
 
             f.write(f"Model: {model_name}\n")
@@ -538,15 +539,15 @@ def generate_distance_report(
 
             f.write("MATRIX STATISTICS:\n")
             f.write("-" * 40 + "\n")
-            f.write(f"Maximum Distance: {max_diff:.6f}\n")
-            f.write(f"Minimum Distance: {min_diff:.6f}\n")
-            f.write(f"Mean Distance: {mean_diff:.6f}\n")
-            f.write(f"Standard Deviation: {std_diff:.6f}\n")
+            f.write(f"Maximum global Distance: {max_diff:.6f}\n")
+            f.write(f"Minimum global Distance: {min_diff:.6f}\n")
+            f.write(f"Mean gloabl Distance: {mean_diff:.6f}\n")
+            f.write(f"Gloabl standard Deviation: {std_diff:.6f}\n")
             f.write(
                 f"Significant Differences: {significant_differences}/{total_comparisons}\n"
             )
             f.write(
-                f"Significance Rate: {(significant_differences/total_comparisons)*100:.2f}%\n\n"
+                f"Significance Rate: {(significant_differences/total_comparisons)*100:.20f}%\n\n"
             )
 
             if ko_impact is not None and ko_ranking is not None:
@@ -560,9 +561,133 @@ def generate_distance_report(
                     if np.isnan(impact_score):
                         f.write(f"  {i+1:2d}. {ko_name:<20} NaN (no valid data)\n")
                     else:
-                        f.write(f"  {i+1:2d}. {ko_name:<20} {impact_score:.6f}\n")
+                        f.write(f"  {i+1:2d}. {ko_name:<20} {impact_score:.20f}\n")
             else:
                 f.write("KNOCKOUT SPECIES RANKING: Unable to calculate\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+
+        print_log(log_file, f"Distance report saved to: {report_path}")
+
+    except Exception as e:
+        print_log(log_file, f"Error writing report to {report_path}: {e}")
+        raise
+
+    return report_path
+
+
+def generate_pattern_distance_report(
+    distance_matrix,
+    correlation_coefficient,
+    p_value,
+    alternative,
+    ko_species_list,
+    model_name,
+    saving_path,
+    threshold=0.2,
+    alpha=0.05,
+    report_title="PATTERN DISTANCE REPORT",
+    log_file=None,
+):
+    """
+    Generate a comprehensive distance report.
+
+    Args:
+        distance_matrix: 2D numpy array with distance values
+        ko_species_list: List of knockout species names
+        model_name: Name of the model (for the report filename)
+        saving_path: Directory where to save the report
+        threshold: Threshold for significant differences
+        log_file: Optional log file
+    """
+    # Check if the destinations folder exists otherwise create it
+    if not os.path.exists(saving_path):
+        os.makedirs(saving_path, exist_ok=True)
+        print_log(log_file, f"Created directory: {saving_path}")
+
+    # Determine correlation strength
+    abs_r = abs(correlation_coefficient)
+    if abs_r >= 0.9:
+        strength = "very strong"
+    elif abs_r >= 0.7:
+        strength = "strong"
+    elif abs_r >= 0.5:
+        strength = "moderate"
+    elif abs_r >= 0.3:
+        strength = "weak"
+    else:
+        strength = "very weak"
+
+    # Determine direction
+    if correlation_coefficient > 0:
+        direction = "positive"
+    elif correlation_coefficient < 0:
+        direction = "negative"
+    else:
+        direction = "no"
+
+    # Statistical significance
+    is_significant = p_value < alpha
+    significance_level = (
+        "highly significant"
+        if p_value < 0.001
+        else "significant" if p_value < 0.01 else "marginally significant"
+    )
+
+    # Hypothesis description
+    if alternative == "two-sided":
+        null_hyp = "H₀: No linear relationship exists (r = 0)"
+        alt_hyp = "H₁: Linear relationship exists (r ≠ 0)"
+        p_interpretation = f"probability of observing a correlation this extreme (in either direction) by chance"
+    elif alternative == "greater":
+        null_hyp = "H₀: No positive relationship (r ≤ 0)"
+        alt_hyp = "H₁: Positive relationship exists (r > 0)"
+        p_interpretation = (
+            f"probability of observing a correlation this large or larger by chance"
+        )
+    elif alternative == "less":
+        null_hyp = "H₀: No negative relationship (r ≥ 0)"
+        alt_hyp = "H₁: Negative relationship exists (r < 0)"
+        p_interpretation = f"probability of observing a correlation this negative or more negative by chance"
+    else:
+        raise Exception("Alternative not valid")
+
+    # Build report
+    report = f"""CORRELATION RESULTS:
+    -------------------
+    Correlation coefficient (r): {correlation_coefficient:.6f}
+    P-value: {p_value:.6f}
+    Test type: {alternative} 
+    Significance level (α): {alpha}
+
+    STATISTICAL INTERPRETATION:
+    --------------------------
+    • Correlation strength: {strength.title()} {direction} correlation
+    • Statistical significance: {"" if is_significant else "Not "}{significance_level}
+    • Null hypothesis: {null_hyp}
+    • Alternative hypothesis: {alt_hyp}\n\n"""
+
+    # Generate report filename
+    report_filename = f"{model_name}_pattern_distance_report.txt"
+    report_path = os.path.join(saving_path, report_filename)
+
+    # Write the report
+    try:
+        with open(report_path, "w") as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"{report_title.upper()}\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(f"Model: {model_name}\n")
+            f.write(
+                f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            )
+
+            f.write("=" * 80 + "\n")
+            f.write("PEARSON ANALYSIS REPORT\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(report)
 
             f.write("\n" + "=" * 80 + "\n")
 
