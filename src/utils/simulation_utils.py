@@ -139,6 +139,8 @@ def simulate_samples(
     if rr_model.getIntegrator().getName() == "gillespie":
         rr_model.getIntegrator().nonnegative = True
 
+    # __import__("pprint").pprint(combination)
+
     for i in range(len(input_species_id)):
         rr_model.setInitConcentration(input_species_id[i], combination[i])
 
@@ -299,6 +301,8 @@ def process_species_multiprocessing(
     min_ss_time,
     log_file=None,
     max_workers=None,
+    use_perturbations=False,
+    preserve_input=False,
 ):
     # Determine number of workers
     if max_workers is None:
@@ -341,7 +345,7 @@ def process_species_multiprocessing(
         print_log(log_file, f" Starting pool")
         with Pool() as pool:
             # result = pool.map(process_species, process_args)
-            if input_species_ids is not None and combinations is not None:
+            if use_perturbations:
                 operation = process_species_samples
             else:
                 operation = process_species_no_samples
@@ -359,6 +363,8 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
     variations_dict = {}
     species_idxs = {}
     exp = r"[\[\]]"
+
+    epsilon = 1e-20
 
     # taking the indices
 
@@ -378,28 +384,23 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
 
         for species in species_idxs.keys():
 
-            # if species == ko_species:
-            #     continue
+            if species == ko_species:
+                variation = np.nan
+                relative_variation = np.nan
+            else:
+                original_value = original_model[-1, species_idxs[species]]
+                original_val = np.where(np.abs(np.float64(original_value)) < epsilon, 0, np.float64(original_value))
 
-            original_last_value = np.float64(original_model[-1, species_idxs[species]])
-            ko_last_value = np.float64(ko_spec_result[-1, species_idxs[species]])
+                ko_last_value = np.float64(ko_spec_result[-1, species_idxs[species]])
 
-            variation = ko_last_value - original_last_value
+                ko_val = np.where(np.abs(np.float64(ko_last_value)) < epsilon, 0, np.float64(ko_last_value))
 
-            try:
-                if np.isclose(original_last_value, 0, atol=1e-20):
-                    relative_variation = (
-                        np.inf if variation > 0 else (-np.inf if variation < 0 else 0.0)
-                    )
-                else:
-                    relative_variation = variation / original_last_value
+                variation = ko_val - original_val
+                relative_variation = (ko_val - original_val)/np.maximum(np.abs(original_val), epsilon)
 
                 variations_dict[ko_species][species] = {
                     "variation": variation,
-                    "relative-variation": relative_variation,
-                }
-            except Exception as e:
-                print_log(log_file, f" Error in relative variation calculation: {e}")
+                    "relative-variation": relative_variation,}
 
     return variations_dict
 
@@ -1006,6 +1007,7 @@ def get_simulations_informations(
     table_results["original"] = {}
     for ts in target_ids:
         if ts == "time":
+
             continue
         ts_index = target_indices[ts]
         # print_log(log_file, f"[DEBUG] ts_index: {ts_index} ({ts})")
@@ -1056,7 +1058,7 @@ def get_simulations_informations(
 
     print_log(
         log_file,
-        f"Processed {processed_count} simulations for {len(target_ids)} species",
+        f"Processed {processed_count} simulations for {len(target_indices)} species",
     )
 
     return table_results
@@ -1202,12 +1204,12 @@ def get_knockout_variations_samples(
                 else:
 
                     original_val = np.where(
-                        np.abs(np.float64(original_value)) < 1e-20,
+                        np.abs(np.float64(original_value)) < epsilon,
                         0,
                         np.float64(original_value),
                     )
                     ko_value = np.where(
-                        np.abs(np.float64(species_dict[combination][species])) < 1e-20,
+                        np.abs(np.float64(species_dict[combination][species])) < epsilon,
                         0,
                         np.float64(species_dict[combination][species]),
                     )
@@ -1227,6 +1229,8 @@ def get_knockout_variations_samples(
                     "variation": variation,
                     "relative-variation": relative_variation,
                 }
+
+    print_log("test", "====================")
 
     return variations_dict
 
@@ -1413,10 +1417,10 @@ def simulate_with_steady_state(
     max_end_time=1000,
     block_size=10,
     points_per_block=100,
-    threshold=1e-6,
+    threshold=1e-12,
     monitor_species=None,
     log_file=None,
-):  # TODO: Make it more efficient
+):
     """
     Simulates a model until steady state is reached using a block-by-block approach.
 
@@ -1428,6 +1432,7 @@ def simulate_with_steady_state(
         points_per_block: Number of points to calculate in each block
         threshold: Threshold for steady state detection
         monitor_species: Species to monitor for steady state detection
+        log_file: Optional log file for debugging output
 
     Returns:
         Tuple of (simulation_results, steady_state_time, column_names)
@@ -1437,8 +1442,9 @@ def simulate_with_steady_state(
     all_species = rr_model.model.getFloatingSpeciesIds()
     if monitor_species is None:
         monitor_species = all_species
+
     # Precompute indices to monitor
-    monitor_idx = [all_species.index(s) for s in monitor_species]
+    monitor_idx = [all_species.index(s) for s in monitor_species if s in all_species]
 
     # Prepare column names (including 'time')
     colnames = rr_model.timeCourseSelections.copy()
@@ -1449,79 +1455,95 @@ def simulate_with_steady_state(
     steady_state_time = None
     steady_blocks_count = 0
     initial_block_size = block_size
-    zero_tol = 1e-12
-    consecutive_checks = 2
-    max_block_size = 50
-    # test = rr_model.model.getReactionIds().index("GROWTH")
+    zero_tol = 1e-30
+    consecutive_checks = 3  # Initialize the required consecutive steady blocks
+    min_block_size = 1.0  # Minimum block size to prevent excessive reduction
+    max_block_size = 50  # Maximum block size for efficiency
+    is_steady = False
 
     while current_time < max_end_time:
-        # print(f"Growth Reaction rate: {rr_model.model.getReactionRates()[test]}")
         next_time = min(current_time + block_size, max_end_time)
-        print_log(log_file, f"Next time: {next_time}")
-        print_log(log_file, f"block_size: {block_size}")
+        print_log(
+            log_file,
+            f"Simulating from {current_time} to {next_time}, block_size: {block_size}",
+        )
+
         block_results = rr_model.simulate(current_time, next_time, points_per_block)
         all_results.append(block_results)
 
         if prev_block is not None:
-            # Extract concentrations at the last point
+            # Extract concentrations at the last point of each block
             prev_conc = prev_block[-1, 1 : 1 + len(all_species)]
             curr_conc = block_results[-1, 1 : 1 + len(all_species)]
 
+            # Calculate variations for all species
             variations = np.zeros_like(prev_conc)
             small_mask = np.abs(prev_conc) < zero_tol
-            # absolute change where prev is near zero
+
+            # Use absolute change where previous concentration is near zero
             variations[small_mask] = np.abs(
                 curr_conc[small_mask] - prev_conc[small_mask]
             )
-            # relative elsewhere
+
+            # Use relative change elsewhere
             variations[~small_mask] = np.abs(
                 (curr_conc[~small_mask] - prev_conc[~small_mask])
                 / prev_conc[~small_mask]
             )
 
-            # Check if indices are valid
+            # Validate monitor indices
             monitor_idx = [i for i in monitor_idx if i < len(variations)]
             if not monitor_idx:
-                print("Warning: No valid species to monitor for steady state")
-                monitor_idx = range(min(len(variations), len(all_species)))
+                print_log(
+                    log_file, "Warning: No valid species to monitor for steady state"
+                )
+                monitor_idx = list(range(min(len(variations), len(all_species))))
 
-            is_steady = False
+            # Check if ALL monitored species satisfy steady-state condition
+            monitored_variations = variations[monitor_idx]
+            max_variation = np.max(monitored_variations)
+            is_steady = max_variation < threshold
 
-            # Check steady state for all monitored species
-            for idx in monitor_idx:
-                print_log(log_file, f"Variation: {variations[idx] < 1e-4}")
-                if variations[idx] < 1e-4:
-                    is_steady = True
-                else:
-                    is_steady = False
-                    break
-
-            print_log(log_file, f"Is Steady: {is_steady}")
+            print_log(
+                log_file, f"Max variation among monitored species: {max_variation}"
+            )
+            print_log(log_file, f"Threshold: {threshold}")
+            print_log(log_file, f"Is steady: {is_steady}")
 
             if is_steady:
                 steady_blocks_count += 1
-                print_log(log_file, f"Steady block at time {current_time}")
+                print_log(
+                    log_file,
+                    f"Steady block #{steady_blocks_count} at time {current_time}",
+                )
 
+                # Check if we have enough consecutive steady blocks
                 if steady_blocks_count >= consecutive_checks:
-                    steady_state_time = next_time
+                    steady_state_time = current_time
+                    print_log(
+                        log_file, f"Steady state reached at time {steady_state_time}"
+                    )
+                    is_steady = True
                     break
-            else:
-                steady_blocks_count = 0
 
-        if steady_blocks_count > consecutive_checks:
-            block_size = min(initial_block_size, block_size * 1.2)
-        else:
-            block_size = max(block_size * 0.5, max_block_size)
+                # Increase block size when approaching steady state for efficiency
+                block_size = min(block_size * 1.2, max_block_size)
+            else:
+                # Reset counter if steady state is broken
+                steady_blocks_count = 0
+                # Reduce block size for better resolution when not in steady state
+                block_size = max(block_size * 0.8, min_block_size)
 
         prev_block = block_results
-        current_time = next_time
+        if not is_steady:
+            current_time = next_time
 
-    # Concatenate, dropping duplicate boundary rows
+    # Concatenate all results, removing duplicate boundary points
     if not all_results:
         full_results = np.empty((0, len(colnames)))
     else:
+        # Remove the first row of each subsequent block to avoid time point duplication
         for i in range(1, len(all_results)):
-            # Drop first row of each subsequent block
             all_results[i] = all_results[i][1:]
         full_results = np.vstack(all_results)
 

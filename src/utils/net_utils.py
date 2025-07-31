@@ -333,4 +333,3 @@ def adjust_positions(pos, spacing=1.0):
     # Convert back to dictionary
     new_pos = {nodes[i]: tuple(pos_array[i]) for i in range(len(nodes))}
     return new_pos
-

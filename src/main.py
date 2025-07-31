@@ -39,7 +39,7 @@ def main():
         if args.command == "simulate":
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
-            sbml_model = sbml_doc.getModel()
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
             file_name = os.path.basename(args.input_path)
 
             # sbml_ut.split_reversible_reactions(sbml_model, log_file)
@@ -82,9 +82,11 @@ def main():
             #     f"tolerances: abs {rr.integrator.absolute_tolerance} | rel {rr.integrator.relative_tolerance}",
             # )
 
-            plt_ut.plot_results(res, colnames, args.output, file_name, log_file)
+            plt_ut.plot_results(
+                res, colnames, args.output, file_name, log_file, ss_time
+            )
 
-        elif args.command == "simulate_samples":
+        elif args.command == "importance_assessment":
 
             steady_state = args.steady_state
             max_end_time = args.max_time
@@ -109,11 +111,9 @@ def main():
             else:
                 target_ids = args.target_ids
 
-            if input_species_ids is not None:
+            if args.preserve_inputs:
                 target_ids = list(set(target_ids) - set(input_species_ids))
-                # ut.print_log(log_file, f"{target_ids}")
 
-            # ut.print_log(log_file, f"target ids: {target_ids}")
             target_ids.sort()
 
             # Get the list of species
@@ -121,7 +121,7 @@ def main():
 
             combinations = None
 
-            if input_species_ids is not None:
+            if args.use_perturbations:
                 ut.print_log(log_file, "Running with samples generations")
                 # Generate the samples
                 samples = sbml_ut.generate_species_samples(
@@ -170,7 +170,7 @@ def main():
                 else min_ss_time
             )
 
-            if input_species_ids is not None:
+            if args.use_perturbations:
                 # Simulate the original model with samples
                 ut.print_log(log_file, "Simulating original model with samples")
                 samples_simulations_results, _ = sim_ut.simulate_combinations(
@@ -247,19 +247,21 @@ def main():
                 max_end_time=max_end_time,
                 min_ss_time=min_ss_time,
                 log_file=log_file,
+                use_perturbations=args.use_perturbations,
+                preserve_input=args.preserve_inputs,
             )
 
-            for ko_species, comb_dict in knockout_data:
-                ut.print_log("samples", f"{ko_species}:")
-                for combination, info_dict in comb_dict.items():
-                    ut.print_log("samples", f"  {combination}:")
-                    for species, value in info_dict.items():
-                        ut.print_log("samples", f"      {species}: {value}")
+            # for ko_species, comb_dict in knockout_data:
+            #     ut.print_log("samples", f"{ko_species}:")
+            #     for combination, info_dict in comb_dict.items():
+            #         ut.print_log("samples", f"  {combination}:")
+            #         for species, value in info_dict.items():
+            #             ut.print_log("samples", f"      {species}: {value}")
 
             end_time = time.perf_counter()
 
             # === IF NO SAMPLES ===
-            if input_species_ids is None:
+            if not args.use_perturbations:
 
                 ut.print_log(log_file, "Printing without samples")
 
@@ -275,33 +277,13 @@ def main():
                     sim_variations, all_species, ko_species_list, log_file=log_file
                 )
 
-                abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
-                    sim_variations, all_species, ko_species_list, "absolute", log_file
-                )
-
                 log_rel_map = np.log(relative_map + 1)
-                log_abs_map = np.log(abs_map + 1)
 
                 plt_ut.plot_variations_heatmap(
                     log_rel_map,
                     all_species_rel,
                     ko_species_list,
                     title="Relative variations heatmap",
-                )
-
-                # for i, ko_species in enumerate(ko_species_list):
-                #     for j, species in enumerate(all_species_rel):
-                #         ut.print_log(
-                #             "no_samples",
-                #             f"({ko_species}, {species}) {log_rel_map[i,j]}",
-                #         )
-
-                plt_ut.plot_variations_heatmap(
-                    log_abs_map,
-                    all_species_abs,
-                    ko_species_list,
-                    variation_type="absolute",
-                    title="Variation heatmap",
                 )
 
             else:  # === IF SAMPLES ===
@@ -335,24 +317,6 @@ def main():
                         )
                     )
 
-                    # for i, ko_species in enumerate(ko_species_list):
-                    #     for j, species in enumerate(all_species_rel):
-                    #         ut.print_log(
-                    #             "samples",
-                    #             f"{ko_species, species} {no_samples_log_relative_map[i,j]}",
-                    #         )
-
-                    # Get the informations about the original absolute variations
-                    no_samples_absolute_map, all_species_abs = (
-                        sim_ut.get_no_samples_variations(
-                            variation_dict,
-                            all_species,
-                            ko_species_list,
-                            variation_type="absolute",
-                            log_file=log_file,
-                        )
-                    )
-
                     # Getting the samples informations
                     relative_map, all_species_rel = sim_ut.get_variations_hm_samples(
                         variation_dict,
@@ -362,34 +326,31 @@ def main():
                         log_file=log_file,
                     )
 
-                    abs_map, all_species_abs = sim_ut.get_variations_hm_samples(
-                        variation_dict,
-                        all_species,
-                        ko_species_list,
-                        variation_type="absolute",
-                        log_file=log_file,
-                    )
-
                     # Normaliziing with logs
                     no_samples_log_relative_map = np.log(no_samples_relative_map + 1)
-                    no_samples_log_absolute_map = np.log(no_samples_absolute_map + 1)
+                    for i, ko_species in enumerate(ko_species_list):
+                        for j, species in enumerate(all_species_rel):
+                            ut.print_log(
+                                "no_samples",
+                                f"{ko_species, species} {no_samples_log_relative_map[i,j]}",
+                            )
 
                     samples_log_relative_map = np.log(relative_map + 1)
-                    samples_log_absolute_map = np.log(abs_map + 1)
+
+                    for i, ko_species in enumerate(ko_species_list):
+                        for j, species in enumerate(all_species_rel):
+                            ut.print_log(
+                                "samples",
+                                f"{ko_species, species} {samples_log_relative_map[i,j]}",
+                            )
 
                     # Normalizing with minMax
                     normalized_no_samples_relative = ut.minMax_normalize(
                         no_samples_log_relative_map
                     )
-                    normalized_no_samples_absolute = ut.minMax_normalize(
-                        no_samples_log_absolute_map
-                    )
 
                     normalized_samples_relative_map = ut.minMax_normalize(
                         samples_log_relative_map
-                    )
-                    normalized_samples_absolute_map = ut.minMax_normalize(
-                        samples_log_absolute_map
                     )
 
                     # Heatmap plotting
@@ -400,15 +361,6 @@ def main():
                         save_path=f"./imgs/{file_name}",
                         variation_type="relative",
                         title="Relative variations with samples",
-                    )
-
-                    plt_ut.plot_variations_heatmap(
-                        samples_log_absolute_map,
-                        all_species_rel,
-                        ko_species_list,
-                        save_path=f"./imgs/{file_name}",
-                        variation_type="absolute",
-                        title="Variations with samples",
                     )
 
                     # === SAMPLING IMPORTANCE ANALYSIS ===
@@ -572,6 +524,8 @@ def main():
                             max_end_time=max_end_time,
                             min_ss_time=min_ss_time,
                             log_file=log_file,
+                            preserve_input=args.preserve_inputs,
+                            use_perturbations=args.use_perturbations,
                         )
 
                         fixed_variation_dict = sim_ut.get_knockout_variations_samples(
@@ -590,17 +544,9 @@ def main():
                             )
                         )
 
-                        fixed_absolute_map, _ = sim_ut.get_variations_hm_samples(
-                            fixed_variation_dict,
-                            all_species,
-                            ko_species_list,
-                            variation_type="absolute",
-                            log_file=log_file,
-                        )
-
+                        ut.print_log(log_file, fixed_relative_map[0, 1])
                         fixed_log_relative_map = np.log(fixed_relative_map + 1)
-
-                        fixed_log_absolute_map = np.log(fixed_absolute_map + 1)
+                        ut.print_log(log_file, fixed_log_relative_map[0, 1])
 
                         # === DIFFERENCE ANALYSIS WITH SAMPLES ===
 
@@ -648,10 +594,13 @@ def main():
                             normalized_fixed_relative_map, log_file
                         )
 
-                        # Doing pattern analysis
+                        # Doing fixed pattern analysis
                         fixed_pattern_distance = np.abs(
                             fixed_active_cells - active_cells_samples_map
                         )
+
+                        __import__("pprint").pprint(fixed_active_cells)
+                        __import__("pprint").pprint(active_cells_samples_map)
 
                         fixed_pattern_pearson_coefficient, fixed_p_value = (
                             ut.pearson_correlation(

@@ -77,7 +77,7 @@ def parse_args():
 
     # === SIMULATE_SAMPLES command ===
     simulate_samples_parser = subparsers.add_parser(
-        "simulate_samples",
+        "importance_assessment",
         help="Simulate model with different input species concentrations",
     )
     simulate_samples_parser.add_argument(
@@ -132,6 +132,18 @@ def parse_args():
         "--steady-state",
         action="store_true",
         help="Simulate until steady state is reached",
+    )
+    simulate_samples_parser.add_argument(
+        "--preserve-inputs",
+        action="store_true",
+        default=False,
+        help="Preserve the inputs node from been analysed",
+    )
+    simulate_samples_parser.add_argument(
+        "--use-perturbations",
+        action="store_true",
+        default=False,
+        help="Run the analysis using inputs' perturbations",
     )
     simulate_samples_parser.add_argument(
         "--max-time",

@@ -18,6 +18,7 @@ def plot_results(
     img_dir_path="./imgs",
     img_name="simulation",
     log_file=None,
+    ss_time=None,
 ):
     """
     Visualize the simulation results and save the plot to a file.
@@ -84,6 +85,8 @@ def plot_results(
     # Dynamically adjust spacing to provide more room for the legend
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.2 + 0.02 * math.ceil(num_species / ncols))
+
+    # Creating the arrows for the states
 
     # Save the figure with the complete path
     plt.savefig(img_file_path, bbox_inches="tight")
