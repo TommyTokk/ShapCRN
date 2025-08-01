@@ -97,13 +97,13 @@ def parse_args():
         default=None,
         help="One or more IDs to check, can also be empty",
     )
-    simulate_samples_parser.add_argument(
-        "--mko",
-        "--multi_ko",
-        nargs="+",
-        default=None,
-        help="Multiple species to Knockout in the same model",
-    )
+    # simulate_samples_parser.add_argument(
+    #     "--mko",
+    #     "--multi_ko",
+    #     nargs="+",
+    #     default=None,
+    #     help="Multiple species to Knockout in the same model",
+    # )
     simulate_samples_parser.add_argument(
         "-n",
         "--num_samples",
@@ -127,12 +127,7 @@ def parse_args():
         choices=["cvode", "gillespie", "rk4"],
         help="Integrator to use",
     )
-    # Steady state options for simulate_samples
-    simulate_samples_parser.add_argument(
-        "--steady-state",
-        action="store_true",
-        help="Simulate until steady state is reached",
-    )
+
     simulate_samples_parser.add_argument(
         "--preserve-inputs",
         action="store_true",
@@ -145,6 +140,27 @@ def parse_args():
         default=False,
         help="Run the analysis using inputs' perturbations",
     )
+    simulate_samples_parser.add_argument(
+        "--perturbations-importance",
+        action="store_true",
+        default=False,
+        help="Run the analysis on the importance of using perturbations for the model",
+    )
+
+    simulate_samples_parser.add_argument(
+        "--random-perturbations-importance",
+        action="store_true",
+        default=False,
+        help="Run analysis on the importance of random perturbations for the model",
+    )
+
+    # Steady state options for simulate_samples
+    simulate_samples_parser.add_argument(
+        "--steady-state",
+        action="store_true",
+        help="Simulate until steady state is reached",
+    )
+
     simulate_samples_parser.add_argument(
         "--max-time",
         type=float,
@@ -388,12 +404,12 @@ def get_ko_species_importance(matrix, ko_species_list, log_file=None):
     ko_impact = np.nanmean(matrix, axis=1)
     ko_ranking = np.argsort(ko_impact)[::-1]
 
-    print_log(log_file, "Top 5 knockouts most sensitive to parameter uncertainty:")
-    for i in range(min(5, len(ko_ranking))):
-        ko_idx = ko_ranking[i]
-        ko_name = ko_species_list[ko_idx]
-        impact_score = ko_impact[ko_idx]
-        print_log(log_file, f"  {i+1}. {ko_name}: {impact_score:.20f}")
+    # print_log(log_file, "Top 5 knockouts most sensitive to parameter uncertainty:")
+    # for i in range(min(5, len(ko_ranking))):
+    #     ko_idx = ko_ranking[i]
+    #     ko_name = ko_species_list[ko_idx]
+    #     impact_score = ko_impact[ko_idx]
+    #     print_log(log_file, f"  {i+1}. {ko_name}: {impact_score:.20f}")
 
     return ko_impact, ko_ranking
 
