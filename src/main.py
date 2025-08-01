@@ -74,13 +74,15 @@ def main():
                 max_end_time=args.max_time,
             )
 
-            # ut.print_log(log_file, f"Colnames: {colnames}")
+            ut.print_log(log_file, f"Colnames: {colnames}")
 
             # ut.print_log(log_file, rr["[Px]"])
             # ut.print_log(
             #     log_file,
             #     f"tolerances: abs {rr.integrator.absolute_tolerance} | rel {rr.integrator.relative_tolerance}",
             # )
+
+            __import__("pprint").pprint(res[-1, :])
 
             plt_ut.plot_results(
                 res, colnames, args.output, file_name, log_file, ss_time
@@ -156,13 +158,14 @@ def main():
             ut.print_log(log_file, "Simulating original model")
             original_results, ss_time, colnames = sim_ut.simulate(
                 rr,
+                end_time=args.time,
                 start_time=0,
-                end_time=end_time,
-                steady_state=steady_state,
-                max_end_time=max_end_time,
+                log_file=log_file,
+                steady_state=args.steady_state,
+                max_end_time=args.max_time,
             )
 
-            # ut.print_log(log_file, f"[MAIN] colnames: {colnames}")
+            # ut.print_log("orig_res", original_results[:, :])
 
             min_ss_time = (
                 ss_time
@@ -178,8 +181,8 @@ def main():
                     combinations,
                     input_species_ids,
                     min_ss_time,
-                    end_time,
-                    max_end_time,
+                    args.time,
+                    args.max_time,
                     steady_state,
                     log_file,
                 )
@@ -277,13 +280,27 @@ def main():
                     sim_variations, all_species, ko_species_list, log_file=log_file
                 )
 
+                abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
+                    sim_variations, all_species, ko_species_list, "absolute", log_file
+                )
+
                 log_rel_map = np.log(relative_map + 1)
+
+                log_abs_map = np.log(abs_map + 1)
 
                 plt_ut.plot_variations_heatmap(
                     log_rel_map,
                     all_species_rel,
                     ko_species_list,
                     title="Relative variations heatmap",
+                )
+
+                plt_ut.plot_variations_heatmap(
+                    log_abs_map,
+                    all_species_abs,
+                    ko_species_list,
+                    variation_type="absolute",
+                    title="Absolute variations heatmap",
                 )
 
             else:  # === IF SAMPLES ===
@@ -328,12 +345,6 @@ def main():
 
                     # Normaliziing with logs
                     no_samples_log_relative_map = np.log(no_samples_relative_map + 1)
-                    for i, ko_species in enumerate(ko_species_list):
-                        for j, species in enumerate(all_species_rel):
-                            ut.print_log(
-                                "no_samples",
-                                f"{ko_species, species} {no_samples_log_relative_map[i,j]}",
-                            )
 
                     samples_log_relative_map = np.log(relative_map + 1)
 

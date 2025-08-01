@@ -56,7 +56,7 @@ def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
 def simulate(
     rr_model,
     start_time=0,
-    end_time=100,
+    end_time=600,
     output_rows=100,
     steady_state=False,
     max_end_time=1000,
@@ -374,8 +374,6 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
         id = re.sub(exp, "", cn)
         species_idxs[id] = colnames.index(cn)
 
-        print_log(log_file, f"{cn}, {species_idxs[id]}")
-
     for i in range(len(ko_models)):
 
         ko_species, ko_spec_result = ko_models[i]
@@ -389,18 +387,29 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
                 relative_variation = np.nan
             else:
                 original_value = original_model[-1, species_idxs[species]]
-                original_val = np.where(np.abs(np.float64(original_value)) < epsilon, 0, np.float64(original_value))
+                original_val = np.where(
+                    np.abs(np.float64(original_value)) < epsilon,
+                    0,
+                    np.float64(original_value),
+                )
 
                 ko_last_value = np.float64(ko_spec_result[-1, species_idxs[species]])
 
-                ko_val = np.where(np.abs(np.float64(ko_last_value)) < epsilon, 0, np.float64(ko_last_value))
+                ko_val = np.where(
+                    np.abs(np.float64(ko_last_value)) < epsilon,
+                    0,
+                    np.float64(ko_last_value),
+                )
 
                 variation = ko_val - original_val
-                relative_variation = (ko_val - original_val)/np.maximum(np.abs(original_val), epsilon)
+                relative_variation = (ko_val - original_val) / np.maximum(
+                    np.abs(original_val), epsilon
+                )
 
                 variations_dict[ko_species][species] = {
                     "variation": variation,
-                    "relative-variation": relative_variation,}
+                    "relative-variation": relative_variation,
+                }
 
     return variations_dict
 
@@ -1010,7 +1019,7 @@ def get_simulations_informations(
 
             continue
         ts_index = target_indices[ts]
-        # print_log(log_file, f"[DEBUG] ts_index: {ts_index} ({ts})")
+
         table_results["original"][ts] = truncate_small_values(
             original_results[-1, ts_index]
         )  # Final concentration
@@ -1209,7 +1218,8 @@ def get_knockout_variations_samples(
                         np.float64(original_value),
                     )
                     ko_value = np.where(
-                        np.abs(np.float64(species_dict[combination][species])) < epsilon,
+                        np.abs(np.float64(species_dict[combination][species]))
+                        < epsilon,
                         0,
                         np.float64(species_dict[combination][species]),
                     )
@@ -1392,6 +1402,9 @@ def simulate_combinations(
             steady_state=steady_state,
             max_end_time=max_end_time,
         )
+
+        # __import__("pprint").pprint(sim_res[:, :])
+
         min_ss_time = (
             ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
         )
