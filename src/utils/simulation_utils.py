@@ -14,13 +14,14 @@ import datetime
 from src.utils.utils import (
     get_ko_species_importance,
     print_log,
-    frobenius_norm,
     truncate_small_values,
 )
 from src.utils import plot_utils as plt_ut
 
 
-def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
+def load_roadrunner_model(
+    sbml_model, rel_tol=1e-8, abs_tol=1e-12, integrator="cvode", log_file=None
+):
     """
     Loads a SBML model into a RoadRunner instance and configures the integrator settings.
 
@@ -28,6 +29,10 @@ def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
         sbml_model: The SBML model (libsbml.Model or string)
         rel_tol: Relative tolerance for the integrator (default: 1e-6)
         abs_tol: Absolute tolerance for the integrator (default: 1e-8)
+        integrator: Integrator to use to run the simulation
+            - cvode: Use of ODEs to run simulations
+            - rk4: Use of the Runge-Kutta method
+            - gillespie: Use the gillespie's stochastic approach
 
     Returns:
         roadrunner.RoadRunner: Configured RoadRunner instance
@@ -41,10 +46,11 @@ def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
         rr_model = rr.RoadRunner(sbml_model)
 
     # Configure integrator settings
-    # rr_model.integrator.nonnegative = True
-    rr_model.getIntegrator().setValue("relative_tolerance", 1e-8)
-    rr_model.getIntegrator().setValue("absolute_tolerance", 1e-12)
+    # Setting the relative and absolute tolerance of the model
+    rr_model.getIntegrator().setValue("relative_tolerance", rel_tol)
+    rr_model.getIntegrator().setValue("absolute_tolerance", abs_tol)
 
+    # Setting the integrator if necessary
     if integrator is not None:
         rr_model.setIntegrator(integrator)
 
@@ -56,7 +62,7 @@ def load_roadrunner_model(sbml_model, integrator=None, log_file=None):
 def simulate(
     rr_model,
     start_time=0,
-    end_time=600,
+    end_time=1000,
     output_rows=100,
     steady_state=False,
     max_end_time=1000,
@@ -66,6 +72,20 @@ def simulate(
 ):
     """
     Simulate the model with optional steady state detection.
+
+    args:
+        - rr_model: RoadRunner for the simulations
+        - start_time: Start time of the simulation
+        - end_time: End time of the simulation
+        - output_rows: Number of rows for the simulations results
+        - steady_state: Flag for the steady state
+        - max_end_time: Maximum time for steady state simulations
+        - sim_step: Simulation step for steady state simulations
+        - threshold: Cut off value for noticing steady state
+        - log_file: File for log printing
+
+    returns:
+        Triple containing the simulation results, the steady state time (None if not present), and the colnames
     """
     # Setting nonnegative for stochastic simulations
     rr_model.getIntegrator().nonnegative = True
@@ -99,9 +119,6 @@ def simulate(
         return result, ss_time, colnames
     else:
         # Standard simulation
-
-        # print_log(log_file, "Normal simulations")
-
         res = rr_model.simulate(start_time, end_time, output_rows)
 
         return res, None, res.colnames
@@ -113,7 +130,7 @@ def simulate_samples(
     input_species_id,
     max_end_time,
     start_time=0,
-    end_time=10,
+    end_time=1000,
     output_rows=100,
     steady_state=False,
 ):
@@ -132,14 +149,14 @@ def simulate_samples(
         - Simulation results of the specified combination
     """
     # rr_model.reset()
+    #
     # Save the current selections
     current_selections = rr_model.selections
     rr_model.reset()
+
     # Set the new concentrations
     if rr_model.getIntegrator().getName() == "gillespie":
         rr_model.getIntegrator().nonnegative = True
-
-    # __import__("pprint").pprint(combination)
 
     for i in range(len(input_species_id)):
         rr_model.setInitConcentration(input_species_id[i], combination[i])
@@ -160,10 +177,12 @@ def simulate_samples(
     )
 
     return res
-    # return rr_model.simulate(start_time, end_time, output_rows)
 
 
 def process_species_samples(args):
+    """
+    Simulates, using perturbations, the specific modified model with the knockout of the knockedout_species
+    """
     try:
         (
             knockedout_species,
@@ -182,28 +201,31 @@ def process_species_samples(args):
 
         print_log(log_file, f"Starting processing: {knockedout_species}")
 
-        modified_rr = load_roadrunner_model(modified_model, integrator, log_file)
+        # Loading the modified model
+        modified_rr = load_roadrunner_model(
+            modified_model, integrator=integrator, log_file=log_file
+        )
 
+        # Setting the selections
         modified_rr.selections = selections
 
+        # Simulating the not perturbed model
         knockout_model_results, ss_time, colnames = simulate(
             modified_rr,
-            start_time=0,
+            start_time=start_time,
             end_time=end_time,
             steady_state=steady_state,
             max_end_time=max_end_time,
         )
 
-        # print_log(
-        #     log_file,
-        #     f"[DEBUG]knockout_model_results({knockedout_species}: {knockout_model_results[-1, colnames.index(f'[{knockedout_species}]')]})",
-        # )
-
+        # Resetting the model
         modified_rr.reset()
+        modified_rr.selections = selections
         min_ss_time = (
             ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
         )
 
+        # Simulating the modified model with the perturbations
         combinations_knockout_model_results, colnames = simulate_combinations(
             modified_rr,
             combinations,
@@ -215,18 +237,6 @@ def process_species_samples(args):
             log_file,
         )
 
-        # print_log(log_file, f"[DEBUG] combinations results:")
-
-        # for i in range(len(combinations_knockout_model_results)):
-        #     res = combinations_knockout_model_results[i]
-        # print_log(log_file, f"  {combinations[i]}")
-        # print_log(
-        #     log_file,
-        #     f"  [DEBUG]{knockedout_species}: {res[-1, colnames.index(f'[{knockedout_species}]')]}",
-        # )
-
-        # print_log(log_file, f"[DEBUG] colnames: {colnames}")
-
         # Contains information, for each knockedout species,
         # and foreach combination, about the simulation's results
         combinations_knockout_model_simualtions_info = get_simulations_informations(
@@ -236,11 +246,6 @@ def process_species_samples(args):
             colnames,
             log_file,
         )
-
-        # for combo_key, info_d in combinations_knockout_model_simualtions_info.items():
-        #     print_log(log_file, f"{combo_key}:")
-        #     for species, value in info_d.items():
-        #         print_log(log_file, f"{species}: {value}")
 
         return (knockedout_species, combinations_knockout_model_simualtions_info)
     except Exception as e:
@@ -266,7 +271,9 @@ def process_species_no_samples(args):
 
         print_log(log_file, f"Starting processing: {knockedout_species}")
 
-        modified_rr = load_roadrunner_model(modified_model, integrator, log_file)
+        modified_rr = load_roadrunner_model(
+            modified_model, integrator=integrator, log_file=log_file
+        )
 
         modified_rr.selections = selections
 
@@ -304,9 +311,15 @@ def process_species_multiprocessing(
     use_perturbations=False,
     preserve_input=False,
 ):
+    """
+    Use multiprocessing to simulates all the knockouts
+    """
     # Determine number of workers
+    # Use 75% of the cpu
+    n_core = int((mp.cpu_count() * 75) / 100)
+    print_log(log_file, f" N core: {n_core}")
     if max_workers is None:
-        max_workers = min(len(target_ids), mp.cpu_count() - 2, 8)  # Don't use all CPUs
+        max_workers = min(len(target_ids), n_core, 8)  # Don't use all CPUs
 
     print_log(
         log_file,
@@ -344,13 +357,15 @@ def process_species_multiprocessing(
         # Implement the logic using Pool and imap
         print_log(log_file, f" Starting pool")
         with Pool() as pool:
-            # result = pool.map(process_species, process_args)
             if use_perturbations:
+                # If perturbations required
                 operation = process_species_samples
             else:
+                # If perturbations not required
                 operation = process_species_no_samples
 
             print_log(log_file, f"[PROCESS] {operation}")
+            # Running the workers
             result = pool.map(operation, process_args)
     except Exception as e:
         print_log(log_file, f"Critical error in multiprocessing: {e}")
@@ -360,53 +375,150 @@ def process_species_multiprocessing(
 
 
 def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
+    """
+    Calculate the variation and relative variation of species in respect to an internal species knockout
+    This is the version used in case perturbations are not required.
+    args:
+        - original_model: Results of the simulation without the kncokout
+        - ko_models: Array of tuples containing the knocked-out species and the simulation results after the species' knockout
+        - colnames: Array containing the name of the columns from the simulation output
+        - log_file: File used to print log informations
+
+    returns:
+        A dictionary having as key the knocked-out species, and as value, for each species in the model, a dictionary containing the variation and
+        relative variation
+    """
     variations_dict = {}
     species_idxs = {}
     exp = r"[\[\]]"
 
-    epsilon = 1e-20
+    epsilon = 1e-20  # Variable used as values cutoff and to avoid division by 0
 
     # taking the indices
-
     for cn in colnames:
-        if cn == "time":
+        if cn == "time":  # Skipping the time column
             continue
         id = re.sub(exp, "", cn)
         species_idxs[id] = colnames.index(cn)
 
     for i in range(len(ko_models)):
 
+        # Getting the ko species with the result of the simulation
         ko_species, ko_spec_result = ko_models[i]
 
+        # Init variations dictionary
         variations_dict[ko_species] = {}
 
         for species in species_idxs.keys():
 
-            if species == ko_species:
+            if species == ko_species:  # Skipping the species if compared with itself
                 variation = np.nan
                 relative_variation = np.nan
             else:
+                # Getting the last value from the original model
                 original_value = original_model[-1, species_idxs[species]]
+
+                # Check if the original value is too small (smaller than epsilon) and setting it to 0
+                # example: original_value = 1e-30 < 1e-20 ==> original_value = 0
                 original_val = np.where(
                     np.abs(np.float64(original_value)) < epsilon,
                     0,
                     np.float64(original_value),
                 )
 
+                # Getting the last value from the knockout results
                 ko_last_value = np.float64(ko_spec_result[-1, species_idxs[species]])
 
+                # Check if the ko value is too small (smaller than epsilon) and setting it to 0
                 ko_val = np.where(
                     np.abs(np.float64(ko_last_value)) < epsilon,
                     0,
                     np.float64(ko_last_value),
                 )
 
+                # Getting the variation
                 variation = ko_val - original_val
+
+                # Getting the relative variation
+                # Check if dividing by 0, if yes using epsilon instead
                 relative_variation = (ko_val - original_val) / np.maximum(
                     np.abs(original_val), epsilon
                 )
 
+                # Load the data in the dictionary
                 variations_dict[ko_species][species] = {
+                    "variation": variation,
+                    "relative-variation": relative_variation,
+                }
+
+    return variations_dict
+
+
+def get_knockout_variations_samples(
+    final_results_original_model, final_results_knocked_model, log_file=None
+):
+    """
+    Calculate variations and relative variation between original and knocked model results.
+
+    Args:
+        final_results_original_model: Dict with original model results
+        final_results_knocked_model: List of tuples (species, info_dict)
+        log_file: Optional logging file (unused in current implementation)
+
+    Returns:
+        Dict: Nested dictionary with variations per species and combination
+    """
+    variations_dict = {}
+    epsilon = 1e-20  # Variable used as values cutoff and to avoid division by 0
+
+    # Looping through knockedout results
+    for ko_species, species_dict in final_results_knocked_model:
+        variations_dict[ko_species] = {}
+
+        # Looping through combinations in original model
+        for combination, original_info_dict in final_results_original_model.items():
+            variations_dict[ko_species][combination] = {}
+
+            # Looping through original simulation dict
+            for species, original_value in original_info_dict.items():
+
+                if species == ko_species:  # Setting nan if ko species
+                    variation = np.nan
+                    relative_variation = np.nan
+
+                elif (
+                    species not in species_dict[combination]
+                ):  # Setting nan if species not present
+                    variation = np.nan
+                    relative_variation = np.nan
+                else:
+
+                    # Cutting off the original value if too small
+                    original_val = np.where(
+                        np.abs(np.float64(original_value)) < epsilon,
+                        0,
+                        np.float64(original_value),
+                    )
+
+                    # Cutting off the ko value if too small
+                    ko_value = np.where(
+                        np.abs(np.float64(species_dict[combination][species]))
+                        < epsilon,
+                        0,
+                        np.float64(species_dict[combination][species]),
+                    )
+
+                    # Getting the variation
+                    variation = ko_value - original_val
+
+                    # Getting the relative variation
+                    # If original_value is too small use epsilon
+                    # Avoid division by 0
+                    relative_variation = (ko_value - original_val) / np.maximum(
+                        np.abs(original_val), epsilon
+                    )
+
+                variations_dict[ko_species][combination][species] = {
                     "variation": variation,
                     "relative-variation": relative_variation,
                 }
@@ -710,6 +822,7 @@ def generate_pattern_distance_report(
     return report_path
 
 
+# DEPRECATED
 def analyze_simulation_variations(  # TODO: Check correctness
     target_data, original_results, output_dir, log_file=None, target_type=0
 ):
@@ -981,7 +1094,7 @@ def get_simulations_informations(
     target_ids = []
     missing_species = []
 
-    exp = r"[\[\]]"
+    exp = r"[\[\]]"  # Expression to filter the colnames
 
     # Pre-compute column indices for all target species
     for cn in colnames:
@@ -1000,23 +1113,13 @@ def get_simulations_informations(
     except Exception as e:
         print_log(log_file, f"Time not present: {e}")
 
-    # print_log(log_file, target_indices)
-
-    # Only process species that exist in the data
-    # valid_target_ids = [ts for ts in target_ids if ts in target_indices]
-
-    # if not valid_target_ids:
-    #     print_log(log_file, "No valid target species found")
-    #     return {}
-
     # Initialize results structure
     table_results = {}
 
     # Add original results (vectorized)
     table_results["original"] = {}
     for ts in target_ids:
-        if ts == "time":
-
+        if ts == "time":  # Skipping time column
             continue
         ts_index = target_indices[ts]
 
@@ -1052,6 +1155,7 @@ def get_simulations_informations(
         for ts in target_ids:
             if ts == "time":
                 continue
+
             ts_index = target_indices[ts]
             try:
                 table_results[combo_key][ts] = truncate_small_values(
@@ -1176,75 +1280,6 @@ def get_simulations_informations_with_detailed_data(
     return table_results
 
 
-def get_knockout_variations_samples(
-    final_results_original_model, final_results_knocked_model, log_file=None
-):
-    """
-    Calculate variations between original and knocked model results.
-
-    Args:
-        final_results_original_model: Dict with original model results
-        final_results_knocked_model: List of tuples (species, info_dict)
-        log_file: Optional logging file (unused in current implementation)
-
-    Returns:
-        Dict: Nested dictionary with variations per species and combination
-    """
-    variations_dict = {}
-    epsilon = 1e-20
-
-    for ko_species, species_dict in final_results_knocked_model:
-        print_log("test", f"[G_KO_V_S]{ko_species}")
-        variations_dict[ko_species] = {}
-
-        for combination, original_info_dict in final_results_original_model.items():
-            print_log("test", f"[G_KO_V_S]    {combination}")
-            variations_dict[ko_species][combination] = {}
-            for species, original_value in original_info_dict.items():
-                print_log("test", f"[G_KO_V_S]        {species}")
-
-                if species == ko_species:
-                    variation = np.nan
-                    relative_variation = np.nan
-
-                elif species not in species_dict[combination]:
-                    variation = np.nan
-                    relative_variation = np.nan
-                else:
-
-                    original_val = np.where(
-                        np.abs(np.float64(original_value)) < epsilon,
-                        0,
-                        np.float64(original_value),
-                    )
-                    ko_value = np.where(
-                        np.abs(np.float64(species_dict[combination][species]))
-                        < epsilon,
-                        0,
-                        np.float64(species_dict[combination][species]),
-                    )
-
-                    variation = ko_value - original_val
-
-                    relative_variation = (ko_value - original_val) / np.maximum(
-                        np.abs(original_val), epsilon
-                    )
-
-                    print_log("test", f"[G_KO_V_S]        ov:{original_val}")
-                    print_log("test", f"[G_KO_V_S]        ko_v:{ko_value}")
-                print_log("test", f"[G_KO_V_S]            var:{variation}")
-                print_log("test", f"[G_KO_V_S]            rel-var:{relative_variation}")
-
-                variations_dict[ko_species][combination][species] = {
-                    "variation": variation,
-                    "relative-variation": relative_variation,
-                }
-
-    print_log("test", "====================")
-
-    return variations_dict
-
-
 def get_no_samples_variations(
     variations_dict,
     all_species,
@@ -1252,22 +1287,40 @@ def get_no_samples_variations(
     variation_type="relative",
     log_file=None,
 ):
+    """
+    Create the heatmap with the variations if perturbations are not required
 
+    args:
+        - variations_dict: Dictionary containing the variations informations
+        - all_species: Set of all the model's species
+        - ko_species_list: List of knocked-out species
+        - variation_type: Type of variation to get from the dictionary
+        - log_file: File where to log informations
+    """
+
+    # Updating the all_species set with the model's species
     for combinations in variations_dict.values():
         for species_data in combinations.values():
             all_species.update(species_data.keys())
 
     all_species = sorted(list(all_species))
+
+    # Creating the result matrix with shape (ko_species, all_species)
     res_matrix = np.zeros((len(ko_species_list), len(all_species)))
 
+    # Looping through the knocked-out species
     for i, ko_species in enumerate(ko_species_list):
+        # Extracting the variation dict
         no_sample_combinations = variations_dict[ko_species]["original"]
 
+        # Looping through the species list
         for j, species in enumerate(all_species):
+            # If relative variation required
             if variation_type.lower() == "relative":
                 res_matrix[i, j] = np.sqrt(
                     no_sample_combinations[species]["relative-variation"] ** 2
                 )
+            # If variation required
             else:
                 res_matrix[i, j] = np.sqrt(
                     no_sample_combinations[species]["variation"] ** 2
@@ -1294,23 +1347,29 @@ def get_variations_hm_samples(
         - log_file: File where to print the debug information
     """
 
+    # Updating the all_species set
     for combinations in variations_dict.values():
         for species_data in combinations.values():
             all_species.update(species_data.keys())
 
     all_species = sorted(list(all_species))
 
-    # Calculate the variation's matrix
+    # Calculate the variation's matrix with shape (ko_species_list, all_species)
     heatmap_data = np.zeros((len(ko_species_list), len(all_species)))
 
+    # Looping through the knocked-out species
     for i, ko_species in enumerate(ko_species_list):
+        # Extracting the combinations dict
         combinations = variations_dict[ko_species]
+
+        # Looping through the species
         for j, species in enumerate(all_species):
             variations = []
+
+            # Looping through the combinations
             for combination, combination_data in combinations.items():
 
                 if species in combination_data:
-
                     if variation_type.lower() == "relative":
                         variations.append(
                             combination_data[species]["relative-variation"]

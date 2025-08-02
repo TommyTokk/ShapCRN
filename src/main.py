@@ -49,9 +49,11 @@ def main():
 
             # Load and simulate
             if args.integrator:
-                rr = sim_ut.load_roadrunner_model(sbml_model, args.integrator, log_file)
+                rr = sim_ut.load_roadrunner_model(
+                    sbml_model, integrator=args.integrator, log_file=log_file
+                )
             else:
-                rr = sim_ut.load_roadrunner_model(sbml_model, log_file)
+                rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
             res, ss_time, colnames = sim_ut.simulate(
                 rr,
@@ -127,7 +129,9 @@ def main():
             else:
                 ut.print_log(log_file, "Running without samples generations")
             # Load the model
-            rr = sim_ut.load_roadrunner_model(sbml_model, integrator, log_file)
+            rr = sim_ut.load_roadrunner_model(
+                sbml_model, integrator=integrator, log_file=log_file
+            )
 
             # Get the selections
             selections = rr.selections
@@ -396,8 +400,6 @@ def main():
                         ut.print_log(
                             log_file, f"  {i+1}. {ko_name}: {impact_score:.20f}"
                         )
-
-                    exit(1)
 
                     if args.perturbations_importance:
                         ut.print_log(log_file, "Importance analysis")
@@ -745,7 +747,7 @@ def main():
 
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
-            rr = sim_ut.load_roadrunner_model(sbml_model, log_file)
+            rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
             N = nu.get_network_from_sbml(reactions_list, species_list, log_file)
             nu.plot_network(
