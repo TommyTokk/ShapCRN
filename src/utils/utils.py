@@ -193,6 +193,25 @@ def parse_args():
         help="Output directory for plots (default: ./imgs/samples)",
     )
 
+    simulate_samples_parser.add_argument(
+        "-so", "--save-output", default=False, help="Save importance analysis results"
+    )
+
+    # === SENSIBILITY_ANALYSIS command ===
+    sens_parser = subparsers.add_parser(
+        "sensibility_analysis",
+        help="Run sensibility analysis between fixed and random perturbations",
+    )
+    sens_parser.add_argument("input_path", help="Path to the SBML model file")
+
+    sens_parser.add_argument(
+        "-is",
+        "--input_species",
+        nargs="+",
+        default=None,
+        help="One or more species IDs to vary (e.g. -s ACEx GLCx P). If None no samples will be generated",
+    )
+
     # === KNOCKOUT_SPECIES command ===
     knockout_species_parser = subparsers.add_parser(
         "knockout_species", help="Knockout a species in the model"

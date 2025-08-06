@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 import enum
+from logging import raiseExceptions
 from math import log, nan
 import os
+import re
 import sys
+from traceback import print_tb
 import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.algorithms.assortativity import correlation
@@ -14,6 +17,10 @@ import libsbml
 import numpy as np
 from dotenv import load_dotenv
 import time
+import pandas as pd
+
+from SALib.sample import sobol as sobol_sample
+from SALib.analyze import sobol as sobol_analyze
 
 
 # Add the src folder path to the Python path
@@ -24,6 +31,7 @@ from src.utils import simulation_utils as sim_ut
 from src.utils import net_utils as nu
 from src.utils import utils as ut
 from src.utils import plot_utils as plt_ut
+from src.utils import sens_utils as sens_ut
 
 
 def main():
@@ -193,10 +201,10 @@ def main():
                     log_file,
                 )
 
-                for combination, info_dict in original_model_simulations_info.items():
-                    ut.print_log("orig", f"{combination}:")
-                    for species, values in info_dict.items():
-                        ut.print_log("orig", f" {species}: {values}")
+                # for combination, info_dict in original_model_simulations_info.items():
+                #     ut.print_log("orig", f"{combination}:")
+                #     for species, values in info_dict.items():
+                #         ut.print_log("orig", f" {species}: {values}")
 
             knockout_data = []
 
@@ -207,23 +215,9 @@ def main():
             sbml_str = libsbml.writeSBMLToString(sbml_doc)
 
             # Create a dict of the ko models
-            model_dict = {}
-            for ids in target_ids:
-                doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
-                model_copy = doc_copy.getModel()
-                if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
-                    modified_model = sbml_ut.knockout_species(model_copy, ids, log_file)
-
-                elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
-                    modified_model = sbml_ut.knockout_reaction(
-                        model_copy, ids, log_file
-                    )
-
-                else:
-                    raise Exception("Id not present in the model")
-
-                doc_copy.setModel(modified_model)
-                model_dict[ids] = libsbml.writeSBMLToString(doc_copy)
+            model_dict = sbml_ut.create_ko_models(
+                target_ids, sbml_model, sbml_str, log_file
+            )
 
             # counter = 0
 
@@ -295,6 +289,21 @@ def main():
                     title="Absolute log variations heatmap",
                 )
 
+                if args.save_output:
+                    relative_data_frame = pd.DataFrame(
+                        relative_map, columns=all_species_rel, index=ko_species_list
+                    )
+                    absolute_data_frame = pd.DataFrame(
+                        abs_map, columns=all_species_abs, index=ko_species_list
+                    )
+
+                    relative_data_frame.to_csv(
+                        f"./report/{file_name}/relative_variations.csv"
+                    )
+                    absolute_data_frame.to_csv(
+                        f"./report/{file_name}/absolute_variations.csv"
+                    )
+
             else:  # === IF SAMPLES ===
                 try:
                     assert original_model_simulations_info is not None  # pyright:ignore
@@ -365,8 +374,16 @@ def main():
                         no_samples_log_relative_map
                     )
 
+                    normalized_no_samples_absolute = ut.minMax_normalize(
+                        no_samples_log_absolute_map
+                    )
+
                     normalized_samples_relative_map = ut.minMax_normalize(
                         samples_log_relative_map
+                    )
+
+                    normalized_samples_absolute_map = ut.minMax_normalize(
+                        samples_log_absolute_map
                     )
 
                     # Heatmap plotting
@@ -401,6 +418,21 @@ def main():
                             log_file, f"  {i+1}. {ko_name}: {impact_score:.20f}"
                         )
 
+                    if args.save_output:  # Saving the variation heatmaps
+                        relative_data_frame = pd.DataFrame(
+                            relative_map, columns=all_species_rel, index=ko_species_list
+                        )
+                        absolute_data_frame = pd.DataFrame(
+                            absolute_map, columns=all_species_abs, index=ko_species_list
+                        )
+
+                        relative_data_frame.to_csv(
+                            f"./report/{file_name}/relative_variations.csv"
+                        )
+                        absolute_data_frame.to_csv(
+                            f"./report/{file_name}/absolute_variations.csv"
+                        )
+
                     if args.perturbations_importance:
                         ut.print_log(log_file, "Importance analysis")
                         # === SAMPLING IMPORTANCE ANALYSIS ===
@@ -412,7 +444,19 @@ def main():
                             samples_log_relative_map - no_samples_log_relative_map
                         )
 
-                        ut.print_log(log_file, relative_values_distance[0, 1])
+                        # Getting the values absolute distance
+                        absolute_values_distance = np.abs(
+                            absolute_map - no_samples_absolute_map
+                        )
+
+                        __import__("pprint").pprint(absolute_map[1, 1])
+                        __import__("pprint").pprint(no_samples_absolute_map[1, 1])
+
+                        # __import__("pprint").pprint(
+                        #    f"Absolute distance: {absolute_values_distance[0, 1]}"
+                        # )
+
+                        # ut.print_log(log_file, relative_values_distance[0, 1])
 
                         # Getting the pearson_coefficient
                         pearson_coefficient, p_value = ut.pearson_correlation(
@@ -440,6 +484,15 @@ def main():
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                             title="Perturbations VS No Perturbations Distance",
                             imgs_name="Perturbations VS No Perturbations distance",
+                        )
+
+                        plt_ut.plot_variations_heatmap(
+                            absolute_values_distance,
+                            all_species_abs,
+                            ko_species_list,
+                            save_path=f"./imgs/{file_name}/Perturbations importance analysis absolute",
+                            title="Perturbations VS No Perturbations Distance absolute",
+                            imgs_name="Perturbations VS No Perturbations distance absolute",
                         )
 
                         # Get the active cells of the matrices
@@ -485,9 +538,9 @@ def main():
 
                     if args.random_perturbations_importance:
                         ut.print_log(log_file, "Random importance analysis")
-                        # === FIXED SAMPLES ANALYSIS ===
 
-                        rr.reset()
+                        # === FIXED SAMPLES ANALYSIS ===
+                        # rr.reset()
 
                         ut.print_log(log_file, "STARTING FIXED SAMPLES ANALYSIS")
                         ut.print_log(
@@ -498,9 +551,14 @@ def main():
                             "[WARNING] Notice that the number of samples will equals to the number of variations",
                         )
 
-                        fixed_variations = [
-                            float(inp) for inp in input().strip().split(" ")
-                        ]
+                        env_pert = os.getenv("FIXED_PERTURBATIONS").split(
+                            ","
+                        )  # pyright:ignore
+
+                        if env_pert is not None:
+                            fixed_variations = [np.float64(v) for v in env_pert]
+                        else:
+                            raise TypeError("Perturbations are None")
 
                         ut.print_log(log_file, f"{fixed_variations}")
 
@@ -654,11 +712,89 @@ def main():
                             title="Fixed perturbations patterns distance's heatmap",
                             imgs_name="Fixed perturbations pattern distance's heatmap",
                         )
-
+                #
                 except AssertionError as ae:
                     ut.print_log(
                         log_file, f"Error during samples results elaboration: {ae}"
                     )
+
+        elif args.command == "sensibility_analysis":
+
+            # LOADING MODEL
+            sbml_doc = sbml_ut.load_model(args.input_path)
+            sbml_model = sbml_doc.getModel()
+
+            # SPLITTING REVERSIBLE REACTIONS
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+
+            file_name = os.path.basename(args.input_path)
+
+            # GETTING INPUT SPECIES IDS
+            input_ids = args.input_species
+            all_species_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+
+            rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
+
+            # Creating selections
+
+            selections = rr.selections
+
+            ut.print_log(log_file, selections)
+
+            for s in all_species_ids:
+                if f"[{s}]" not in selections:
+                    selections.append(f"[{s}]")
+
+            rr.selections = selections
+
+            # TEST SALib
+
+            internal_nodes = list(set(all_species_ids) - set(input_ids))
+
+            # Creating the problem
+            problem = sens_ut.get_problem_parameters(
+                sbml_model, len(input_ids), input_ids, 20, log_file=log_file
+            )
+
+            params = sobol_sample.sample(problem, 256)
+
+            RES = np.zeros([params.shape[0], len(internal_nodes)])
+
+            res_dict = {}
+            start = time.perf_counter()
+            for i, param in enumerate(params):
+                # Saving the selections
+
+                rr.reset()
+
+                rr.selections = selections
+
+                # Changing the concentrations
+                for j in range(len(input_ids)):
+                    rr.setInitConcentration(input_ids[j], param[j])
+
+                # Simulate
+                sim_res, _, colnames = sim_ut.simulate(rr, 0, 5000, log_file=log_file)
+
+                for j in range(len(internal_nodes)):
+                    s_id = colnames.index(f"[{internal_nodes[j]}]")
+
+                    RES[i, j] = sim_res[-1, s_id]
+
+            end = time.perf_counter()
+
+            ut.print_log(log_file, f"Time: {end - start}")
+
+            for i in range(len(internal_nodes)):
+                s_id = internal_nodes[i]
+                Si = sobol_analyze.analyze(problem, RES[:, i])
+
+                res_dict[s_id] = Si
+
+            __import__("pprint").pprint(res_dict)
+
+            for node, data in res_dict.items():
+                sens_ut.report_sensitivity(node, data, input_ids, log_file)
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)

@@ -1,5 +1,7 @@
 from decimal import *
 
+from networkx import current_flow_betweenness
+
 import roadrunner as rr
 import libsbml
 import numpy as np
@@ -17,6 +19,8 @@ from src.utils.utils import (
     truncate_small_values,
 )
 from src.utils import plot_utils as plt_ut
+from utils.sbml_utils import create_samples_combination, generate_species_samples
+
 
 
 def load_roadrunner_model(
@@ -475,12 +479,15 @@ def get_knockout_variations_samples(
     for ko_species, species_dict in final_results_knocked_model:
         variations_dict[ko_species] = {}
 
+        print_log("G_KO_V", f"{ko_species}:")
+
         # Looping through combinations in original model
         for combination, original_info_dict in final_results_original_model.items():
             variations_dict[ko_species][combination] = {}
 
             # Looping through original simulation dict
             for species, original_value in original_info_dict.items():
+                print_log("G_KO_V", f"  {species}:")
 
                 if species == ko_species:  # Setting nan if ko species
                     variation = np.nan
@@ -508,6 +515,7 @@ def get_knockout_variations_samples(
                         np.float64(species_dict[combination][species]),
                     )
 
+                    
                     # Getting the variation
                     variation = ko_value - original_val
 
@@ -517,6 +525,13 @@ def get_knockout_variations_samples(
                     relative_variation = (ko_value - original_val) / np.maximum(
                         np.abs(original_val), epsilon
                     )
+
+                    print_log("G_KO_V", f"      variation:{ko_value} - {original_val}: {variation}")
+                    print_log("G_KO_V", f"      relative-variation:({ko_value} - {original_val})/{np.maximum(
+                        np.abs(original_val), epsilon
+                    )}: {relative_variation}")
+
+
 
                 variations_dict[ko_species][combination][species] = {
                     "variation": variation,
@@ -1175,6 +1190,41 @@ def get_simulations_informations(
     )
 
     return table_results
+
+
+def collapse_informations(data, colnames, log_file = None):
+    target_indices = {} 
+
+    exp = r"[\[\]]"  # Expression to filter the colnames
+
+    # Pre-compute column indices for all target species
+    for cn in colnames:
+
+        if cn == 'time':
+            continue
+
+        s_id = re.sub(exp, "", cn)
+        target_indices[s_id] = colnames.index(cn)
+
+    res = {}
+    count = 0
+
+    for key in target_indices.keys():
+        res[key] = 0
+        count=0
+        for combination, data_dict in data.items():
+            res[key] += data_dict[key]
+            count += 1 
+        res[key] = (res[key]/count)
+
+    return res
+
+
+def get_convergence(fixed_data, original_model_results, sbml_model, input_species_ids, samples_size, rr_model, log_file = None):
+    exit(1)
+        
+
+    
 
 
 def get_simulations_informations_with_detailed_data(

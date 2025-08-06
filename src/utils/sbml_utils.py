@@ -42,6 +42,27 @@ def dict_pretty_print(dict_obj):
     print(json_formatted_str)
 
 
+def create_ko_models(target_ids, sbml_model, sbml_str, log_file=None):
+
+    model_dict = {}
+    for ids in target_ids:
+        doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
+        model_copy = doc_copy.getModel()
+        if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
+            modified_model = knockout_species(model_copy, ids, log_file)
+
+        elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
+            modified_model = knockout_reaction(model_copy, ids, log_file)
+
+        else:
+            raise Exception("Id not present in the model")
+
+        doc_copy.setModel(modified_model)
+        model_dict[ids] = libsbml.writeSBMLToString(doc_copy)
+
+    return model_dict
+
+
 def save_file(file_name, operation_name, model, save_output=False, log_file=None):
     # Generate output filename
     base_name, extension = os.path.splitext(file_name)
