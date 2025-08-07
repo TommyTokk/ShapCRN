@@ -732,10 +732,11 @@ def main():
             # GETTING INPUT SPECIES IDS
             input_ids = args.input_species
             all_species_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+            internal_nodes = list(set(all_species_ids) - set(input_ids))
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
-            # Creating selections
+            # CREATING SELECTIONS
 
             selections = rr.selections
 
@@ -747,39 +748,44 @@ def main():
 
             rr.selections = selections
 
-            # TEST SALib
+            ut.print_log(log_file, rr.selections)
 
-            internal_nodes = list(set(all_species_ids) - set(input_ids))
+            # TEST SALib
 
             # Creating the problem
             problem = sens_ut.get_problem_parameters(
                 sbml_model, len(input_ids), input_ids, 20, log_file=log_file
             )
 
-            params = sobol_sample.sample(problem, 256)
+            params = sobol_sample.sample(problem, 5)
 
-            RES = np.zeros([params.shape[0], len(internal_nodes)])
+            # RES = np.zeros([params.shape[0], len(internal_nodes)])
 
             res_dict = {}
             start = time.perf_counter()
-            for i, param in enumerate(params):
-                # Saving the selections
 
-                rr.reset()
+            RES = sens_ut.run_simulation_with_params(
+                rr, params, input_ids, selections, internal_nodes, log_file
+            )
 
-                rr.selections = selections
-
-                # Changing the concentrations
-                for j in range(len(input_ids)):
-                    rr.setInitConcentration(input_ids[j], param[j])
-
-                # Simulate
-                sim_res, _, colnames = sim_ut.simulate(rr, 0, 5000, log_file=log_file)
-
-                for j in range(len(internal_nodes)):
-                    s_id = colnames.index(f"[{internal_nodes[j]}]")
-
-                    RES[i, j] = sim_res[-1, s_id]
+            # for i, param in enumerate(params):
+            #     # Saving the selections
+            #
+            #     rr.reset()
+            #
+            #     rr.selections = selections
+            #
+            #     # Changing the concentrations
+            #     for j in range(len(input_ids)):
+            #         rr.setInitConcentration(input_ids[j], param[j])
+            #
+            #     # Simulate
+            #     sim_res, _, colnames = sim_ut.simulate(rr, 0, 5000, log_file=log_file)
+            #
+            #     for j in range(len(internal_nodes)):
+            #         s_id = colnames.index(f"[{internal_nodes[j]}]")
+            #
+            #         RES[i, j] = sim_res[-1, s_id]
 
             end = time.perf_counter()
 
@@ -791,10 +797,67 @@ def main():
 
                 res_dict[s_id] = Si
 
-            __import__("pprint").pprint(res_dict)
+            # __import__("pprint").pprint(res_dict)
 
-            for node, data in res_dict.items():
-                sens_ut.report_sensitivity(node, data, input_ids, log_file)
+            # for node, data in res_dict.items():
+            #     sens_ut.report_sensitivity(node, data, input_ids, log_file)
+
+            if args.check_convergence:
+                sample_sizes = [64, 128, 256, 512, 1024, 2048, 4096]
+
+                informations_dict = {}
+
+                ut.print_log(log_file, "Starting convergence analysis")
+
+                for i, size in enumerate(sample_sizes):
+                    ut.print_log(log_file, f" Running  with {size} samples")
+                    start = time.perf_counter()
+                    params = sobol_sample.sample(problem, sample_sizes[i])
+
+                    RES_i = sens_ut.run_simulation_with_params(
+                        rr, params, input_ids, selections, internal_nodes, log_file
+                    )
+
+                    res_dict = {}
+
+                    for i in range(len(internal_nodes)):
+                        s_id = internal_nodes[i]
+                        Si = sobol_analyze.analyze(problem, RES_i[:, i])
+
+                        res_dict[s_id] = Si
+
+                    informations_dict[size] = res_dict
+
+                    end = time.perf_counter()
+
+                    ut.print_log(
+                        log_file, f"{size} samples analyzed in {(end - start)}s"
+                    )
+                    ut.print_log(log_file, 40 * "=")
+
+                convergence_informations = sens_ut.check_convergence(
+                    informations_dict, internal_nodes
+                )
+
+                for node, info in convergence_informations.items():
+                    Ns = sorted(info["max_change"].keys())
+                    changes = [info["max_change"][N] for N in Ns]
+                    cis = [info["ci_half_width"][N] for N in Ns]
+
+                    plt.figure()
+                    plt.plot(Ns, changes, "-o", label="Max Change")
+                    plt.plot(Ns, cis, "--s", label="CI Half-Width")
+                    plt.axhline(
+                        0.01,
+                        color="gray",
+                        linestyle="--",
+                        label="Change Tolerance",
+                    )
+                    plt.axhline(0.05, color="red", linestyle="--", label="CI Tolerance")
+                    plt.title(f"Convergence diagnostics for {node}")
+                    plt.xlabel("Base sample size N")
+                    plt.legend()
+                    plt.show()
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)

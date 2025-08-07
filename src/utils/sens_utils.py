@@ -1,3 +1,4 @@
+from utils.simulation_utils import simulate
 from utils.utils import print_log
 import numpy as np
 
@@ -23,6 +24,89 @@ def get_problem_parameters(
     problem["bounds"] = tmp
 
     return problem
+
+
+def run_simulation_with_params(
+    rr, params, input_ids, selections, internal_nodes, log_file=None
+):
+
+    RES = np.zeros([params.shape[0], len(internal_nodes)])
+
+    for i, param in enumerate(params):
+        # Saving the selections
+
+        rr.reset()
+
+        rr.selections = selections
+
+        # Changing the concentrations
+        for j in range(len(input_ids)):
+            rr.setInitConcentration(input_ids[j], param[j])
+
+        # Simulate
+        sim_res, _, colnames = simulate(rr, 0, 5000, log_file=log_file)
+
+        for j in range(len(internal_nodes)):
+            s_id = colnames.index(f"[{internal_nodes[j]}]")
+
+            RES[i, j] = sim_res[-1, s_id]
+
+    return RES
+
+
+def check_convergence(results, internal_nodes, tol_change=0.01, tol_ci=0.05):
+    """
+    Determine convergence per node and report error metrics.
+
+    Parameters:
+      results (dict): { N : { node : {'S1': array, 'S1_conf': array,
+                                      'ST': array, 'ST_conf': array}, ... }, ... }
+      internal_nodes (list): names of output nodes to analyze.
+      tol_change (float): Max allowed change in index between sample sizes.
+      tol_ci (float): Max allowed CI half-width.
+
+    Returns:
+      dict: { node: { 'converged_at': N or None,
+                      'max_change': {N: value, ...},
+                      'ci_half_width': {N: value, ...} } }
+    """
+    convergence = {}
+    Ns = sorted(results.keys())
+
+    for node in internal_nodes:
+        node_data = results
+        prev = None
+        converged_at = None
+        max_change = {}
+        ci_half_width = {}
+
+        for N in Ns:
+            curr = results[N][node]
+            # Max CI half-width across S1 and ST
+            max_ci = max(curr["S1_conf"].max(), curr["ST_conf"].max())
+            ci_half_width[N] = max_ci
+
+            # Max change from previous N
+            if prev:
+                delta_s1 = abs(curr["S1"] - prev["S1"]).max()
+                delta_st = abs(curr["ST"] - prev["ST"]).max()
+                max_delta = max(delta_s1, delta_st)
+            else:
+                max_delta = float("inf")
+            max_change[N] = max_delta
+
+            if max_delta < tol_change and max_ci < tol_ci and converged_at is None:
+                converged_at = N
+
+            prev = curr
+
+        convergence[node] = {
+            "converged_at": converged_at,
+            "max_change": max_change,
+            "ci_half_width": ci_half_width,
+        }
+
+    return convergence
 
 
 def report_sensitivity(node, data, parameters, log_file=None):

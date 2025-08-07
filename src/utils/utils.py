@@ -212,6 +212,21 @@ def parse_args():
         help="One or more species IDs to vary (e.g. -s ACEx GLCx P). If None no samples will be generated",
     )
 
+    sens_parser.add_argument(
+        "-fp",
+        "--fixed-perturbations",
+        nargs="+",
+        help="Perturbation percentages to use in fixed samples combination (WARNING: The number of samples will be equal to the number of parameters)",
+    )
+
+    sens_parser.add_argument(
+        "-cc",
+        "--check-convergence",
+        action="store_true",
+        default=False,
+        help="Check convergence with increasing samples (MAX: 4096)",
+    )
+
     # === KNOCKOUT_SPECIES command ===
     knockout_species_parser = subparsers.add_parser(
         "knockout_species", help="Knockout a species in the model"
