@@ -122,8 +122,10 @@ def simulate(
 
         return result, ss_time, colnames
     else:
-        # Standard simulation
+        # Standard simulation 
         res = rr_model.simulate(start_time, end_time, output_rows)
+
+        
 
         return res, None, res.colnames
 
@@ -155,7 +157,7 @@ def simulate_samples(
     # rr_model.reset()
     #
     # Save the current selections
-    current_selections = rr_model.selections
+    current_selections = rr_model.timeCourseSelections
     rr_model.reset()
 
     # Set the new concentrations
@@ -169,7 +171,7 @@ def simulate_samples(
 
     # Reset the concentrations
     # Needed because the .reset() method reset also the simulation selections
-    rr_model.selections = current_selections
+    rr_model.timeCourseSelections = current_selections
 
     res = simulate(
         rr_model,
@@ -211,7 +213,7 @@ def process_species_samples(args):
         )
 
         # Setting the selections
-        modified_rr.selections = selections
+        modified_rr.timeCourseSelections = selections
 
         # Simulating the not perturbed model
         knockout_model_results, ss_time, colnames = simulate(
@@ -224,7 +226,7 @@ def process_species_samples(args):
 
         # Resetting the model
         modified_rr.reset()
-        modified_rr.selections = selections
+        modified_rr.timeCourseSelections = selections
         min_ss_time = (
             ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
         )

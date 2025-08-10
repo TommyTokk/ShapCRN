@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from networkx.algorithms.assortativity import correlation
 from numpy._typing import _UnknownType
 from pandas._libs import iNaT
+from pandas.core.generic import pprint_thing
 from classes.SBMLHandler import SBMLHandler
 import roadrunner
 import libsbml
@@ -21,6 +22,7 @@ import pandas as pd
 
 from SALib.sample import sobol as sobol_sample
 from SALib.analyze import sobol as sobol_analyze
+from SALib.util import ProblemSpec
 
 
 # Add the src folder path to the Python path
@@ -82,9 +84,11 @@ def main():
 
             __import__("pprint").pprint(res[-1, :])
 
-            plt_ut.plot_results(
-                res, colnames, args.output, file_name, log_file, ss_time
-            )
+            # plt_ut.plot_results(
+            #     res, colnames, args.output, file_name, log_file, ss_time
+            # )
+            #
+            plt_ut.plot_results_interactive(res, colnames)
 
         elif args.command == "importance_assessment":
 
@@ -142,7 +146,7 @@ def main():
             )
 
             # Get the selections
-            selections = rr.selections
+            selections = rr.timeCourseSelections
             for s in species_list:
                 if f"[{s}]" not in selections:
                     selections.append(f"[{s}]")
@@ -152,7 +156,7 @@ def main():
                 if ts in sbml_model.getListOfReactions().getId():
                     selections.append(f"{ts}")
 
-            rr.selections = selections
+            rr.timeCourseSelections = selections
 
             # Simulate the model
             ut.print_log(log_file, "Simulating original model")
@@ -736,74 +740,70 @@ def main():
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
-            # CREATING SELECTIONS
-
-            selections = rr.selections
-
-            ut.print_log(log_file, selections)
-
-            for s in all_species_ids:
-                if f"[{s}]" not in selections:
-                    selections.append(f"[{s}]")
-
-            rr.selections = selections
-
-            ut.print_log(log_file, rr.selections)
-
-            # TEST SALib
-
             # Creating the problem
             problem = sens_ut.get_problem_parameters(
                 sbml_model, len(input_ids), input_ids, 20, log_file=log_file
             )
 
-            params = sobol_sample.sample(problem, 5)
+            spec = ProblemSpec(problem)
+
+            params = spec.sample(sobol_sample.sample, 2).samples
 
             # RES = np.zeros([params.shape[0], len(internal_nodes)])
 
             res_dict = {}
-            start = time.perf_counter()
+            needed_selections = [f"[{n}]" for n in internal_nodes]
+            selections = rr.timeCourseSelections
+            for sel in needed_selections:
+                if sel not in selections:
+                    selections.append(sel)
+            rr.timeCourseSelections = selections
 
-            RES = sens_ut.run_simulation_with_params(
-                rr, params, input_ids, selections, internal_nodes, log_file
+            # Mappa coerente selezione -> indice in rr.selections
+            selection_to_idx = {
+                sel: rr.timeCourseSelections.index(sel) for sel in needed_selections
+            }
+
+            # Limita ai soli nodi interni effettivamente disponibili
+            available_pairs = [
+                (n, f"[{n}]") for n in internal_nodes if f"[{n}]" in selection_to_idx
+            ]
+            available_internal_nodes = [n for (n, _) in available_pairs]
+            available_needed_selections = [sel for (_, sel) in available_pairs]
+
+            ut.print_log(
+                log_file, f"Available internal nodes: {available_internal_nodes}"
             )
 
-            # for i, param in enumerate(params):
-            #     # Saving the selections
-            #
-            #     rr.reset()
-            #
-            #     rr.selections = selections
-            #
-            #     # Changing the concentrations
-            #     for j in range(len(input_ids)):
-            #         rr.setInitConcentration(input_ids[j], param[j])
-            #
-            #     # Simulate
-            #     sim_res, _, colnames = sim_ut.simulate(rr, 0, 5000, log_file=log_file)
-            #
-            #     for j in range(len(internal_nodes)):
-            #         s_id = colnames.index(f"[{internal_nodes[j]}]")
-            #
-            #         RES[i, j] = sim_res[-1, s_id]
+            start = time.perf_counter()
+
+            # __import__("pprint").pprint(f"idxs: {valid_idxs}")
+
+            RES = sens_ut.run_simulation_with_params(
+                rr,
+                params,
+                available_needed_selections,
+                selection_to_idx,
+                input_ids,
+                log_file,
+            )
 
             end = time.perf_counter()
 
             ut.print_log(log_file, f"Time: {end - start}")
 
-            for i in range(len(internal_nodes)):
-                s_id = internal_nodes[i]
-                Si = sobol_analyze.analyze(problem, RES[:, i])
+            for j, node_id in enumerate(available_internal_nodes):
 
-                res_dict[s_id] = Si
+                Si = sobol_analyze.analyze(problem, RES[:, j])
+                res_dict[node_id] = Si
 
             # __import__("pprint").pprint(res_dict)
 
-            # for node, data in res_dict.items():
-            #     sens_ut.report_sensitivity(node, data, input_ids, log_file)
+            for node, data in res_dict.items():
+                sens_ut.report_sensitivity(node, data, input_ids, log_file)
 
             if args.check_convergence:
-                sample_sizes = [64, 128, 256, 512, 1024, 2048, 4096]
+                sample_sizes = [64, 128, 256, 1024, 2048, 4096]
 
                 informations_dict = {}
 
@@ -815,18 +815,21 @@ def main():
                     params = sobol_sample.sample(problem, sample_sizes[i])
 
                     RES_i = sens_ut.run_simulation_with_params(
-                        rr, params, input_ids, selections, internal_nodes, log_file
+                        rr,
+                        params,
+                        available_needed_selections,
+                        selection_to_idx,
+                        input_ids,
+                        log_file,
                     )
 
-                    res_dict = {}
+                    res_dict_conv = {}
 
-                    for i in range(len(internal_nodes)):
-                        s_id = internal_nodes[i]
-                        Si = sobol_analyze.analyze(problem, RES_i[:, i])
+                    for j, node_id in enumerate(available_internal_nodes):
+                        Si = sobol_analyze.analyze(problem, RES_i[:, j])
+                        res_dict_conv[node_id] = Si
 
-                        res_dict[s_id] = Si
-
-                    informations_dict[size] = res_dict
+                    informations_dict[size] = res_dict_conv
 
                     end = time.perf_counter()
 
@@ -836,28 +839,15 @@ def main():
                     ut.print_log(log_file, 40 * "=")
 
                 convergence_informations = sens_ut.check_convergence(
-                    informations_dict, internal_nodes
+                    informations_dict,
+                    available_internal_nodes,
+                    min_consecutive=1,
+                    relative=True,
                 )
 
-                for node, info in convergence_informations.items():
-                    Ns = sorted(info["max_change"].keys())
-                    changes = [info["max_change"][N] for N in Ns]
-                    cis = [info["ci_half_width"][N] for N in Ns]
+                __import__("pprint").pprint(convergence_informations)
 
-                    plt.figure()
-                    plt.plot(Ns, changes, "-o", label="Max Change")
-                    plt.plot(Ns, cis, "--s", label="CI Half-Width")
-                    plt.axhline(
-                        0.01,
-                        color="gray",
-                        linestyle="--",
-                        label="Change Tolerance",
-                    )
-                    plt.axhline(0.05, color="red", linestyle="--", label="CI Tolerance")
-                    plt.title(f"Convergence diagnostics for {node}")
-                    plt.xlabel("Base sample size N")
-                    plt.legend()
-                    plt.show()
+                sens_ut.plot_convergence_single_plot(convergence_informations)
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)
