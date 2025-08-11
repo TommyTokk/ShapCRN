@@ -84,11 +84,11 @@ def main():
 
             __import__("pprint").pprint(res[-1, :])
 
-            # plt_ut.plot_results(
-            #     res, colnames, args.output, file_name, log_file, ss_time
-            # )
+            save_path = f"{args.output}/{file_name}"
+
+            plt_ut.plot_results(res, colnames, save_path, "model_simulation", log_file)
             #
-            plt_ut.plot_results_interactive(res, colnames)
+            # plt_ut.plot_results_interactive(res, colnames, log_file=file_name)
 
         elif args.command == "importance_assessment":
 
@@ -735,7 +735,14 @@ def main():
 
             # GETTING INPUT SPECIES IDS
             input_ids = args.input_species
-            all_species_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+            all_species_ids = []
+
+            for s in sbml_model.getListOfSpecies():
+                if not s.getConstant():
+                    s.getId()
+                else:
+                    continue
+
             internal_nodes = list(set(all_species_ids) - set(input_ids))
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)

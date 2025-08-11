@@ -56,7 +56,7 @@ def plot_results(
 
     plt.xlabel("Time")
     plt.ylabel("Concentration")
-    plt.title(f'Simulation: {img_name.replace(".png", "")}')
+    plt.title("Model Simulation")
     plt.grid(True)
 
     # Calculate the optimal number of columns for the legend
@@ -173,7 +173,7 @@ def plot_results_interactive(
 
     # Calculate legend positioning based on number of species
     num_species = len(species_names)
-    
+
     # Determine legend layout and calculate required margins
     if num_species <= 10:
         legend_orientation = "v"  # vertical
@@ -196,7 +196,9 @@ def plot_results_interactive(
         legend_rows = math.ceil(num_species / 4)  # Assume 4 items per row
         extra_height = max(80, legend_rows * 25)  # Minimum 80px, 25px per row
         adjusted_height = height + extra_height
-        margin_updates = dict(b=extra_height + 20)  # Bottom margin for horizontal legend
+        margin_updates = dict(
+            b=extra_height + 20
+        )  # Bottom margin for horizontal legend
 
     # Update layout with all settings at once
     fig.update_layout(
