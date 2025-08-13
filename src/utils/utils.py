@@ -197,10 +197,10 @@ def parse_args():
         "-so", "--save-output", default=False, help="Save importance analysis results"
     )
 
-    # === SENSIBILITY_ANALYSIS command ===
+    # === SENSITIVITY_ANALYSIS command ===
     sens_parser = subparsers.add_parser(
-        "sensibility_analysis",
-        help="Run sensibility analysis between fixed and random perturbations",
+        "sensitivity_analysis",
+        help="Run sensitivity analysis between fixed and random perturbations",
     )
     sens_parser.add_argument("input_path", help="Path to the SBML model file")
 

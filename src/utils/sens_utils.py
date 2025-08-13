@@ -1,9 +1,16 @@
+import multiprocessing
+from os import path
+import os
+
+from matplotlib.cbook import safe_masked_invalid
 from utils import simulation_utils
-from utils.simulation_utils import simulate
+from utils.simulation_utils import load_roadrunner_model, simulate
 from utils.utils import print_log
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
+from SALib.sample import sobol as sobol_sample
+from multiprocessing import Pool
 
 
 def get_problem_parameters(
@@ -209,44 +216,169 @@ def check_convergence(
     return convergence
 
 
-def report_sensitivity(node, data, parameters, log_file=None):
-    print_log(log_file, f"\n--- Sensitivity Report for Node {node} ---")
-    print_log(log_file, "First-Order Sobol Indices (S1):")
-    for i, s1 in enumerate(data["S1"]):
-        conf = data["S1_conf"][i]
-        print_log(log_file, f"  {parameters[i]}: {s1:.5f} ± {conf:.5f}")
+def assess_model_linearity(RES, sample_sizes):
+    """
+    Assess model linearity to help decide on perturbation suitability
+    """
 
-    dominant_index = np.argmax(np.abs(data["S1"]))
-    print_log(
-        log_file,
-        f"\nDominant Input: {parameters[dominant_index]} (S1 = {data['S1'][dominant_index]:.5f})",
-    )
+    print(f"\nMODEL LINEARITY ASSESSMENT:")
+    print(f"{'='*50}")
 
-    negligible = [parameters[i] for i, s1 in enumerate(data["S1"]) if np.abs(s1) < 0.01]
-    if negligible:
-        print_log(log_file, f"Negligible Inputs (S1 < 0.01): {', '.join(negligible)}")
+    # Check if sensitivity indices are stable across different sample sizes
+    # (indicating linear behavior)
+    linearity_scores = {}
+
+    for node_idx in range(RES.shape[1]):
+        node_outputs = RES[:, node_idx]
+
+        # Simple linearity check: coefficient of variation of outputs
+        cv = np.std(node_outputs) / (np.mean(np.abs(node_outputs)) + 1e-10)
+
+        if cv < 0.5:
+            linearity = "High"
+        elif cv < 1.5:
+            linearity = "Medium"
+        else:
+            linearity = "Low"
+
+        linearity_scores[f"node_{node_idx}"] = linearity
+
+    # Overall assessment
+    high_linearity_count = sum(1 for l in linearity_scores.values() if l == "High")
+    total_nodes = len(linearity_scores)
+
+    if high_linearity_count / total_nodes > 0.7:
+        overall_linearity = "High - perturbations likely sufficient"
+    elif high_linearity_count / total_nodes > 0.4:
+        overall_linearity = "Medium - test both approaches"
     else:
-        print_log(log_file, "No negligible inputs (all S1 ≥ 0.01)")
+        overall_linearity = "Low - full sampling recommended"
 
-    # Check for interactions
-    S2_nonzero = np.nansum(np.abs(data["S2"]) > 1e-3)
-    if S2_nonzero == 0:
-        print_log(log_file, "Interactions: None detected (all S2 < 1e-3)")
-    else:
-        print_log(
-            log_file,
-            f"Interactions: {S2_nonzero} significant interaction(s) detected (S2 > 1e-3)",
-        )
+    print(f"Overall model linearity: {overall_linearity}")
+    return overall_linearity
 
-    print("\nTotal-Order Sobol Indices (ST):")
-    for i, st in enumerate(data["ST"]):
-        conf = data["ST_conf"][i]
-        print_log(log_file, f"  {parameters[i]}: {st:.5f} ± {conf:.5f}")
-    print_log(log_file, "-" * 40)
+
+def report_sensitivity(res_dict, parameters, report_file):
+
+    with open(report_file, "w") as f:
+        f.write("====== SENSITIVITY REPORT ANALYSIS ======\n")
+        f.write(41 * "=")
+        f.write("\n")
+
+        for node, data in res_dict.items():
+
+            f.write(f"=== Sensitivity Report for Node {node} ===\n")
+            f.write("First-Order Sobol Indices (S1):\n")
+            for i, s1 in enumerate(data["S1"]):
+                conf = data["S1_conf"][i]
+                f.write(f"  {parameters[i]}: {s1:.5f} ± {conf:.5f}\n")
+
+            dominant_index = np.argmax(np.abs(data["S1"]))
+            f.write(
+                f"Dominant Input: {parameters[dominant_index]} (S1 = {data['S1'][dominant_index]:.5f})\n"
+            )
+
+            negligible = [
+                parameters[i] for i, s1 in enumerate(data["S1"]) if np.abs(s1) < 0.01
+            ]
+            if negligible:
+                f.write(f"Negligible Inputs (S1 < 0.01): {', '.join(negligible)}\n")
+            else:
+                f.write("No negligible inputs (all S1 ≥ 0.01)\n")
+
+            # Check for interactions
+            S2_nonzero = np.nansum(np.abs(data["S2"]) > 1e-3)
+            if S2_nonzero == 0:
+                f.write("Interactions: None detected (all S2 < 1e-3)\n")
+            else:
+                f.write(
+                    f"Interactions: {S2_nonzero} significant interaction(s) detected (S2 > 1e-3)\n",
+                )
+
+            f.write("Total-Order Sobol Indices (ST):\n")
+            for i, st in enumerate(data["ST"]):
+                conf = data["ST_conf"][i]
+                f.write(f"  {parameters[i]}: {st:.5f} ± {conf:.5f}\n")
+            f.write("=" * 41)
+            f.write("\n")
+
+
+def convergence_report(convergence_informations, report_file):
+    """
+    {
+        'C': {
+            'ci_half_width': {64: np.float64(0.24602364788674944),
+                     128: np.float64(0.20275722115655403)},
+            'converged_at': None,
+            'max_change': {64: inf, 128: np.float64(0.07043455196840663)}},
+    'Out1': {
+            'ci_half_width': {64: np.float64(0.30358699371699416),
+                        128: np.float64(0.18037084052882127)},
+            'converged_at': None,
+            'max_change': {64: inf, 128: np.float64(0.9703688240363703)}},
+    'Out2': {
+            'ci_half_width': {64: np.float64(0.2285240676628604),
+                        128: np.float64(0.16170909631137673)},
+            'converged_at': None,
+            'max_change': {64: inf, 128: np.float64(0.07642293347579533)}}}
+    """
+    # __import__("pprint").pprint(convergence_informations)
+
+    conv_info = []
+
+    for internal_node, convergence_data in convergence_informations.items():
+        conv_info.append((internal_node, convergence_data["converged_at"]))
+
+    __import__("pprint").pprint(conv_info)
+
+    not_conv = []
+
+    with open(report_file, "w") as f:
+
+        f.write("====== CONVERGENCE ANALYSIS ======\n")
+        f.write(41 * "=")
+        f.write("\n")
+
+        for node, c_at in conv_info:
+            if c_at is None:
+                not_conv.append(node)
+
+        if len(not_conv) >= 1:
+            f.write("[WARNING]: Not convergence detected whitin 4096 samples\n")
+            f.write(
+                "[WARNING]: There may be nodes with constant value or that do not converge\n"
+            )
+
+        f.write("=== NON_CONVERGENT NODES ===\n")
+        f.write(f"{','.join(not_conv)}\n")
+        f.write(41 * "=")
+        f.write("\n")
+
+        f.write("=== CONVERGENCE INFORMATION ===\n")
+
+        valid_values = []
+
+        for node, value in conv_info:
+            if value is not None:
+                valid_values.append((node, value))
+
+        if len(valid_values) != 0:
+            max_samples_size = np.nanmax([t[1] for t in valid_values])
+            f.write(
+                f" Max samples size to convergence whithin 4096: {max_samples_size}\n"
+            )
+        else:
+            f.write("All values are NaN. \nNo node reaches convergence\n")
+
+        f.write("=== Convergence values per node ===\n")
+        for node, value in conv_info:
+            f.write(f"  {node}:{value}\n")
+
+        f.write(41 * "=")
 
 
 def plot_convergence_single_plot(
-    convergence_informations, tol_change=0.01, tol_ci=0.05
+    convergence_informations, tol_change=0.01, tol_ci=0.05, file_name=None
 ):
     """
     Plot both metrics on a single plot with different line styles and colors.
@@ -300,12 +432,18 @@ def plot_convergence_single_plot(
     plt.title("Sobol Index Convergence Diagnostics - All Nodes")
     plt.xlabel("Base sample size N")
     plt.ylabel("Metric Value")
-    
+
     # Legenda sotto il grafico con più colonne per compattezza
     plt.legend(bbox_to_anchor=(0.5, -0.15), loc="upper center", ncol=3)
-    
+
     plt.grid(True, alpha=0.3)
     plt.yscale("log")
     plt.tight_layout()
-    plt.savefig("./imgs/Convergence_analysis.png", dpi=300, bbox_inches="tight")
+
+    if file_name is None:
+        plt.savefig("./imgs/Convergence_analysis.png", dpi=300, bbox_inches="tight")
+    else:
+        path = f"./imgs/{file_name}"
+        os.makedirs(path, exist_ok=True)
+        plt.savefig(f"{path}/Convergence_analysis.png", dpi=300, bbox_inches="tight")
     plt.close()  # Opzionale: libera la memoria

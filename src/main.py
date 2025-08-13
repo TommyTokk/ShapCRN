@@ -722,7 +722,7 @@ def main():
                         log_file, f"Error during samples results elaboration: {ae}"
                     )
 
-        elif args.command == "sensibility_analysis":
+        elif args.command == "sensitivity_analysis":
 
             # LOADING MODEL
             sbml_doc = sbml_ut.load_model(args.input_path)
@@ -739,7 +739,7 @@ def main():
 
             for s in sbml_model.getListOfSpecies():
                 if not s.getConstant():
-                    s.getId()
+                    all_species_ids.append(s.getId())
                 else:
                     continue
 
@@ -754,7 +754,7 @@ def main():
 
             spec = ProblemSpec(problem)
 
-            params = spec.sample(sobol_sample.sample, 2).samples
+            params = spec.sample(sobol_sample.sample, 4096).samples
 
             # RES = np.zeros([params.shape[0], len(internal_nodes)])
 
@@ -804,13 +804,14 @@ def main():
                 Si = sobol_analyze.analyze(problem, RES[:, j])
                 res_dict[node_id] = Si
 
-            # __import__("pprint").pprint(res_dict)
+                # __import__("pprint").pprint(res_dict)
 
-            for node, data in res_dict.items():
-                sens_ut.report_sensitivity(node, data, input_ids, log_file)
+                sens_ut.report_sensitivity(
+                    res_dict, input_ids, f"./report/{file_name}/sens_analysis"
+                )
 
             if args.check_convergence:
-                sample_sizes = [64, 128, 256, 1024, 2048, 4096]
+                sample_sizes = [64, 128, 256, 512, 1024, 2048, 4096]
 
                 informations_dict = {}
 
@@ -829,6 +830,8 @@ def main():
                         input_ids,
                         log_file,
                     )
+
+                    cv = sens_ut.assess_model_linearity(RES, size)
 
                     res_dict_conv = {}
 
@@ -852,9 +855,14 @@ def main():
                     relative=True,
                 )
 
-                __import__("pprint").pprint(convergence_informations)
+                sens_ut.convergence_report(
+                    convergence_informations,
+                    f"./report/{file_name}/convergence_analysis",
+                )
 
-                sens_ut.plot_convergence_single_plot(convergence_informations)
+                sens_ut.plot_convergence_single_plot(
+                    convergence_informations, file_name=file_name
+                )
 
         elif args.command == "knockout_species":
             sbml_doc = sbml_ut.load_model(args.input_path)
@@ -934,6 +942,7 @@ def main():
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
             dir_name = os.path.dirname(args.input_path)
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
             file_name = os.path.basename(args.input_path)
 
             species_list = sbml_ut.get_list_of_species(sbml_model)
