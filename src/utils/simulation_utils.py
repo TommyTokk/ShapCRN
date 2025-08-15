@@ -53,6 +53,10 @@ def load_roadrunner_model(
     # Setting the relative and absolute tolerance of the model
     rr_model.getIntegrator().setValue("relative_tolerance", rel_tol)
     rr_model.getIntegrator().setValue("absolute_tolerance", abs_tol)
+    rr_model.integrator.variable_step_size = True
+    
+
+    #rr_model.getIntegrator().setValue('stiff', True)
 
     # Setting the integrator if necessary
     if integrator is not None:
@@ -275,11 +279,15 @@ def process_species_no_samples(args):
             log_file,
         ) = args
 
+        print_log(log_file, knockedout_species)
+
         print_log(log_file, f"Starting processing: {knockedout_species}")
 
         modified_rr = load_roadrunner_model(
             modified_model, integrator=integrator, log_file=log_file
         )
+
+        #__import__('pprint').pprint(modified_rr.relative_tolerance)
 
         modified_rr.selections = selections
 
@@ -297,7 +305,7 @@ def process_species_no_samples(args):
 
         return (knockedout_species, knockout_model_results)
     except Exception as e:
-        raise Exception(f"Error during processing species:\n Error: {e}")
+        raise Exception(f"Error during processing species :\n Error: {e}")
 
 
 def process_species_multiprocessing(
@@ -374,7 +382,7 @@ def process_species_multiprocessing(
             # Running the workers
             result = pool.map(operation, process_args)
     except Exception as e:
-        print_log(log_file, f"Critical error in multiprocessing: {e}")
+        print_log(log_file, f"Critical error in multiprocessing : {e}")
         return []
 
     return result

@@ -106,8 +106,10 @@ def main():
             # Split all the reversible reactions in two different reactions
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
+            # Getting the model name
             file_name = os.path.basename(args.input_path)
 
+            #
             input_species_ids = args.input_species
 
             if args.target_ids is None:

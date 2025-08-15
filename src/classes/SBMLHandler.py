@@ -54,10 +54,38 @@ class SBMLHandler:
         self.document = doc
         return True
 
-    def get_model(self) -> libsbml.Model:
-        model_copy = self.model.copy()
+    # === SPECIES HANDLER ===
 
-        return model_copy
+    def get_list_of_species_ids(self):
+        return [s.getId() for s in self.model.getListOfSpecies()]  # pyright: ignore
+
+    def get_list_of_species_names(self):
+        return [s.getName() for s in self.model.getListOfSpecies()]  # pyright: ignore
+
+    def knockout_species(self, target_species_id):
+        pass
+
+    # === REACTIONS HANDLER ===
+
+    def get_list_of_reactions(self):
+        return self.model.getListOfReactions()  # pyright: ignore
+
+    def get_list_of_reaction_ids(self):
+        return [r.getId() for r in self.model.getListOfReactions()]  # pyright: ignore
+
+    def get_list_of_reaction_names(self):
+        return [r.getName() for r in self.model.getListOfReactions()]  # pyright: ignore
+
+    def get_list_of_reversible_reactions(self):
+        reactions = self.get_list_of_reactions()
+
+        res = []
+
+        for r in reactions:
+            if r.getReversible():
+                res.append(r)
+
+        return res
 
     # === PRIVATE ===
 
