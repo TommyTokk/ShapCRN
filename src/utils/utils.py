@@ -141,6 +141,12 @@ def parse_args():
         help="Run the analysis using inputs' perturbations",
     )
     simulate_samples_parser.add_argument(
+        "-fp",
+        "--fixed-perturbations",
+        nargs="+",
+        help="Perturbation percentages to use in fixed samples combination (WARNING: The number of samples will be equal to the number of parameters)",
+    )
+    simulate_samples_parser.add_argument(
         "--perturbations-importance",
         action="store_true",
         default=False,

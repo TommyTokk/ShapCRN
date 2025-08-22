@@ -133,18 +133,27 @@ def main():
             combinations = None
 
             if args.use_perturbations:
-                ut.print_log(log_file, "Running with samples generations")
-                # Generate the samples
-                samples = sbml_ut.generate_species_samples(
-                    sbml_model,
-                    target_species=input_species_ids,
-                    log_file=log_file,
-                    n_samples=args.num_samples,
-                    variation=args.variation,
-                )
+                if args.fixed_perturbations is None:
+                    ut.print_log(log_file, "Running with random samples generations")
+                    # Generate the samples
+                    samples = sbml_ut.generate_species_samples(
+                        sbml_model,
+                        target_species=input_species_ids,
+                        log_file=log_file,
+                        n_samples=args.num_samples,
+                        variation=args.variation,
+                    )
 
-                # Create the combinations
-                combinations = sbml_ut.create_samples_combination(samples, log_file)
+                    # Create the combinations
+                    combinations = sbml_ut.create_samples_combination(samples, log_file)
+                else:
+                    ut.print_log(log_file, "Running with fixed samples generations")
+                    fp = [int(p) for p in args.fixed_perturbations]
+
+                    combinations = sbml_ut.get_fixed_combinations(
+                        sbml_model, input_species_ids, fp, log_file
+                    )
+
             else:
                 ut.print_log(log_file, "Running without samples generations")
             # Load the model
@@ -185,18 +194,36 @@ def main():
             )
 
             if args.use_perturbations:
-                # Simulate the original model with samples
-                ut.print_log(log_file, "Simulating original model with samples")
-                samples_simulations_results, _ = sim_ut.simulate_combinations(
-                    rr,
-                    combinations,
-                    input_species_ids,
-                    min_ss_time,
-                    args.time,
-                    args.max_time,
-                    steady_state,
-                    log_file,
-                )
+                if args.fixed_perturbations is None:
+                    # Simulate the original model with samples
+                    ut.print_log(
+                        log_file, "Simulating original model with random samples"
+                    )
+                    samples_simulations_results, _ = sim_ut.simulate_combinations(
+                        rr,
+                        combinations,
+                        input_species_ids,
+                        min_ss_time,
+                        args.time,
+                        args.max_time,
+                        steady_state,
+                        log_file,
+                    )
+                else:
+                    ut.print_log(
+                        log_file, "Simulating original model with fixed perturbations"
+                    )
+
+                    samples_simulations_results, _ = sim_ut.simulate_combinations(
+                        rr,
+                        combinations,
+                        input_species_ids,
+                        min_ss_time,
+                        args.time,
+                        args.max_time,
+                        steady_state,
+                        log_file,
+                    )
 
                 ut.print_log(
                     log_file, "Getting simulations informations of the original model"
