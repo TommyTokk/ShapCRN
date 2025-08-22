@@ -511,14 +511,13 @@ def plot_all_simulation_traces(
     plt.close()
 
 
-def plot_variations_heatmap(
+def plot_variations_heatmap_relative(
     heatmap_data,
     all_species,
     ko_species_list,
     figsize=(12, 8),
-    cmap="RdBu_r",
+    cmap="PiYG_r",
     save_path="./imgs",
-    variation_type="relative",
     show_averages=True,
     title=None,
     imgs_name=None,
@@ -567,7 +566,7 @@ def plot_variations_heatmap(
 
     # Color scale limits - now safe to use .max() and .min()
     vmax = valid_data.max()
-    vmin = 0 if variation_type.lower() == "relative" else valid_data.min()
+    vmin = 0
 
     # Log data range for debugging
     if log_file:
@@ -599,14 +598,14 @@ def plot_variations_heatmap(
     # Add colorbar
     cbar = plt.colorbar(im, shrink=0.8)
     cbar.set_label(
-        f"Mean {'Relative' if variation_type.lower() == 'relative' else ''} Variation",
+        f"Mean relative Variation",
         rotation=270,
         labelpad=20,
     )
 
     # Title
     if title is None:
-        title = f"Species Variations Heatmap\n(Mean {'relative' if variation_type.lower() == 'relative' else ''} variation across all combinations)"
+        title = f"Species Variations Heatmap\n(Mean relative variation across all combinations)"
     plt.title(title, fontsize=14, fontweight="bold", pad=20)
 
     plt.xlabel("Species", fontweight="bold")
@@ -621,7 +620,130 @@ def plot_variations_heatmap(
             plt.savefig(
                 os.path.join(
                     save_path,
-                    f"{'Relative variation' if variation_type.lower() == 'relative' else 'Variation'} Heatmap.png",
+                    "Relative variations Heatmap.png",
+                )
+            )
+        else:
+            plt.savefig(
+                os.path.join(
+                    save_path,
+                    f"{imgs_name} Heatmap.png",
+                )
+            )
+
+    plt.close()
+
+
+def plot_variations_heatmap_absolute(
+    heatmap_data,
+    all_species,
+    ko_species_list,
+    figsize=(12, 8),
+    cmap="PRGn_r",
+    save_path="./imgs",
+    show_averages=True,
+    title=None,
+    imgs_name=None,
+    log_file=None,
+):
+    """
+    Create a heatmap visualization of species variations across knockouts,
+    with visible grid lines between cells.
+
+    Args:
+        variations_dict: Dict returned by get_simulations_variations
+        figsize: Figure size tuple (default: (12, 8))
+        cmap: Colormap for heatmap (default: "RdBu")
+        save_path: Path to save the plot (optional)
+        show_averages: Whether to show average variations (default: True)
+        title: Custom title for the plot (optional)
+    """
+
+    # Validate heatmap_data before proceeding
+    if heatmap_data.size == 0:
+        print("Error: Heatmap data is empty. No data to visualize.")
+        if log_file:
+            print_log(log_file, "Error: Heatmap data is empty. No data to visualize.")
+        return
+
+    # Check for all NaN values
+    if np.all(np.isnan(heatmap_data)):
+        print("Error: All heatmap data values are NaN. No valid data to visualize.")
+        if log_file:
+            print_log(
+                log_file,
+                "Error: All heatmap data values are NaN. No valid data to visualize.",
+            )
+        return
+
+    # Check if we have valid data for visualization
+    valid_data = heatmap_data[~np.isnan(heatmap_data)]
+    if len(valid_data) == 0:
+        print("Error: No valid (non-NaN) data points found.")
+        if log_file:
+            print_log(log_file, "Error: No valid (non-NaN) data points found.")
+        return
+
+    # Create the figure
+    plt.figure(figsize=figsize)
+
+    # Color scale limits - now safe to use .max() and .min()
+    vmax = valid_data.max()
+    vmin = valid_data.min()
+
+    # Log data range for debugging
+    if log_file:
+        print_log(log_file, f"Heatmap data shape: {heatmap_data.shape}")
+        print_log(log_file, f"Valid data points: {len(valid_data)}/{heatmap_data.size}")
+        print_log(log_file, f"Data range: {vmin:.10f} to {vmax:.10f}")
+
+    masked_data = np.ma.masked_invalid(heatmap_data)
+    cmap = plt.get_cmap(cmap).copy()
+    cmap.set_bad(color="black")  # Optional: makes NaNs visible
+
+    # Draw the heatmap
+    im = plt.imshow(masked_data, cmap=cmap, aspect="auto", vmin=vmin, vmax=vmax)
+
+    # Set x- and y-axis labels
+    plt.xticks(range(len(all_species)), all_species, rotation=45, ha="right")
+    plt.yticks(range(len(ko_species_list)), ko_species_list)
+
+    # Add separating lines between cells:
+    ax = plt.gca()
+    # Set minor ticks at -0.5, 0.5, 1.5, ..., up to the number of species
+    ax.set_xticks(np.arange(-0.5, len(all_species), 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(ko_species_list), 1), minor=True)
+    # Draw the grid using the minor ticks
+    ax.grid(which="minor", color="gray", linestyle="-", linewidth=0.5)
+    # Remove minor tick markers (actual ticks are not needed)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    # Add colorbar
+    cbar = plt.colorbar(im, shrink=0.8)
+    cbar.set_label(
+        f"Mean Variation",
+        rotation=270,
+        labelpad=20,
+    )
+
+    # Title
+    if title is None:
+        title = f"Species Variations Heatmap\n(Mean variation across all combinations)"
+    plt.title(title, fontsize=14, fontweight="bold", pad=20)
+
+    plt.xlabel("Species", fontweight="bold")
+    plt.ylabel("Knocked Out Ids", fontweight="bold")
+
+    plt.tight_layout()
+
+    # Save if specified
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        if imgs_name is None:
+            plt.savefig(
+                os.path.join(
+                    save_path,
+                    f"Variations Heatmap.png",
                 )
             )
         else:

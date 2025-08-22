@@ -224,8 +224,6 @@ def main():
                         steady_state,
                         log_file,
                     )
-                plt_ut.plot_boxplot_distribution(samples_simulations_results, file_name)
-                exit(1)
                 ut.print_log(
                     log_file, "Getting simulations informations of the original model"
                 )
@@ -363,7 +361,9 @@ def main():
                     all_species = set()
                     ko_species_list = list(variation_dict.keys())
 
-                    # Getting the informations about the original relative variations
+                    is_rel = False
+
+                    # Getting the informations about the original variations
                     no_samples_relative_map, all_species_rel = (
                         sim_ut.get_no_samples_variations(
                             variation_dict,
@@ -426,21 +426,19 @@ def main():
                     )
 
                     # Heatmap plotting
-                    plt_ut.plot_variations_heatmap(
+                    plt_ut.plot_variations_heatmap_relative(
                         samples_log_relative_map,
                         all_species_rel,
                         ko_species_list,
                         save_path=f"./imgs/{file_name}",
-                        variation_type="relative",
                         title="Log relative variations with samples",
                     )
 
-                    plt_ut.plot_variations_heatmap(
+                    plt_ut.plot_variations_heatmap_absolute(
                         samples_log_absolute_map,
                         all_species_abs,
                         ko_species_list,
                         save_path=f"./imgs/{file_name}",
-                        variation_type="absolute",
                         title="Log absolute variations with samples",
                     )
 
@@ -516,19 +514,21 @@ def main():
                         )
 
                         # Plotting the distance of log normalized matrices
-                        plt_ut.plot_variations_heatmap(
+                        plt_ut.plot_variations_heatmap_relative(
                             relative_values_distance,
                             all_species_rel,
                             ko_species_list,
+                            cmap="BrBG_r",
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                             title="Perturbations VS No Perturbations Distance",
                             imgs_name="Perturbations VS No Perturbations distance",
                         )
 
-                        plt_ut.plot_variations_heatmap(
+                        plt_ut.plot_variations_heatmap_absolute(
                             absolute_values_distance,
                             all_species_abs,
                             ko_species_list,
+                            cmap="BrBG_r",
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis absolute",
                             title="Perturbations VS No Perturbations Distance absolute",
                             imgs_name="Perturbations VS No Perturbations distance absolute",
@@ -566,10 +566,11 @@ def main():
                         )
 
                         # Plotting the pattern distnace's matrix
-                        plt_ut.plot_variations_heatmap(
+                        plt_ut.plot_variations_heatmap_relative(
                             relative_pattern_distance,
                             all_species_rel,
                             ko_species_list,
+                            cmap="PuOr_r",
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                             title="Relative patterns distance's heatmap",
                             imgs_name="Relative pattern distance's heatmap",
@@ -701,10 +702,11 @@ def main():
                         )
 
                         # Plotting the distance of log normalized matrices
-                        plt_ut.plot_variations_heatmap(
+                        plt_ut.plot_variations_heatmap_relative(
                             fixed_relative_values_distance,
                             fixed_all_species_rel,
                             ko_species_list,
+                            cmap="PuOr_r",
                             save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
                             title="Random Perturbations VS Fixed Perturbations Distance",
                             imgs_name="Random Perturbations VS Fixed Perturbations distance",
@@ -743,10 +745,11 @@ def main():
                         )
 
                         # Plotting the pattern distance's matrix
-                        plt_ut.plot_variations_heatmap(
+                        plt_ut.plot_variations_heatmap_relative(
                             fixed_pattern_distance,
                             fixed_all_species_rel,
                             ko_species_list,
+                            cmap="BrBG_r",
                             save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
                             title="Fixed perturbations patterns distance's heatmap",
                             imgs_name="Fixed perturbations pattern distance's heatmap",
