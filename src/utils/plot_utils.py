@@ -6,11 +6,15 @@ import numpy as np
 
 import pandas as pd
 
-import os  # needed for saving
+import os
+
+from pandas.core.generic import pprint_thing  # needed for saving
 
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+
+import seaborn as sns
 
 from utils.utils import print_log
 
@@ -354,81 +358,91 @@ def plot_percentage_variation(
 
 def plot_boxplot_distribution(
     perturbed_array,
-    time,
-    target_species,
-    species_dir,
+    model_name,
     num_timepoints=5,
-    original_data=None,
+    save_path="./imgs",
+    filename="boxplot_distribution",
 ):
     """
     Create boxplots showing the distribution of simulation values at selected timepoints.
 
     Args:
         perturbed_array: Array containing all simulation results for the species
-        time: Time points array
-        target_species: Name of the species being analyzed
-        species_dir: Directory to save the plot
         num_timepoints: Number of timepoints to sample for the boxplots (default: 5)
-        original_data: Optional array with original simulation data (default: None)
+        save_path: Directory to save the plot (default: "./imgs")
+        filename: Name of the saved file (default: "boxplot_distribution")
     """
+    # Extract time and column names from the first simulation
+    time = perturbed_array[0][:, 0]
+    colnames = perturbed_array[0].colnames[1:]
+
+    print(f"Time points shape: {time.shape}")
+    print(f"Species columns: {colnames}")
+
     # Select timepoints evenly distributed across the simulation
     indices = np.linspace(0, len(time) - 1, num_timepoints, dtype=int)
     selected_times = time[indices]
 
-    # Extract data at selected timepoints
-    data_at_timepoints = [perturbed_array[:, idx] for idx in indices]
+    print(f"Selected time indices: {indices}")
+    print(f"Selected times: {selected_times}")
 
-    plt.figure(figsize=(12, 8))
+    # Calculate means for each simulation across all species
+    all_simulations_means = [np.mean(arr[:, 1:], axis=0) for arr in perturbed_array]
+
+    # Create pandas DataFrame using colnames as column names and all_simulations_means as data
+    df = pd.DataFrame(all_simulations_means, columns=colnames)
+
+    print(f"DataFrame shape: {df.shape}")
+    print(f"DataFrame columns: {df.columns.tolist()}")
+    print("DataFrame head:")
+    print(df.head())
+
+    # Set seaborn theme
+    sns.set_theme(style="whitegrid")
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Melt the DataFrame to long format for seaborn boxplot
+    df_melted = df.melt(var_name="Species", value_name="Mean_Concentration")
+
+    print(f"Melted DataFrame shape: {df_melted.shape}")
+    print("Melted DataFrame head:")
+    print(df_melted.head())
 
     # Create boxplot
-    box = plt.boxplot(data_at_timepoints, patch_artist=True)
-
-    # Customize boxplot colors
-    for patch in box["boxes"]:
-        patch.set_facecolor("lightblue")
-
-    # Add a line for the legend entry (invisible, just for the legend)
-    plt.plot([], [], "lightblue", linewidth=10, label="Simulation distribution")
-
-    # Add original data points if provided
-    if original_data is not None:
-        original_values = original_data[indices]
-        plt.scatter(
-            range(1, num_timepoints + 1),
-            original_values,
-            color="blue",
-            marker="o",
-            s=80,
-            label="Original value",
-        )
-
-    # Set labels for x-axis with selected time points
-    plt.xticks(range(1, num_timepoints + 1), [f"t={t:.2f}" for t in selected_times])
-
-    plt.xlabel("Time")
-    plt.ylabel("Concentration")
-    plt.title(f"{target_species} - Distribution of Values Across Simulations")
-    plt.grid(True, alpha=0.3)
-
-    # Add simple legend like in plot_percentage_variation
-    plt.legend()
-
-    # Add a text with statistics in the corner
-    stats_text = "Statistics per timepoint:\n"
-    for i, data in enumerate(data_at_timepoints):
-        stats_text += f"t={selected_times[i]:.2f}: mean={np.mean(data):.4f}, "
-        stats_text += f"std={np.std(data):.4f}\n"
-
-    plt.figtext(
-        0.02,
-        0.02,
-        stats_text,
-        fontsize=8,
-        bbox=dict(facecolor="white", alpha=0.5, boxstyle="round"),
+    sns.boxplot(
+        data=df_melted, x="Species", y="Mean_Concentration", ax=ax, palette="viridis"
     )
 
+    # Customize the plot
+    ax.set_title(
+        "Distribution of Mean Concentrations Across Simulations",
+        fontsize=14,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Species", fontsize=12, fontweight="bold")
+    ax.set_ylabel("Mean Concentration", fontsize=12, fontweight="bold")
+
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha="right")
+
+    # Add grid for better readability
+    ax.grid(True, alpha=0.3)
+
+    # Adjust layout to prevent label cutoff
     plt.tight_layout()
-    plt.savefig(os.path.join(species_dir, f"{target_species}_boxplot_distribution.png"))
+
+    # Save the plot
+    save_path = os.path.join(save_path, model_name)
+    os.makedirs(save_path, exist_ok=True)
+    save_file = os.path.join(save_path, f"{filename}.png")
+    plt.savefig(save_file, dpi=300, bbox_inches="tight")
+
+    print(f"Boxplot saved to: {save_file}")
+
+    # Show the plot
+    plt.show()
     plt.close()
 
 

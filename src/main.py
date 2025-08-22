@@ -224,7 +224,8 @@ def main():
                         steady_state,
                         log_file,
                     )
-
+                plt_ut.plot_boxplot_distribution(samples_simulations_results, file_name)
+                exit(1)
                 ut.print_log(
                     log_file, "Getting simulations informations of the original model"
                 )
