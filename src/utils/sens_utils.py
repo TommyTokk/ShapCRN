@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 from SALib.sample import sobol as sobol_sample
 from multiprocessing import Pool
 
+from scipy import stats
+
 
 def get_problem_parameters(
     sbml_model, n_input_species, input_species_ids, range=20, log_file=None
@@ -67,10 +69,11 @@ def run_simulation_with_params(
 
         idx = 0
 
-        for el in valid_elements:
+        # __import__("pprint").pprint(valid_elements)
+        for j, el in enumerate(valid_elements):
             s_idx = valid_idxs[el]
             # print_log(log_file, f"{el} - {idx} - {s_idx} - {colnames.index(el)}")
-            RES[i, idx] = sim_res[-1, s_idx]
+            RES[i, j] = sim_res[-1, s_idx]
 
             idx += 1
 
@@ -447,3 +450,63 @@ def plot_convergence_single_plot(
         os.makedirs(path, exist_ok=True)
         plt.savefig(f"{path}/Convergence_analysis.png", dpi=300, bbox_inches="tight")
     plt.close()  # Opzionale: libera la memoria
+
+
+def convergence_analysis(random_samples, fixed_samples):
+    """
+    Analyze how random samples converge compared to fixed samples
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    for node in range(3):
+        random_node = random_samples[:, node]
+        fixed_node = fixed_samples[:, node]
+
+        # Running mean of random samples
+        running_mean = np.cumsum(random_node) / np.arange(1, len(random_node) + 1)
+        fixed_mean = np.mean(fixed_node)
+
+        # Plot convergence
+        axes[node].plot(running_mean, label="Random (running mean)", alpha=0.8)
+        axes[node].axhline(
+            y=fixed_mean,
+            color="red",
+            linestyle="--",
+            label=f"Fixed mean ({fixed_mean:.4f})",
+        )
+        axes[node].set_title(f"Node {node} - Convergence Analysis")
+        axes[node].set_xlabel("Sample number")
+        axes[node].set_ylabel("Running mean")
+        axes[node].legend()
+        axes[node].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def statistical_tests(random_samples, fixed_samples):
+    """
+    Perform statistical tests to compare distributions
+    """
+    print("=== STATISTICAL TESTS ===")
+
+    for node in range(3):
+        random_node = random_samples[:, node]
+        fixed_node = fixed_samples[:, node]
+
+        print(f"--- Node {node} ---")
+
+        # Two-sample t-test
+        t_stat, t_pval = stats.ttest_ind(random_node, fixed_node)
+        print(f"T-test: t-statistic = {t_stat:.4f}, p-value = {t_pval:.2e}")
+
+        # Kolmogorov-Smirnov test
+        ks_stat, ks_pval = stats.ks_2samp(random_node, fixed_node)
+        print(f"KS-test: statistic = {ks_stat:.4f}, p-value = {ks_pval:.2e}")
+
+        # Mann-Whitney U test (non-parametric)
+        mw_stat, mw_pval = stats.mannwhitneyu(
+            random_node, fixed_node, alternative="two-sided"
+        )
+        print(f"Mann-Whitney U: statistic = {mw_stat:.0f}, p-value = {mw_pval:.2e}")
+        print()

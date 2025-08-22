@@ -49,7 +49,8 @@ def main():
         if args.command == "simulate":
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
+            sbml_model = sbml_doc.getModel()
+            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
             file_name = os.path.basename(args.input_path)
 
             # sbml_ut.split_reversible_reactions(sbml_model, log_file)
@@ -109,22 +110,26 @@ def main():
             # Getting the model name
             file_name = os.path.basename(args.input_path)
 
-            #
+            # Getting the input species ids
             input_species_ids = args.input_species
 
             if args.target_ids is None:
+                # If no input species are provided all nodes will be used
                 target_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
             else:
+                # Else only the provided ones will be used
                 target_ids = args.target_ids
 
             if args.preserve_inputs:
+                # Removing the input species from the species to analyze
                 target_ids = list(set(target_ids) - set(input_species_ids))
 
-            target_ids.sort()
+            # target_ids.sort()
 
             # Get the list of species
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
+            # Init the combinations array
             combinations = None
 
             if args.use_perturbations:
@@ -745,7 +750,7 @@ def main():
                 else:
                     continue
 
-            internal_nodes = list(set(all_species_ids) - set(input_ids))
+            internal_nodes = list(set(all_species_ids))  # - set(input_ids))
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
@@ -781,7 +786,7 @@ def main():
             available_needed_selections = [sel for (_, sel) in available_pairs]
 
             ut.print_log(
-                log_file, f"Available internal nodes: {available_internal_nodes}"
+                log_file, f"Available internal nodes: {available_needed_selections}"
             )
 
             start = time.perf_counter()
@@ -800,6 +805,62 @@ def main():
             end = time.perf_counter()
 
             ut.print_log(log_file, f"Time: {end - start}")
+
+            # Running the fixed simulations
+
+            fp = [int(p) for p in args.fixed_perturbations]
+
+            fixed_combinations = sbml_ut.get_fixed_combinations(
+                sbml_model, input_ids, fp, log_file
+            )
+
+            # __import__("pprint").pprint(fixed_combinations)
+
+            fixed_samples_results, _ = sim_ut.simulate_combinations(
+                rr,
+                fixed_combinations,
+                input_ids,
+                1000,
+                5000,
+                5000,
+                False,
+                log_file,
+            )
+
+            FIXED_RES = np.zeros(
+                [
+                    np.array(fixed_combinations).shape[0],
+                    len(available_needed_selections),
+                ]
+            )
+
+            for i, fc in enumerate(fixed_combinations):
+                sim = fixed_samples_results[i]
+                idx = 0
+
+                for j, el in enumerate(available_needed_selections):
+                    s_idx = selection_to_idx[el]
+                    FIXED_RES[i, j] = sim[-1, s_idx]
+                    idx += 1
+
+            __import__("pprint").pprint(f"{RES.shape} | {FIXED_RES.shape}")
+
+            fixed_mean = np.mean(FIXED_RES, axis=0)
+            fixed_std = np.std(FIXED_RES, axis=0)
+
+            random_std = np.std(RES, axis=0)
+            random_mean = np.mean(RES, axis=0)
+
+            mean_diff = np.abs(fixed_mean - random_mean)
+
+            normalized_diff = mean_diff / random_std
+
+            sens_ut.convergence_analysis(RES, FIXED_RES)
+            sens_ut.statistical_tests(RES, FIXED_RES)
+
+            __import__("pprint").pprint(
+                f"fixed mean: {fixed_mean} | random_mean{random_mean} | mean diff: {mean_diff} | normalized diff: {normalized_diff}"
+            )
 
             for j, node_id in enumerate(available_internal_nodes):
 
@@ -884,13 +945,13 @@ def main():
             )
 
             # Inhibit the species
-            modified_model = sbml_ut.knockout_species(
-                sbml_model, args.species_id, log_file
-            )
-
-            # modified_model, r = sbml_ut.knockout_species_via_reaction(
+            # modified_model = sbml_ut.knockout_species(
             #     sbml_model, args.species_id, log_file
             # )
+
+            modified_model, r = sbml_ut.knockout_species_via_reaction(
+                sbml_model, args.species_id, log_file
+            )
 
             # if r is None:
             #     raise Exception("Knockout species failed")
@@ -918,7 +979,7 @@ def main():
             sbml_model = sbml_doc.getModel()
             file_name = os.path.basename(args.input_path)
 
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
             ut.print_log(
                 log_file,

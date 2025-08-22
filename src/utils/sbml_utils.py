@@ -260,10 +260,10 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
 
     # Create the new product species
 
-    p_species = sbml_model.createSpecies()
-    p_species.setId(f"ko_{target_species_id}")
-    p_species.setCompartment(species.getCompartment())
-    p_species.setInitialConcentration(0)
+    # p_species = sbml_model.createSpecies()
+    # p_species.setId(f"ko_{target_species_id}")
+    # p_species.setCompartment(species.getCompartment())
+    # p_species.setInitialConcentration(0)
     # p_species.setStoichiometry(1)
 
     # Create the new reaction
@@ -280,9 +280,9 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
 
     # Create the product
     prod = new_reaction.createProduct()
-    prod.setSpecies(p_species.getId())
-    prod.setStoichiometry(1)
-    prod.setConstant(False)
+    # prod.setSpecies(p_species.getId())
+    # prod.setStoichiometry(1)
+    # prod.setConstant(False)
 
     # Create the kinetic law of the new reaction
     kl_deactivation = new_reaction.createKineticLaw()
@@ -820,6 +820,13 @@ def generate_species_samples(
     n_samples=5,
     variation=20,
 ):
+    """
+    Generate the input samples
+    Args:
+        - sbml_model: SBML model instance
+        - target_species: List of species for samples creation
+        -
+    """
     res = []
 
     for ts in target_species:
@@ -857,10 +864,10 @@ def generate_species_samples(
 
             sample = rng.uniform(lower_bound, upper_bound)
 
-            print_log(
-                log_file,
-                f"[GENERATE_SAMPLES] t0:value: {t0_conc} | lower-bound: {lower_bound} | upper-bound: {upper_bound} | sample: {sample}",
-            )
+            # print_log(
+            #     log_file,
+            #     f"[GENERATE_SAMPLES] t0:value: {t0_conc} | lower-bound: {lower_bound} | upper-bound: {upper_bound} | sample: {sample}",
+            # )
 
             tmp.append(sample)
 
@@ -929,10 +936,10 @@ def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file
             # Apply percentage variations (same as before but with better logging)
             for v in sorted(fixed_variations):
                 sample = t0_conc + (t0_conc * v / 100)
-                print_log(
-                    log_file,
-                    f"[FIXED_COMBINATIONS] Species: {s_id} | t0_value: {t0_conc} | variation: {v}% | sample: {sample}",
-                )
+                # print_log(
+                #     log_file,
+                #     f"[FIXED_COMBINATIONS] Species: {s_id} | t0_value: {t0_conc} | variation: {v}% | sample: {sample}",
+                # )
                 tmp.append(sample)
 
         samples.append(tmp)
