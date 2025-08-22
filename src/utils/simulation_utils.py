@@ -532,9 +532,11 @@ def get_knockout_variations_samples(
                     # Getting the relative variation
                     # If original_value is too small use epsilon
                     # Avoid division by 0
-                    relative_variation = (ko_value - original_val) / np.maximum(
-                        np.abs(original_val), epsilon
-                    )
+
+                    if original_val > epsilon:
+                        relative_variation = (ko_value - original_val) / original_val
+                    else:
+                        relative_variation = np.inf
 
                     print_log("G_KO_V", f"      variation:{ko_value} - {original_val}: {variation}")
                     print_log("G_KO_V", f"      relative-variation:({ko_value} - {original_val})/{np.maximum(
@@ -1377,6 +1379,9 @@ def get_no_samples_variations(
         for j, species in enumerate(all_species):
             # If relative variation required
             if variation_type.lower() == "relative":
+                if np.isinf(no_sample_combinations[species]["relative-variation"]):
+                    raise ZeroDivisionError
+                
                 res_matrix[i, j] = np.sqrt(
                     no_sample_combinations[species]["relative-variation"] ** 2
                 )
