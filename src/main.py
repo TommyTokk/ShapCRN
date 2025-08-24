@@ -224,6 +224,9 @@ def main():
                         steady_state,
                         log_file,
                     )
+
+                plt_ut.plot_all_simulation_traces_interactive(original_results, samples_simulations_results, colnames, input_species_ids, model_name=file_name)
+
                 ut.print_log(
                     log_file, "Getting simulations informations of the original model"
                 )
@@ -311,18 +314,17 @@ def main():
 
                 log_abs_map = np.log(abs_map + 1)
 
-                plt_ut.plot_variations_heatmap(
+                plt_ut.plot_variations_heatmap_relative(
                     log_rel_map,
                     all_species_rel,
                     ko_species_list,
                     title="Relative log variations heatmap",
                 )
 
-                plt_ut.plot_variations_heatmap(
+                plt_ut.plot_variations_heatmap_absolute(
                     log_abs_map,
                     all_species_abs,
                     ko_species_list,
-                    variation_type="absolute",
                     title="Absolute log variations heatmap",
                 )
 
@@ -362,7 +364,6 @@ def main():
                     ko_species_list = list(variation_dict.keys())
 
                     # First try with the relative variation
-
                     try:
                         # Getting the informations about the original variations
                         no_samples_relative_map, all_species_rel = (
@@ -692,7 +693,6 @@ def main():
                                 title="Fixed perturbations patterns distance's heatmap",
                                 imgs_name="Fixed perturbations pattern distance's heatmap",
                             )
-
                     except ZeroDivisionError:
                         # Switch to absolute
                         ut.print_log(

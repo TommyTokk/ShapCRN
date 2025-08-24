@@ -455,9 +455,10 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
 
                 # Getting the relative variation
                 # Check if dividing by 0, if yes using epsilon instead
-                relative_variation = (ko_val - original_val) / np.maximum(
-                    np.abs(original_val), epsilon
-                )
+                if original_val > epsilon:
+                    relative_variation = (ko_val - original_val) / original_val
+                else:
+                    relative_variation = np.inf
 
                 # Load the data in the dictionary
                 variations_dict[ko_species][species] = {
