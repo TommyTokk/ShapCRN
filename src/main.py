@@ -24,6 +24,8 @@ from SALib.sample import sobol as sobol_sample
 from SALib.analyze import sobol as sobol_analyze
 from SALib.util import ProblemSpec
 
+from scipy.special import factorial
+
 
 # Add the src folder path to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -112,24 +114,22 @@ def main():
 
             # Getting the input species ids
             input_species_ids = args.input_species
-            
+
             # Get the list of species
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
-            if args.target_ids is None:
+            if args.knockout is None:
                 # If no input species are provided all nodes will be used
-                target_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+                ids_to_ko = [s.getId() for s in sbml_model.getListOfSpecies()]
             else:
                 # Else only the provided ones will be used
-                target_ids = args.target_ids
+                ids_to_ko = args.knockout
 
             if args.preserve_inputs:
                 # Removing the input species from the species to analyze
-                target_ids = list(set(target_ids) - set(input_species_ids))
+                ids_to_ko = list(set(ids_to_ko) - set(input_species_ids))
 
-            target_ids.sort()
-
-            
+            ids_to_ko.sort()
 
             # Init the combinations array
             combinations = None
@@ -170,7 +170,7 @@ def main():
                     selections.append(f"[{s}]")
 
             # Add also the reactions in the selections if target
-            for ts in target_ids:
+            for ts in ids_to_ko:
                 if ts in sbml_model.getListOfReactions().getId():
                     selections.append(f"{ts}")
 
@@ -256,7 +256,7 @@ def main():
 
             # Create a dict of the ko models
             model_dict = sbml_ut.create_ko_models(
-                target_ids, sbml_model, sbml_str, log_file
+                ids_to_ko, sbml_model, sbml_str, log_file
             )
 
             # counter = 0
@@ -264,7 +264,7 @@ def main():
             start_time = time.perf_counter()
 
             knockout_data = sim_ut.process_species_multiprocessing(
-                target_ids,
+                ids_to_ko,
                 model_dict,
                 combinations,
                 input_species_ids,
@@ -289,6 +289,19 @@ def main():
 
             end_time = time.perf_counter()
 
+            # === SHAPLEY VALUE ===
+
+            payoff_dict = sim_ut.get_payoff_vals(
+                original_model_simulations_info, knockout_data, log_file=log_file
+            )
+
+            shap_values = sim_ut.get_shapley_values(
+                payoff_dict, len(combinations), log_file=log_file
+            )
+
+            __import__("pprint").pprint(shap_values)
+
+            exit(1)
             # === IF NO SAMPLES ===
             if not args.use_perturbations:
 

@@ -1,4 +1,5 @@
 from decimal import *
+import math
 
 from networkx import current_flow_betweenness
 from pandas.core.generic import pprint_thing
@@ -558,28 +559,31 @@ def get_knockout_variations_samples(
 
     return variations_dict
 
-def shapley_value(final_results_original_model, final_results_knocked_model, combinations, n_all_species, log_file=None):
-    shap_dict = {}
+def get_payoff_vals(final_results_original_model, final_results_knocked_model, log_file=None):
     epsilon = 1e-20  # Variable used as values cutoff and to avoid division by 0
+
+    payoff_dict = {}
+
     # Looping through knockedout results
     for ko_species, species_dict in final_results_knocked_model:
-        shap_dict[ko_species] = {}
+        payoff_dict[ko_species] = {}
 
         # Looping through combinations in original model
-        for combination, original_info_dict in final_results_original_model.items():
-            shap_dict[ko_species][combination] = {}
-
+        for combination, original_info_dict in final_results_original_model.items(): 
             # Looping through original simulation dict
             for species, original_value in original_info_dict.items():
+
+                # Initialize species dict if not exists
+                if species not in payoff_dict[ko_species]:
+                    payoff_dict[ko_species][species] = {}
+
                 if species == ko_species:  # Setting nan if ko species
-                    variation = np.nan
-                    relative_variation = np.nan
+                    continue
 
                 elif (
                     species not in species_dict[combination]
                 ):  # Setting nan if species not present
                     variation = np.nan
-                    relative_variation = np.nan
                 else:
 
                     # Cutting off the original value if too small
@@ -597,9 +601,37 @@ def shapley_value(final_results_original_model, final_results_knocked_model, com
                         np.float64(species_dict[combination][species]),
                     )
 
-                    shap_dict[ko_species][combination][species] = original_val - ko_value
+                    # Getting the variation
+                    variation = original_val - ko_value
 
-    return shap_dict
+                # Store the variation for this species and combination
+                payoff_dict[ko_species][species][combination] = variation
+
+    return payoff_dict
+
+
+def get_shapley_values(payoff_dict, n_combinations, log_file = None):
+    shapley_dict = {}
+
+    for ko_species, ko_info in payoff_dict.items():
+        shapley_dict[ko_species] = {}
+        for species, species_info in ko_info.items():
+            sum = 0
+
+            for combination, payoff_value in species_info.items():
+                comb_len = len(combination.split("_"))
+                left_factor = (math.factorial(comb_len) * math.factorial((n_combinations - comb_len)))/math.factorial(n_combinations)
+                sum += left_factor * payoff_value
+
+            shapley_dict[ko_species][species] = {
+                "shap": sum
+            }
+
+    return shapley_dict
+
+
+    
+
 
 
 def generate_values_distance_report(
