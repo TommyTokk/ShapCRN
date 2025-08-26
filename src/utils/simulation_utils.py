@@ -1,6 +1,7 @@
 from decimal import *
 
 from networkx import current_flow_betweenness
+from pandas.core.generic import pprint_thing
 
 import roadrunner as rr
 import libsbml
@@ -460,6 +461,8 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
                 else:
                     relative_variation = np.inf
 
+                __import__('pprint').pprint(relative_variation)
+
                 # Load the data in the dictionary
                 variations_dict[ko_species][species] = {
                     "variation": variation,
@@ -539,6 +542,8 @@ def get_knockout_variations_samples(
                     else:
                         relative_variation = np.inf
 
+                    
+
                     print_log("G_KO_V", f"      variation:{ko_value} - {original_val}: {variation}")
                     print_log("G_KO_V", f"      relative-variation:({ko_value} - {original_val})/{np.maximum(
                         np.abs(original_val), epsilon
@@ -552,6 +557,49 @@ def get_knockout_variations_samples(
                 }
 
     return variations_dict
+
+def shapley_value(final_results_original_model, final_results_knocked_model, combinations, n_all_species, log_file=None):
+    shap_dict = {}
+    epsilon = 1e-20  # Variable used as values cutoff and to avoid division by 0
+    # Looping through knockedout results
+    for ko_species, species_dict in final_results_knocked_model:
+        shap_dict[ko_species] = {}
+
+        # Looping through combinations in original model
+        for combination, original_info_dict in final_results_original_model.items():
+            shap_dict[ko_species][combination] = {}
+
+            # Looping through original simulation dict
+            for species, original_value in original_info_dict.items():
+                if species == ko_species:  # Setting nan if ko species
+                    variation = np.nan
+                    relative_variation = np.nan
+
+                elif (
+                    species not in species_dict[combination]
+                ):  # Setting nan if species not present
+                    variation = np.nan
+                    relative_variation = np.nan
+                else:
+
+                    # Cutting off the original value if too small
+                    original_val = np.where(
+                        np.abs(np.float64(original_value)) < epsilon,
+                        0,
+                        np.float64(original_value),
+                    )
+
+                    # Cutting off the ko value if too small
+                    ko_value = np.where(
+                        np.abs(np.float64(species_dict[combination][species]))
+                        < epsilon,
+                        0,
+                        np.float64(species_dict[combination][species]),
+                    )
+
+                    shap_dict[ko_species][combination][species] = original_val - ko_value
+
+    return shap_dict
 
 
 def generate_values_distance_report(
@@ -1444,7 +1492,7 @@ def get_variations_hm_samples(
                         variations.append(combination_data[species]["variation"])
 
             if variations:
-                # Use the RMS to avoid the lost of information
+                # Use the RMS to avoid the lost of information 
                 heatmap_data[i, j] = np.sqrt(np.mean([v**2 for v in variations]))
     return (heatmap_data, all_species)
 
@@ -1491,7 +1539,11 @@ def get_variations_hm_no_samples(
                         if variation_type.lower() == "relative"
                         else "variation"
                     )
-                    heatmap_data[i, j] = np.sqrt(variation_entry[key] ** 2)
+
+                    if np.isinf(variation_entry[key]):
+                        raise ZeroDivisionError
+                    else:
+                        heatmap_data[i, j] = np.sqrt(variation_entry[key]**2)
                 except KeyError:
                     # If missing from variations_dict, fill with NaN
                     heatmap_data[i, j] = np.nan

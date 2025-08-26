@@ -112,6 +112,9 @@ def main():
 
             # Getting the input species ids
             input_species_ids = args.input_species
+            
+            # Get the list of species
+            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
             if args.target_ids is None:
                 # If no input species are provided all nodes will be used
@@ -124,10 +127,9 @@ def main():
                 # Removing the input species from the species to analyze
                 target_ids = list(set(target_ids) - set(input_species_ids))
 
-            # target_ids.sort()
+            target_ids.sort()
 
-            # Get the list of species
-            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+            
 
             # Init the combinations array
             combinations = None
@@ -225,8 +227,6 @@ def main():
                         log_file,
                     )
 
-                plt_ut.plot_all_simulation_traces_interactive(original_results, samples_simulations_results, colnames, input_species_ids, model_name=file_name)
-
                 ut.print_log(
                     log_file, "Getting simulations informations of the original model"
                 )
@@ -302,46 +302,56 @@ def main():
 
                 all_species = set()
 
-                relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
-                    sim_variations, all_species, ko_species_list, log_file=log_file
-                )
+                try:
 
-                abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
-                    sim_variations, all_species, ko_species_list, "absolute", log_file
-                )
-
-                log_rel_map = np.log(relative_map + 1)
-
-                log_abs_map = np.log(abs_map + 1)
-
-                plt_ut.plot_variations_heatmap_relative(
-                    log_rel_map,
-                    all_species_rel,
-                    ko_species_list,
-                    title="Relative log variations heatmap",
-                )
-
-                plt_ut.plot_variations_heatmap_absolute(
-                    log_abs_map,
-                    all_species_abs,
-                    ko_species_list,
-                    title="Absolute log variations heatmap",
-                )
-
-                if args.save_output:
-                    relative_data_frame = pd.DataFrame(
-                        relative_map, columns=all_species_rel, index=ko_species_list
-                    )
-                    absolute_data_frame = pd.DataFrame(
-                        abs_map, columns=all_species_abs, index=ko_species_list
+                    relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
+                        sim_variations, all_species, ko_species_list, log_file=log_file
                     )
 
-                    relative_data_frame.to_csv(
-                        f"./report/{file_name}/relative_variations.csv"
+                    log_rel_map = np.log(relative_map + 1)
+
+                    plt_ut.plot_variations_heatmap_relative(
+                        log_rel_map,
+                        all_species_rel,
+                        ko_species_list,
+                        title="Relative log variations heatmap",
                     )
-                    absolute_data_frame.to_csv(
-                        f"./report/{file_name}/absolute_variations.csv"
+
+                    if args.save_output:
+                        relative_data_frame = pd.DataFrame(
+                            relative_map, columns=all_species_rel, index=ko_species_list
+                        )
+                        relative_data_frame.to_csv(
+                            f"./report/{file_name}/relative_variations.csv"
+                        )
+
+                except ZeroDivisionError:
+
+                    abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
+                        sim_variations,
+                        all_species,
+                        ko_species_list,
+                        "absolute",
+                        log_file,
                     )
+
+                    log_abs_map = np.log(abs_map + 1)
+
+                    plt_ut.plot_variations_heatmap_absolute(
+                        log_abs_map,
+                        all_species_abs,
+                        ko_species_list,
+                        title="Absolute log variations heatmap",
+                    )
+
+                    if args.save_output:
+                        absolute_data_frame = pd.DataFrame(
+                            abs_map, columns=all_species_abs, index=ko_species_list
+                        )
+
+                        absolute_data_frame.to_csv(
+                            f"./report/{file_name}/absolute_variations.csv"
+                        )
 
             else:  # === IF SAMPLES ===
                 try:
@@ -661,9 +671,6 @@ def main():
                                 fixed_active_cells - active_cells_samples_map
                             )
 
-                            __import__("pprint").pprint(fixed_active_cells)
-                            __import__("pprint").pprint(active_cells_samples_map)
-
                             fixed_pattern_pearson_coefficient, fixed_p_value = (
                                 ut.pearson_correlation(
                                     fixed_active_cells,
@@ -767,16 +774,6 @@ def main():
                                 absolute_map - no_samples_absolute_map
                             )
 
-                            plt_ut.plot_variations_heatmap_absolute(
-                                absolute_values_distance,
-                                all_species_abs,
-                                ko_species_list,
-                                cmap="BrBG_r",
-                                save_path=f"./imgs/{file_name}/Perturbations importance analysis absolute",
-                                title="Perturbations VS No Perturbations Distance absolute",
-                                imgs_name="Perturbations VS No Perturbations distance absolute",
-                            )
-
                             # Getting the pearson_coefficient
                             pearson_coefficient, p_value = ut.pearson_correlation(
                                 samples_log_absolute_map, no_samples_log_absolute_map
@@ -795,15 +792,15 @@ def main():
                                 log_file=log_file,
                             )
 
-                            # Plotting the distance of log normalized matrices
-                            plt_ut.plot_variations_heatmap_relative(
+                            # Plotting the distance matrices
+                            plt_ut.plot_variations_heatmap_absolute(
                                 absolute_values_distance,
                                 all_species_abs,
                                 ko_species_list,
                                 cmap="BrBG_r",
                                 save_path=f"./imgs/{file_name}/Perturbations importance analysis",
-                                title="Perturbations VS No Perturbations Distance",
-                                imgs_name="Perturbations VS No Perturbations distance",
+                                title="Perturbations VS No Perturbations Distance absolute",
+                                imgs_name="Perturbations VS No Perturbations distance absolute",
                             )
 
                             # Get the active cells of the matrices
@@ -845,8 +842,8 @@ def main():
                                 ko_species_list,
                                 cmap="PuOr_r",
                                 save_path=f"./imgs/{file_name}/Perturbations importance analysis",
-                                title="Relative patterns distance's heatmap",
-                                imgs_name="Relative pattern distance's heatmap",
+                                title="Patterns distance's heatmap",
+                                imgs_name="Pattern distance's heatmap",
                             )
 
                         if args.random_perturbations_importance:
