@@ -2,6 +2,10 @@ import datetime
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from scipy.stats import pearsonr
 
+import pandas as pd
+
+import os
+
 
 import json
 import numpy as np
@@ -95,7 +99,7 @@ def parse_args():
         "--knockout",
         nargs="+",
         default=None,
-        help="One or more IDs to check, can also be empty",
+        help="One or more IDs to knockout, if empty all species are used",
     )
 
     simulate_samples_parser.add_argument(
@@ -103,7 +107,7 @@ def parse_args():
         "--target-nodes",
         nargs="+",
         default=None,
-        
+        help="One or more IDs to print on analysis",
     )
     # simulate_samples_parser.add_argument(
     #     "--mko",
@@ -400,6 +404,61 @@ def pretty_print_variations(variations_dict, precision=4, show_zero=False):
 
 
 # === DEBUG ===
+
+def save_shapley_values_to_csv_pivot(shapley_dict, file_path, log_file=None):
+    """
+    Save Shapley values to a CSV file in pivot table format (knockout species as rows, species as columns).
+    
+    Args:
+        shapley_dict: Dictionary with structure:
+                     {ko_species: {species: {"shap": value}}}
+        file_path: Path where to save the CSV file
+        log_file: Optional log file for messages
+        
+    Returns:
+        str: Path of the saved CSV file
+    """
+    try:
+        # Create lists to store the data
+        ko_species_list = []
+        species_list = []
+        shapley_values = []
+        
+        # Extract data from the nested dictionary
+        for ko_species, ko_info in shapley_dict.items():
+            for species, species_info in ko_info.items():
+                ko_species_list.append(ko_species)
+                species_list.append(species)
+                shapley_values.append(species_info["shap"])
+        
+        # Create DataFrame
+        df = pd.DataFrame({
+            'knockout_species': ko_species_list,
+            'species': species_list,
+            'shapley_value': shapley_values
+        })
+        
+        # Create pivot table
+        pivot_df = df.pivot(index='knockout_species', columns='species', values='shapley_value')
+        
+        # Fill NaN values with 0 or keep them as NaN (you can choose)
+        # pivot_df = pivot_df.fillna(0)  # Uncomment if you want to fill NaN with 0
+        
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Save to CSV
+        pivot_df.to_csv(file_path, float_format='%.10f')
+        
+        print_log(log_file, f"Shapley values (pivot format) saved to: {file_path}")
+        print_log(log_file, f"Pivot table shape: {pivot_df.shape}")
+        
+        return file_path
+        
+    except Exception as e:
+        error_msg = f"Error saving Shapley values (pivot) to CSV: {e}"
+        print_log(log_file, error_msg)
+        raise Exception(error_msg)
 
 # === ANALYSIS ===
 

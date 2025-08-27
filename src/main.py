@@ -295,13 +295,17 @@ def main():
                 original_model_simulations_info, knockout_data, log_file=log_file
             )
 
+            __import__("pprint").pprint(payoff_dict)
+
             shap_values = sim_ut.get_shapley_values(
                 payoff_dict, len(combinations), log_file=log_file
             )
 
-            __import__("pprint").pprint(shap_values)
+            if args.save_output:
+                ut.save_shapley_values_to_csv_pivot(
+                    shap_values, f"./report/{file_name}/shap.csv", log_file=log_file
+                )
 
-            exit(1)
             # === IF NO SAMPLES ===
             if not args.use_perturbations:
 

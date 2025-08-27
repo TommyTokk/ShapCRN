@@ -616,12 +616,15 @@ def get_shapley_values(payoff_dict, n_combinations, log_file = None):
     for ko_species, ko_info in payoff_dict.items():
         shapley_dict[ko_species] = {}
         for species, species_info in ko_info.items():
-            sum = 0
+            if species == ko_species:
+                sum = np.nan
+            else:
+                sum = 0
 
-            for combination, payoff_value in species_info.items():
-                comb_len = len(combination.split("_"))
-                left_factor = (math.factorial(comb_len) * math.factorial((n_combinations - comb_len)))/math.factorial(n_combinations)
-                sum += left_factor * payoff_value
+                for combination, payoff_value in species_info.items():
+                    comb_len = len(combination.split("_"))
+                    left_factor = (math.factorial(comb_len) * math.factorial((n_combinations - comb_len)))/math.factorial(n_combinations)
+                    sum += left_factor * payoff_value
 
             shapley_dict[ko_species][species] = {
                 "shap": sum
