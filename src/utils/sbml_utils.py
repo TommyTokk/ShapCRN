@@ -472,7 +472,7 @@ def parse_ast_tree(ast_node, log_file=None):
 
 
 def split_reversible_reaction(
-    model, reaction_id, model_compartments, model_parameters_dict, log_file=None
+    sbml_model, reaction_id, model_compartments, model_parameters_dict, log_file=None
 ):
     """
     Split a reversible reaction into two irreversible reactions (forward and reverse)
@@ -489,7 +489,7 @@ def split_reversible_reaction(
     """
 
     # Get the reaction from the model
-    reaction = model.getReaction(reaction_id)
+    reaction = sbml_model.getReaction(reaction_id)
 
     if reaction is None:
         raise ValueError(f"Reaction with ID '{reaction_id}' not found in the model.")
@@ -518,7 +518,6 @@ def split_reversible_reaction(
     reaction_comps = []
 
     # Extract reaction parameters and compartments
-    # TODO: Improve compartments and parameters load
     for i in range(ast_nodes.getSize()):
         # Get the AST node
         node = ast_nodes.get(i)
@@ -540,10 +539,11 @@ def split_reversible_reaction(
 
     print_log(log_file, f"{parameters}")
 
+    # Creation of the compartments string
     reaction_comps_string = " * ".join([c for c in reaction_comps])
 
     # Creation of forward reaction
-    forward_reaction = model.createReaction()
+    forward_reaction = sbml_model.createReaction()
     forward_reaction.setId(f"{reaction_id}_forward")
     forward_reaction.setReversible(False)
     # forward_reaction.setFast(False)
@@ -595,7 +595,7 @@ def split_reversible_reaction(
     param_k_forward.setConstant(True)
 
     # Create reverse reaction
-    reverse_reaction = model.createReaction()
+    reverse_reaction = sbml_model.createReaction()
     reverse_reaction.setId(f"{reaction_id}_reverse")
     reverse_reaction.setReversible(False)
     # reverse_reaction.setFast(False)
@@ -641,7 +641,7 @@ def split_reversible_reaction(
     param_k_reverse.setConstant(True)
 
     # Remove the original reversible reaction
-    model.removeReaction(reaction_id)
+    sbml_model.removeReaction(reaction_id)
 
     return (forward_reaction, reverse_reaction)
 
@@ -683,6 +683,11 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
             print_log(
                 log_file, f"No kinetic law found for reaction {target_reaction_id}"
             )
+    else:
+        print_log(
+            log_file,
+            f"[WARNING] Reaction not found in the model, no modification applied.",
+        )
 
     return sbml_model
 
@@ -816,35 +821,36 @@ def get_sbml_as_xml(model, log_file=None):
 def generate_species_samples(
     sbml_model,
     target_species=[],
-    log_file=None,
     n_samples=5,
     variation=20,
+    log_file=None,
 ):
     """
     Generate the input samples
     Args:
         - sbml_model: SBML model instance
         - target_species: List of species for samples creation
-        -
     """
     res = []
 
     for ts in target_species:
         species = sbml_model.getListOfSpecies().getElementBySId(ts)
 
-        if species.getHasOnlySubstanceUnits():
+        if species is None:
+            print_log(
+                log_file, f"[ERROR] Species {ts} not present in the model, exiting..."
+            )
+            exit(1)
 
-            print_log(log_file, f"Using amounts for {ts}")
-            t0_conc = species.getInitialAmount()
-        elif species.isSetInitialAmount():
+        if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
             print_log(log_file, f"Using amounts for {ts}")
             t0_conc = species.getInitialAmount()
         elif species.isSetInitialConcentration():
             print_log(log_file, f"Using concentration for {ts}")
             t0_conc = species.getInitialConcentration()
         else:
-            raise Exception("Cannot access species initial values")
-
+            print_log(log_file, f"[ERROR] Cannot access species {ts} intial values")
+            exit(1)
         tmp = []
 
         for i in range(n_samples):
@@ -862,13 +868,7 @@ def generate_species_samples(
 
             rng = np.random.default_rng()
 
-            sample = rng.uniform(lower_bound, upper_bound)
-
-            # print_log(
-            #     log_file,
-            #     f"[GENERATE_SAMPLES] t0:value: {t0_conc} | lower-bound: {lower_bound} | upper-bound: {upper_bound} | sample: {sample}",
-            # )
-
+            sample = rng.uniform(lower_bound, np.nextafter(upper_bound, np.inf))
             tmp.append(sample)
 
         res.append(tmp)
@@ -905,10 +905,7 @@ def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file
         species = sbml_model.getListOfSpecies().getElementBySId(s_id)
 
         # Get initial concentration/amount using the same logic as generate_species_samples
-        if species.getHasOnlySubstanceUnits():
-            print_log(log_file, f"Using amounts for {s_id}")
-            t0_conc = species.getInitialAmount()
-        elif species.isSetInitialAmount():
+        if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
             print_log(log_file, f"Using amounts for {s_id}")
             t0_conc = species.getInitialAmount()
         elif species.isSetInitialConcentration():

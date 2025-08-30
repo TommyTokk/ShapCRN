@@ -43,28 +43,29 @@ def load_roadrunner_model(
     Returns:
         roadrunner.RoadRunner: Configured RoadRunner instance
     """
-    # Check if input is a libSBML model or a string
-    if isinstance(sbml_model, libsbml.Model):
-        sbml_doc = libsbml.SBMLWriter().writeSBMLToString(sbml_model.getSBMLDocument())
-        rr_model = rr.RoadRunner(sbml_doc)
-    else:
-        # Assume it's a string representation or file path
-        rr_model = rr.RoadRunner(sbml_model)
+
+    
+
+    try:
+        writer = libsbml.SBMLWriter()
+        # Check if input is a libSBML model or a string
+        if isinstance(sbml_model, libsbml.Model):
+            sbml_doc = writer.writeSBMLToString(sbml_model.getSBMLDocument())
+            rr_model = rr.RoadRunner(sbml_doc)
+        else:
+            # Assume it's a string representation or file path
+            rr_model = rr.RoadRunner(sbml_model)
+    except Exception as e:
+        exit(f"Error during model loading: {e}")
 
     # Configure integrator settings
     # Setting the relative and absolute tolerance of the model
     rr_model.getIntegrator().setValue("relative_tolerance", rel_tol)
     rr_model.getIntegrator().setValue("absolute_tolerance", abs_tol)
-    rr_model.integrator.variable_step_size = True
-    
-
-    #rr_model.getIntegrator().setValue('stiff', True)
 
     # Setting the integrator if necessary
     if integrator is not None:
         rr_model.setIntegrator(integrator)
-
-    # print_log(log_file, f"integrator: {rr_model.getIntegrator()}")
 
     return rr_model
 
@@ -106,7 +107,7 @@ def simulate(
             f"Simulating until steady state (max time: {max_end_time}, threshold: {threshold})",
         )
 
-        # Calculate a reasonable number of points per block based on output_rows and sim_step
+        # Calculate number of points per block based on output_rows and sim_step
         points_per_block = int(max(20, output_rows // (max_end_time / sim_step)))
 
         result, ss_time, colnames = simulate_with_steady_state(
@@ -131,9 +132,145 @@ def simulate(
         # Standard simulation 
         res = rr_model.simulate(start_time, end_time, output_rows)
 
-        
-
         return res, None, res.colnames
+    
+def simulate_with_steady_state(
+    rr_model,
+    start_time=0,
+    max_end_time=1000,
+    block_size=10,
+    points_per_block=100,
+    threshold=1e-12,
+    consecutive_checks = 3,
+    monitor_species=None,
+    log_file=None,
+):
+    """
+    Simulates a model until steady state is reached using a block-by-block approach.
+
+    Args:
+        rr_model: RoadRunner model instance
+        start_time: Start time for simulation
+        max_end_time: Maximum end time if steady state is not reached
+        block_size: Size of each simulation block
+        points_per_block: Number of points to calculate in each block
+        threshold: Threshold for steady state detection
+        monitor_species: Species to monitor for steady state detection
+        log_file: Optional log file for debugging output
+
+    Returns:
+        Tuple of (simulation_results, steady_state_time, column_names)
+    """
+    rr_model.setIntegrator("cvode")
+    rr_model.reset()
+    all_species = rr_model.model.getFloatingSpeciesIds()
+    if monitor_species is None:
+        monitor_species = all_species
+
+    # Precompute indices to monitor
+    monitor_idx = [all_species.index(s) for s in monitor_species if s in all_species]
+
+    # Prepare column names (including 'time')
+    colnames = rr_model.timeCourseSelections.copy()
+
+    current_time = start_time
+    all_results = []
+    prev_block = None
+    steady_state_time = None
+    steady_blocks_count = 0
+    initial_block_size = block_size
+    zero_tol = 1e-30
+    min_block_size = 1.0  # Minimum block size to prevent excessive reduction
+    max_block_size = 50  # Maximum block size for efficiency
+    is_steady = False
+
+    while current_time < max_end_time:
+        next_time = min(current_time + block_size, max_end_time)
+        print_log(
+            log_file,
+            f"Simulating from {current_time} to {next_time}, block_size: {block_size}",
+        )
+
+        block_results = rr_model.simulate(current_time, next_time, points_per_block)
+        all_results.append(block_results)
+
+        if prev_block is not None:
+            # Extract concentrations at the last point of each block
+            prev_conc = prev_block[-1, 1 : 1 + len(all_species)]
+            curr_conc = block_results[-1, 1 : 1 + len(all_species)]
+
+            # Calculate variations for all species
+            variations = np.zeros_like(prev_conc)
+            small_mask = np.abs(prev_conc) < zero_tol
+
+            # Use absolute change where previous concentration is near zero
+            variations[small_mask] = np.abs(
+                curr_conc[small_mask] - prev_conc[small_mask]
+            )
+
+            # Use relative change elsewhere
+            variations[~small_mask] = np.abs(
+                (curr_conc[~small_mask] - prev_conc[~small_mask])
+                / prev_conc[~small_mask]
+            )
+
+            # Validate monitor indices
+            monitor_idx = [i for i in monitor_idx if i < len(variations)]
+            if not monitor_idx:
+                print_log(
+                    log_file, "Warning: No valid species to monitor for steady state"
+                )
+                monitor_idx = list(range(min(len(variations), len(all_species))))
+
+            # Check if ALL monitored species satisfy steady-state condition
+            monitored_variations = variations[monitor_idx]
+            max_variation = np.max(monitored_variations)
+            is_steady = max_variation < threshold
+
+            print_log(
+                log_file, f"Max variation among monitored species: {max_variation}"
+            )
+            print_log(log_file, f"Threshold: {threshold}")
+            print_log(log_file, f"Is steady: {is_steady}")
+
+            if is_steady:
+                steady_blocks_count += 1
+                print_log(
+                    log_file,
+                    f"Steady block #{steady_blocks_count} at time {current_time}",
+                )
+
+                # Check if we have enough consecutive steady blocks
+                if steady_blocks_count >= consecutive_checks:
+                    steady_state_time = current_time
+                    print_log(
+                        log_file, f"Steady state reached at time {steady_state_time}"
+                    )
+                    is_steady = True
+                    break
+
+                # Increase block size when approaching steady state for efficiency
+                block_size = min(block_size * 1.2, max_block_size)
+            else:
+                # Reset counter if steady state is broken
+                steady_blocks_count = 0
+                # Reduce block size for better resolution when not in steady state
+                block_size = max(block_size * 0.8, min_block_size)
+
+        prev_block = block_results
+        if not is_steady:
+            current_time = next_time
+
+    # Concatenate all results, removing duplicate boundary points
+    if not all_results:
+        full_results = np.empty((0, len(colnames)))
+    else:
+        # Remove the first row of each subsequent block to avoid time point duplication
+        for i in range(1, len(all_results)):
+            all_results[i] = all_results[i][1:]
+        full_results = np.vstack(all_results)
+
+    return full_results, steady_state_time, colnames
 
 
 def simulate_samples(
@@ -331,7 +468,7 @@ def process_species_multiprocessing(
     Use multiprocessing to simulates all the knockouts
     """
     # Determine number of workers
-    # Use 75% of the cpu
+    # Use 75% of the available cores
     n_core = int((mp.cpu_count() * 75) / 100)
     print_log(log_file, f" N core: {n_core}")
     if max_workers is None:
@@ -385,7 +522,7 @@ def process_species_multiprocessing(
             result = pool.map(operation, process_args)
     except Exception as e:
         print_log(log_file, f"Critical error in multiprocessing : {e}")
-        return []
+        exit(1)
 
     return result
 
@@ -493,8 +630,6 @@ def get_knockout_variations_samples(
     # Looping through knockedout results
     for ko_species, species_dict in final_results_knocked_model:
         variations_dict[ko_species] = {}
-
-        print_log("G_KO_V", f"{ko_species}:")
 
         # Looping through combinations in original model
         for combination, original_info_dict in final_results_original_model.items():
@@ -623,7 +758,7 @@ def get_shapley_values(payoff_dict, n_combinations, log_file = None):
 
                 for combination, payoff_value in species_info.items():
                     comb_len = len(combination.split("_"))
-                    left_factor = (math.factorial(comb_len) * math.factorial((n_combinations - comb_len)))/math.factorial(n_combinations)
+                    left_factor = (math.factorial(comb_len)* math.factorial((n_combinations - comb_len)))/math.factorial(n_combinations)
                     sum += left_factor * payoff_value
 
             shapley_dict[ko_species][species] = {
@@ -632,8 +767,6 @@ def get_shapley_values(payoff_dict, n_combinations, log_file = None):
 
     return shapley_dict
 
-
-    
 
 
 
@@ -1636,143 +1769,7 @@ def get_importance_informations(
     pass
 
 
-def simulate_with_steady_state(
-    rr_model,
-    start_time=0,
-    max_end_time=1000,
-    block_size=10,
-    points_per_block=100,
-    threshold=1e-12,
-    monitor_species=None,
-    log_file=None,
-):
-    """
-    Simulates a model until steady state is reached using a block-by-block approach.
 
-    Args:
-        rr_model: RoadRunner model instance
-        start_time: Start time for simulation
-        max_end_time: Maximum end time if steady state is not reached
-        block_size: Size of each simulation block
-        points_per_block: Number of points to calculate in each block
-        threshold: Threshold for steady state detection
-        monitor_species: Species to monitor for steady state detection
-        log_file: Optional log file for debugging output
-
-    Returns:
-        Tuple of (simulation_results, steady_state_time, column_names)
-    """
-    rr_model.setIntegrator("cvode")
-    rr_model.reset()
-    all_species = rr_model.model.getFloatingSpeciesIds()
-    if monitor_species is None:
-        monitor_species = all_species
-
-    # Precompute indices to monitor
-    monitor_idx = [all_species.index(s) for s in monitor_species if s in all_species]
-
-    # Prepare column names (including 'time')
-    colnames = rr_model.timeCourseSelections.copy()
-
-    current_time = start_time
-    all_results = []
-    prev_block = None
-    steady_state_time = None
-    steady_blocks_count = 0
-    initial_block_size = block_size
-    zero_tol = 1e-30
-    consecutive_checks = 3  # Initialize the required consecutive steady blocks
-    min_block_size = 1.0  # Minimum block size to prevent excessive reduction
-    max_block_size = 50  # Maximum block size for efficiency
-    is_steady = False
-
-    while current_time < max_end_time:
-        next_time = min(current_time + block_size, max_end_time)
-        print_log(
-            log_file,
-            f"Simulating from {current_time} to {next_time}, block_size: {block_size}",
-        )
-
-        block_results = rr_model.simulate(current_time, next_time, points_per_block)
-        all_results.append(block_results)
-
-        if prev_block is not None:
-            # Extract concentrations at the last point of each block
-            prev_conc = prev_block[-1, 1 : 1 + len(all_species)]
-            curr_conc = block_results[-1, 1 : 1 + len(all_species)]
-
-            # Calculate variations for all species
-            variations = np.zeros_like(prev_conc)
-            small_mask = np.abs(prev_conc) < zero_tol
-
-            # Use absolute change where previous concentration is near zero
-            variations[small_mask] = np.abs(
-                curr_conc[small_mask] - prev_conc[small_mask]
-            )
-
-            # Use relative change elsewhere
-            variations[~small_mask] = np.abs(
-                (curr_conc[~small_mask] - prev_conc[~small_mask])
-                / prev_conc[~small_mask]
-            )
-
-            # Validate monitor indices
-            monitor_idx = [i for i in monitor_idx if i < len(variations)]
-            if not monitor_idx:
-                print_log(
-                    log_file, "Warning: No valid species to monitor for steady state"
-                )
-                monitor_idx = list(range(min(len(variations), len(all_species))))
-
-            # Check if ALL monitored species satisfy steady-state condition
-            monitored_variations = variations[monitor_idx]
-            max_variation = np.max(monitored_variations)
-            is_steady = max_variation < threshold
-
-            print_log(
-                log_file, f"Max variation among monitored species: {max_variation}"
-            )
-            print_log(log_file, f"Threshold: {threshold}")
-            print_log(log_file, f"Is steady: {is_steady}")
-
-            if is_steady:
-                steady_blocks_count += 1
-                print_log(
-                    log_file,
-                    f"Steady block #{steady_blocks_count} at time {current_time}",
-                )
-
-                # Check if we have enough consecutive steady blocks
-                if steady_blocks_count >= consecutive_checks:
-                    steady_state_time = current_time
-                    print_log(
-                        log_file, f"Steady state reached at time {steady_state_time}"
-                    )
-                    is_steady = True
-                    break
-
-                # Increase block size when approaching steady state for efficiency
-                block_size = min(block_size * 1.2, max_block_size)
-            else:
-                # Reset counter if steady state is broken
-                steady_blocks_count = 0
-                # Reduce block size for better resolution when not in steady state
-                block_size = max(block_size * 0.8, min_block_size)
-
-        prev_block = block_results
-        if not is_steady:
-            current_time = next_time
-
-    # Concatenate all results, removing duplicate boundary points
-    if not all_results:
-        full_results = np.empty((0, len(colnames)))
-    else:
-        # Remove the first row of each subsequent block to avoid time point duplication
-        for i in range(1, len(all_results)):
-            all_results[i] = all_results[i][1:]
-        full_results = np.vstack(all_results)
-
-    return full_results, steady_state_time, colnames
 
 
 def rms_average(array, axis=1, log_file=None):

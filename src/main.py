@@ -19,6 +19,7 @@ import numpy as np
 from dotenv import load_dotenv
 import time
 import pandas as pd
+from pathlib import Path
 
 from SALib.sample import sobol as sobol_sample
 from SALib.analyze import sobol as sobol_analyze
@@ -45,12 +46,18 @@ def main():
 
     # Setup logging
     log_file = args.log if hasattr(args, "log") else None
+    file_path = Path(args.input_path)
+
+    if not file_path.exists():
+        ut.print_log(log_file, f"[ERROR] The specified model doesn't exists")
+        exit(1)
 
     try:
         # Process based on command
         if args.command == "simulate":
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
+
             sbml_model = sbml_doc.getModel()
             # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
             file_name = os.path.basename(args.input_path)
@@ -104,6 +111,7 @@ def main():
 
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
+            
             sbml_model = sbml_doc.getModel()
 
             # Split all the reversible reactions in two different reactions
@@ -302,8 +310,14 @@ def main():
             )
 
             if args.save_output:
+                save_path = args.save_output
+                if args.target_nodes:
+                    cols = args.target_nodes
+                else:
+                    cols = None
+
                 ut.save_shapley_values_to_csv_pivot(
-                    shap_values, f"./report/{file_name}/shap.csv", log_file=log_file
+                    shap_values, save_path, cols=cols, log_file=log_file
                 )
 
             # === IF NO SAMPLES ===

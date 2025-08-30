@@ -153,7 +153,7 @@ def check_convergence(
                     prev_S1 = np.asarray(prev.get("S1", np.array([np.nan])))
                     prev_ST = np.asarray(prev.get("ST", np.array([np.nan])))
 
-                    # Maschera parametri “rilevanti”
+                    # Maks the relevant values
                     mask_relevant = (
                         np.fmax(np.abs(curr_S1), np.abs(prev_S1)) >= eps_small
                     ) | (np.fmax(np.abs(curr_ST), np.abs(prev_ST)) >= eps_small)
@@ -169,7 +169,7 @@ def check_convergence(
                         diff_S1 = np.abs(curr_S1 - prev_S1)
                         diff_ST = np.abs(curr_ST - prev_ST)
 
-                    # Applica maschera; se nessun parametro rilevante, delta=0
+                    # Apply the mask, if no relevant values delta = 0
                     if np.any(mask_relevant):
                         delta_s1 = nanmax_or(diff_S1[mask_relevant], 0.0)
                         delta_st = nanmax_or(diff_ST[mask_relevant], 0.0)
