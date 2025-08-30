@@ -21,7 +21,7 @@ from src.utils.utils import (
     truncate_small_values,
 )
 from src.utils import plot_utils as plt_ut
-from utils.sbml_utils import create_samples_combination, generate_species_samples
+#from utils.sbml_utils import create_samples_combination, generate_species_samples
 
 
 
@@ -694,8 +694,7 @@ def get_knockout_variations_samples(
 
     return variations_dict
 
-def get_payoff_vals(final_results_original_model, final_results_knocked_model, log_file=None):
-    epsilon = 1e-20  # Variable used as values cutoff and to avoid division by 0
+def get_payoff_vals(final_results_original_model, final_results_knocked_model, epsilon = 1e-20, log_file=None):
 
     payoff_dict = {}
 
@@ -713,12 +712,12 @@ def get_payoff_vals(final_results_original_model, final_results_knocked_model, l
                     payoff_dict[ko_species][species] = {}
 
                 if species == ko_species:  # Setting nan if ko species
-                    continue
+                    payoff = np.nan
 
                 elif (
                     species not in species_dict[combination]
                 ):  # Setting nan if species not present
-                    variation = np.nan
+                    payoff = np.nan
                 else:
 
                     # Cutting off the original value if too small
@@ -737,10 +736,10 @@ def get_payoff_vals(final_results_original_model, final_results_knocked_model, l
                     )
 
                     # Getting the variation
-                    variation = original_val - ko_value
+                    payoff = original_val - ko_value
 
-                # Store the variation for this species and combination
-                payoff_dict[ko_species][species][combination] = variation
+                    # Store the variation for this species and combination
+                    payoff_dict[ko_species][species][combination] = payoff
 
     return payoff_dict
 
@@ -761,9 +760,7 @@ def get_shapley_values(payoff_dict, n_combinations, log_file = None):
                     left_factor = (math.factorial(comb_len)* math.factorial((n_combinations - comb_len)))/math.factorial(n_combinations)
                     sum += left_factor * payoff_value
 
-            shapley_dict[ko_species][species] = {
-                "shap": sum
-            }
+            shapley_dict[ko_species][species] = sum
 
     return shapley_dict
 

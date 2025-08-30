@@ -818,7 +818,7 @@ def get_sbml_as_xml(model, log_file=None):
 
 # TODO: CHECK THIS PART
 # TODO: Change the logic of generating samples
-def generate_species_samples(
+def generate_species_random_combinations(
     sbml_model,
     target_species=[],
     n_samples=5,
@@ -875,10 +875,10 @@ def generate_species_samples(
 
     # print_log(log_file, f"[GENERATE SAMPLES]{res}")
 
-    return res
+    return create_combinations(res, log_file)
 
 
-def create_samples_combination(input_samples, log_file=None):
+def create_combinations(input_samples, log_file=None):
     # input_samples is a 2D array: e.g., [[1, 2], [3, 4], [5, 6]]
     combinations = list(itertools.product(*input_samples))
 
@@ -941,7 +941,7 @@ def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file
 
         samples.append(tmp)
 
-    return create_samples_combination(samples, log_file)
+    return create_combinations(samples, log_file)
 
 
 # FOR DEBUG ONLY

@@ -481,7 +481,7 @@ def save_shapley_values_to_csv_pivot(shapley_dict, file_path, cols=None, log_fil
 
                 # Check if this species exists for this ko_species
                 if species in ko_info:
-                    shap_value = ko_info[species].get("shap", np.nan)
+                    shap_value = ko_info[species]
                     # Handle special cases
                     if shap_value is None:
                         shapley_values.append(np.nan)

@@ -111,7 +111,7 @@ def main():
 
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
-            
+
             sbml_model = sbml_doc.getModel()
 
             # Split all the reversible reactions in two different reactions
@@ -145,17 +145,15 @@ def main():
             if args.use_perturbations:
                 if args.fixed_perturbations is None:
                     ut.print_log(log_file, "Running with random samples generations")
-                    # Generate the samples
-                    samples = sbml_ut.generate_species_samples(
+
+                    # Create the combinations
+                    combinations = sbml_ut.generate_species_random_combinations(
                         sbml_model,
                         target_species=input_species_ids,
                         log_file=log_file,
                         n_samples=args.num_samples,
                         variation=args.variation,
                     )
-
-                    # Create the combinations
-                    combinations = sbml_ut.create_samples_combination(samples, log_file)
                 else:
                     ut.print_log(log_file, "Running with fixed samples generations")
                     fp = [int(p) for p in args.fixed_perturbations]
@@ -298,27 +296,29 @@ def main():
             end_time = time.perf_counter()
 
             # === SHAPLEY VALUE ===
-
-            payoff_dict = sim_ut.get_payoff_vals(
-                original_model_simulations_info, knockout_data, log_file=log_file
-            )
-
-            __import__("pprint").pprint(payoff_dict)
-
-            shap_values = sim_ut.get_shapley_values(
-                payoff_dict, len(combinations), log_file=log_file
-            )
-
-            if args.save_output:
-                save_path = args.save_output
-                if args.target_nodes:
-                    cols = args.target_nodes
-                else:
-                    cols = None
-
-                ut.save_shapley_values_to_csv_pivot(
-                    shap_values, save_path, cols=cols, log_file=log_file
+            if args.use_perturbations:
+                payoff_dict = sim_ut.get_payoff_vals(
+                    original_model_simulations_info,  # pyright:ignore
+                    knockout_data,
+                    log_file=log_file,  # pyright:ignore
                 )
+
+                shap_values = sim_ut.get_shapley_values(
+                    payoff_dict, len(combinations), log_file=log_file
+                )
+
+                __import__("pprint").pprint(shap_values)
+
+                if args.save_output:
+                    save_path = args.save_output
+                    if args.target_nodes:
+                        cols = args.target_nodes
+                    else:
+                        cols = None
+
+                    ut.save_shapley_values_to_csv_pivot(
+                        shap_values, save_path, cols=cols, log_file=log_file
+                    )
 
             # === IF NO SAMPLES ===
             if not args.use_perturbations:
@@ -613,7 +613,7 @@ def main():
 
                             fixed_knockout_data = (
                                 sim_ut.process_species_multiprocessing(
-                                    target_ids,
+                                    ids_to_ko,
                                     model_dict,
                                     fixed_combinations,
                                     input_species_ids,
@@ -941,7 +941,7 @@ def main():
 
                             fixed_knockout_data = (
                                 sim_ut.process_species_multiprocessing(
-                                    target_ids,
+                                    ids_to_ko,
                                     model_dict,
                                     fixed_combinations,
                                     input_species_ids,
