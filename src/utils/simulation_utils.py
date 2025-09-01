@@ -626,18 +626,19 @@ def get_knockout_variations_samples(
     """
     variations_dict = {}
     epsilon = 1e-20  # Variable used as values cutoff and to avoid division by 0
+    inf_vals = set()
 
     # Looping through knockedout results
     for ko_species, species_dict in final_results_knocked_model:
         variations_dict[ko_species] = {}
-
+        #print_log("G_KO_V", f"  {ko_species}:")
         # Looping through combinations in original model
         for combination, original_info_dict in final_results_original_model.items():
             variations_dict[ko_species][combination] = {}
 
             # Looping through original simulation dict
             for species, original_value in original_info_dict.items():
-                print_log("G_KO_V", f"  {species}:")
+                #print_log("G_KO_V", f"  {species}:")
 
                 if species == ko_species:  # Setting nan if ko species
                     variation = np.nan
@@ -676,14 +677,15 @@ def get_knockout_variations_samples(
                     if original_val > epsilon:
                         relative_variation = (ko_value - original_val) / original_val
                     else:
-                        relative_variation = np.inf
+                        inf_vals.add((ko_species, species))
+                        relative_variation = np.nan
 
                     
 
-                    print_log("G_KO_V", f"      variation:{ko_value} - {original_val}: {variation}")
-                    print_log("G_KO_V", f"      relative-variation:({ko_value} - {original_val})/{np.maximum(
-                        np.abs(original_val), epsilon
-                    )}: {relative_variation}")
+                    # print_log("G_KO_V", f"      variation:{ko_value} - {original_val}: {variation}")
+                    # print_log("G_KO_V", f"      relative-variation:({ko_value} - {original_val})/{np.maximum(
+                    #     np.abs(original_val), epsilon
+                    # )}: {relative_variation}")
 
 
 
@@ -691,6 +693,11 @@ def get_knockout_variations_samples(
                     "variation": variation,
                     "relative-variation": relative_variation,
                 }
+
+    if bool(inf_vals):
+        for ko_s, s in list(inf_vals):
+            print_log(log_file, f"[WARNING] Infinite values detected for couple {(ko_s, s)} during relative calculation.")
+            print_log(log_file, "Relative results may be unreliable.")
 
     return variations_dict
 
@@ -873,7 +880,7 @@ def generate_values_distance_report(
     )
 
     # Generate report filename
-    report_filename = f"{model_name}_values_distance_report.txt"
+    report_filename = report_title
     report_path = os.path.join(saving_path, report_filename)
 
     # Write the report
@@ -1593,9 +1600,6 @@ def get_no_samples_variations(
         for j, species in enumerate(all_species):
             # If relative variation required
             if variation_type.lower() == "relative":
-                if np.isinf(no_sample_combinations[species]["relative-variation"]):
-                    raise ZeroDivisionError
-                
                 res_matrix[i, j] = np.sqrt(
                     no_sample_combinations[species]["relative-variation"] ** 2
                 )

@@ -15,6 +15,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 
 import seaborn as sns
+from matplotlib.colors import LinearSegmentedColormap
 
 from utils.utils import print_log
 
@@ -270,54 +271,6 @@ def plot_results_interactive(
     return fig
 
 
-def plot_statistical_comparison(
-    time,
-    original_data,
-    perturbed_array,
-    avg_rms_variations_percentage,
-    target_species,
-    species_dir,
-):
-    """
-    Plot the comparison between original data and simulation statistics with confidence intervals.
-
-    Args:
-        time: Time points array
-        original_data: Original simulation data
-        rms_variations
-        target_species: Name of the species being analyzed
-        species_dir: Directory to save the plot
-    """
-    max_traces = 125
-    plt.figure(figsize=(12, 8))
-    plt.plot(time, original_data, "b-", linewidth=2, label="Original")
-    plt.fill_between(
-        time,
-        original_data - ((avg_rms_variations_percentage / 100) * original_data),
-        original_data + ((avg_rms_variations_percentage / 100) * original_data),
-        color="r",
-        alpha=0.2,
-        label="± avg_rms_variations",
-    )
-
-    min = np.min(perturbed_array, axis=0)
-    max = np.max(perturbed_array, axis=0)
-
-    plt.fill_between(time, min, max, color="grey", alpha=0.2, label="Min-Max")
-
-    plt.xlabel("Time")
-    plt.ylabel("Concentration")
-    plt.title(f"{target_species} - Original vs Perturbed (125 simulations)")
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-
-    plt.savefig(
-        os.path.join(species_dir, f"{target_species}_statistical_comparison.png")
-    )
-    plt.close()
-
-
 def plot_percentage_variation(
     time, mean_percent_variation, percent_variations, target_species, species_dir
 ):
@@ -509,6 +462,101 @@ def plot_all_simulation_traces(
     plt.tight_layout()
     plt.savefig(os.path.join(species_dir, f"{target_species}_all_traces.png"))
     plt.close()
+
+
+def plot_heatmap(data, y_labels, x_labels, **kwargs):
+    """
+    Simple heatmap plotting with customizable color mapping.
+    
+    Args:
+        data (np.ndarray): 2D array with heatmap values
+        y_labels (list): Labels for y-axis (rows)
+        x_labels (list): Labels for x-axis (columns)
+        **kwargs: Optional customization parameters
+        
+    Optional kwargs:
+        title (str): Title for the heatmap. Default: "Heatmap"
+        cmap (str): Colormap name. Default: "viridis"
+        colors (list): Custom colors for colormap. Overrides cmap if provided
+        figsize (tuple): Figure size. Default: (10, 6)
+        save_path (str): Directory path to save figure. Default: None (don't save)
+        img_name (str): Filename for saved image. Default: "heatmap.png"
+        annot (bool): Show values in cells. Default: False
+        
+    Returns:
+        fig, ax: matplotlib figure and axes objects
+    """
+    
+    # Default parameters
+    defaults = {
+        'title': 'Heatmap',
+        'cmap': 'viridis',
+        'figsize': (12, 8),
+        'annot': False,
+        'save_path': "./imgs",
+        'img_name': "heatmap.png"
+    }
+    
+    # Update defaults with user kwargs
+    params = {**defaults, **kwargs}
+    
+    # Create custom colormap if colors provided
+    if 'colors' in kwargs:
+        cmap = LinearSegmentedColormap.from_list("custom", kwargs['colors'])
+    else:
+        cmap = params['cmap']
+    
+    # Set NaN values to be displayed as black
+    if isinstance(cmap, str):
+        cmap = plt.cm.get_cmap(cmap).copy()
+    else:
+        cmap = cmap.copy()
+    cmap.set_bad(color='black')
+    
+    # Create plot
+    fig, ax = plt.subplots(figsize=params['figsize'])
+    
+    # Create heatmap
+    sns.heatmap(
+        data,
+        xticklabels=x_labels,
+        yticklabels=y_labels,
+        annot=params['annot'],
+        cmap=cmap,
+        ax=ax
+    )
+    
+    # Set title and labels
+    ax.set_title(params['title'], fontsize=14, pad=20)
+    ax.set_xlabel('Species')
+    ax.set_ylabel('Knocked-out Ids')
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    
+    # Save if requested
+    if params['save_path']:
+        # Create directory if it doesn't exist
+        os.makedirs(params['save_path'], exist_ok=True)
+        
+        # Construct full file path
+        full_file_path = os.path.join(params['save_path'], params['img_name'])
+        
+        # Debug logging
+        print(f"Saving to directory: {params['save_path']}")
+        print(f"File name: {params['img_name']}")
+        print(f"Full file path: {full_file_path}")
+        
+        # Verify that the directory exists and the full path is not a directory
+        # if os.path.isdir(full_file_path):
+        #     raise ValueError(f"Cannot save file: '{full_file_path}' is a directory, not a file path")
+        
+        # Save the figure
+        plt.savefig(full_file_path, bbox_inches='tight', dpi=300)
+        print(f"Heatmap saved successfully to: {full_file_path}")
+    
+    return fig, ax
 
 
 def plot_variations_heatmap_relative(

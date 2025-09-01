@@ -100,8 +100,8 @@ def check_convergence(
       internal_nodes (list): names of output nodes to analyze.
       tol_change (float): Max allowed change (assoluta o relativa) tra N consecutivi.
       tol_ci (float): Max allowed CI half-width (assoluta).
-      eps_small (float): Soglia sotto cui un indice è considerato trascurabile.
-      relative (bool): Se True usa variazione relativa; altrimenti assoluta.
+      eps_small (float): Cutoff value for small elements.
+      relative (bool): Flag for calculation type, if False --> Absolute.
 
     Returns:
       dict: { node: { 'converged_at': N or None,
@@ -159,10 +159,12 @@ def check_convergence(
                     ) | (np.fmax(np.abs(curr_ST), np.abs(prev_ST)) >= eps_small)
 
                     if relative:
-                        denom_S1 = np.fmax(np.abs(prev_S1), np.abs(curr_S1))
-                        denom_ST = np.fmax(np.abs(prev_ST), np.abs(curr_ST))
-                        denom_S1 = np.where(denom_S1 < eps_small, 1.0, denom_S1)
-                        denom_ST = np.where(denom_ST < eps_small, 1.0, denom_ST)
+                        denom_S1 = (np.abs(prev_S1) + np.abs(curr_S1)) / 2
+                        denom_ST = (np.abs(prev_ST) + np.abs(curr_ST)) / 2
+                        
+                        denom_S1 = np.where(denom_S1 < eps_small, eps_small, denom_S1)
+                        denom_ST = np.where(denom_ST < eps_small, eps_small, denom_ST)
+                        
                         diff_S1 = np.abs(curr_S1 - prev_S1) / denom_S1
                         diff_ST = np.abs(curr_ST - prev_ST) / denom_ST
                     else:
@@ -452,13 +454,13 @@ def plot_convergence_single_plot(
     plt.close()  # Opzionale: libera la memoria
 
 
-def convergence_analysis(random_samples, fixed_samples):
+def convergence_analysis(random_samples, fixed_samples, n_inputs):
     """
     Analyze how random samples converge compared to fixed samples
     """
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
-    for node in range(3):
+    for node in range(n_inputs):
         random_node = random_samples[:, node]
         fixed_node = fixed_samples[:, node]
 
@@ -481,7 +483,6 @@ def convergence_analysis(random_samples, fixed_samples):
         axes[node].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.show()
 
 
 def statistical_tests(random_samples, fixed_samples):
