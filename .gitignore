@@ -177,7 +177,8 @@ db.s
 
 imgs/*
 
-models/*
+models/Example/*
+models/Test/*
 
 log
 

@@ -161,10 +161,10 @@ def check_convergence(
                     if relative:
                         denom_S1 = (np.abs(prev_S1) + np.abs(curr_S1)) / 2
                         denom_ST = (np.abs(prev_ST) + np.abs(curr_ST)) / 2
-                        
+
                         denom_S1 = np.where(denom_S1 < eps_small, eps_small, denom_S1)
                         denom_ST = np.where(denom_ST < eps_small, eps_small, denom_ST)
-                        
+
                         diff_S1 = np.abs(curr_S1 - prev_S1) / denom_S1
                         diff_ST = np.abs(curr_ST - prev_ST) / denom_ST
                     else:
@@ -185,10 +185,10 @@ def check_convergence(
 
                 passed = (max_delta < tol_change) and (max_ci < tol_ci)
 
-                print_log(
-                    "debug",
-                    f"[DEBUG] {node} - {(max_delta < tol_change)} - {(max_ci < tol_ci)} - {passed}",
-                )
+                # print_log(
+                #     "debug",
+                #     f"[DEBUG] {node} - {(max_delta < tol_change)} - {(max_ci < tol_ci)} - {passed}",
+                # )
 
                 if passed:
                     consecutive_count += 1
@@ -196,10 +196,10 @@ def check_convergence(
 
                         streak_start_idx = max(0, Ns.index(N) - consecutive_count + 1)
                         converged_at = Ns[streak_start_idx]
-                        print_log(
-                            "debug",
-                            f"[DEBUG] {node} - {converged_at} - {consecutive_count}",
-                        )
+                        # print_log(
+                        #     "debug",
+                        #     f"[DEBUG] {node} - {converged_at} - {consecutive_count}",
+                        # )
                 else:
                     consecutive_count = 0
 

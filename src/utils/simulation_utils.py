@@ -21,8 +21,8 @@ from src.utils.utils import (
     truncate_small_values,
 )
 from src.utils import plot_utils as plt_ut
-#from utils.sbml_utils import create_samples_combination, generate_species_samples
 
+# from utils.sbml_utils import create_samples_combination, generate_species_samples
 
 
 def load_roadrunner_model(
@@ -43,8 +43,6 @@ def load_roadrunner_model(
     Returns:
         roadrunner.RoadRunner: Configured RoadRunner instance
     """
-
-    
 
     try:
         writer = libsbml.SBMLWriter()
@@ -129,11 +127,12 @@ def simulate(
 
         return result, ss_time, colnames
     else:
-        # Standard simulation 
+        # Standard simulation
         res = rr_model.simulate(start_time, end_time, output_rows)
 
         return res, None, res.colnames
-    
+
+
 def simulate_with_steady_state(
     rr_model,
     start_time=0,
@@ -141,7 +140,7 @@ def simulate_with_steady_state(
     block_size=10,
     points_per_block=100,
     threshold=1e-12,
-    consecutive_checks = 3,
+    consecutive_checks=3,
     monitor_species=None,
     log_file=None,
 ):
@@ -426,7 +425,7 @@ def process_species_no_samples(args):
             modified_model, integrator=integrator, log_file=log_file
         )
 
-        #__import__('pprint').pprint(modified_rr.relative_tolerance)
+        # __import__('pprint').pprint(modified_rr.relative_tolerance)
 
         modified_rr.selections = selections
 
@@ -599,7 +598,7 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
                 else:
                     relative_variation = np.inf
 
-                __import__('pprint').pprint(relative_variation)
+                __import__("pprint").pprint(relative_variation)
 
                 # Load the data in the dictionary
                 variations_dict[ko_species][species] = {
@@ -631,14 +630,14 @@ def get_knockout_variations_samples(
     # Looping through knockedout results
     for ko_species, species_dict in final_results_knocked_model:
         variations_dict[ko_species] = {}
-        #print_log("G_KO_V", f"  {ko_species}:")
+        # print_log("G_KO_V", f"  {ko_species}:")
         # Looping through combinations in original model
         for combination, original_info_dict in final_results_original_model.items():
             variations_dict[ko_species][combination] = {}
 
             # Looping through original simulation dict
             for species, original_value in original_info_dict.items():
-                #print_log("G_KO_V", f"  {species}:")
+                # print_log("G_KO_V", f"  {species}:")
 
                 if species == ko_species:  # Setting nan if ko species
                     variation = np.nan
@@ -666,7 +665,6 @@ def get_knockout_variations_samples(
                         np.float64(species_dict[combination][species]),
                     )
 
-                    
                     # Getting the variation
                     variation = ko_value - original_val
 
@@ -680,14 +678,10 @@ def get_knockout_variations_samples(
                         inf_vals.add((ko_species, species))
                         relative_variation = np.nan
 
-                    
-
                     # print_log("G_KO_V", f"      variation:{ko_value} - {original_val}: {variation}")
                     # print_log("G_KO_V", f"      relative-variation:({ko_value} - {original_val})/{np.maximum(
                     #     np.abs(original_val), epsilon
                     # )}: {relative_variation}")
-
-
 
                 variations_dict[ko_species][combination][species] = {
                     "variation": variation,
@@ -696,12 +690,21 @@ def get_knockout_variations_samples(
 
     if bool(inf_vals):
         for ko_s, s in list(inf_vals):
-            print_log(log_file, f"[WARNING] Infinite values detected for couple {(ko_s, s)} during relative calculation.")
+            print_log(
+                log_file,
+                f"[WARNING] Infinite values detected for couple {(ko_s, s)} during relative calculation.",
+            )
             print_log(log_file, "Relative results may be unreliable.")
 
     return variations_dict
 
-def get_payoff_vals(final_results_original_model, final_results_knocked_model, epsilon = 1e-20, log_file=None):
+
+def get_payoff_vals(
+    final_results_original_model,
+    final_results_knocked_model,
+    epsilon=1e-20,
+    log_file=None,
+):
 
     payoff_dict = {}
 
@@ -710,7 +713,7 @@ def get_payoff_vals(final_results_original_model, final_results_knocked_model, e
         payoff_dict[ko_species] = {}
 
         # Looping through combinations in original model
-        for combination, original_info_dict in final_results_original_model.items(): 
+        for combination, original_info_dict in final_results_original_model.items():
             # Looping through original simulation dict
             for species, original_value in original_info_dict.items():
 
@@ -751,7 +754,7 @@ def get_payoff_vals(final_results_original_model, final_results_knocked_model, e
     return payoff_dict
 
 
-def get_shapley_values(payoff_dict, n_combinations, log_file = None):
+def get_shapley_values(payoff_dict, n_combinations, log_file=None):
     shapley_dict = {}
 
     for ko_species, ko_info in payoff_dict.items():
@@ -764,14 +767,15 @@ def get_shapley_values(payoff_dict, n_combinations, log_file = None):
 
                 for combination, payoff_value in species_info.items():
                     comb_len = len(combination.split("_"))
-                    left_factor = (math.factorial(comb_len)* math.factorial((n_combinations - comb_len)))/math.factorial(n_combinations)
+                    left_factor = (
+                        math.factorial(comb_len)
+                        * math.factorial((n_combinations - comb_len))
+                    ) / math.factorial(n_combinations)
                     sum += left_factor * payoff_value
 
             shapley_dict[ko_species][species] = sum
 
     return shapley_dict
-
-
 
 
 def generate_values_distance_report(
@@ -909,10 +913,10 @@ def generate_values_distance_report(
 
             f.write("MATRIX STATISTICS:\n")
             f.write("-" * 40 + "\n")
-            f.write(f"Maximum global Distance: {max_diff:.6f}\n")
-            f.write(f"Minimum global Distance: {min_diff:.6f}\n")
-            f.write(f"Mean gloabl Distance: {mean_diff:.6f}\n")
-            f.write(f"Gloabl standard Deviation: {std_diff:.6f}\n")
+            f.write(f"Maximum global Distance: {max_diff}\n")
+            f.write(f"Minimum global Distance: {min_diff}\n")
+            f.write(f"Mean gloabl Distance: {mean_diff}\n")
+            f.write(f"Gloabl standard Deviation: {std_diff}\n")
             f.write(
                 f"Significant Differences: {significant_differences}/{total_comparisons}\n"
             )
@@ -1425,15 +1429,15 @@ def get_simulations_informations(
     return table_results
 
 
-def collapse_informations(data, colnames, log_file = None):
-    target_indices = {} 
+def collapse_informations(data, colnames, log_file=None):
+    target_indices = {}
 
     exp = r"[\[\]]"  # Expression to filter the colnames
 
     # Pre-compute column indices for all target species
     for cn in colnames:
 
-        if cn == 'time':
+        if cn == "time":
             continue
 
         s_id = re.sub(exp, "", cn)
@@ -1444,20 +1448,25 @@ def collapse_informations(data, colnames, log_file = None):
 
     for key in target_indices.keys():
         res[key] = 0
-        count=0
+        count = 0
         for combination, data_dict in data.items():
             res[key] += data_dict[key]
-            count += 1 
-        res[key] = (res[key]/count)
+            count += 1
+        res[key] = res[key] / count
 
     return res
 
 
-def get_convergence(fixed_data, original_model_results, sbml_model, input_species_ids, samples_size, rr_model, log_file = None):
+def get_convergence(
+    fixed_data,
+    original_model_results,
+    sbml_model,
+    input_species_ids,
+    samples_size,
+    rr_model,
+    log_file=None,
+):
     exit(1)
-        
-
-    
 
 
 def get_simulations_informations_with_detailed_data(
@@ -1661,7 +1670,7 @@ def get_variations_hm_samples(
                         variations.append(combination_data[species]["variation"])
 
             if variations:
-                # Use the RMS to avoid the lost of information 
+                # Use the RMS to avoid the lost of information
                 heatmap_data[i, j] = np.sqrt(np.mean([v**2 for v in variations]))
     return (heatmap_data, all_species)
 
@@ -1712,7 +1721,7 @@ def get_variations_hm_no_samples(
                     if np.isinf(variation_entry[key]):
                         raise ZeroDivisionError
                     else:
-                        heatmap_data[i, j] = np.sqrt(variation_entry[key]**2)
+                        heatmap_data[i, j] = variation_entry[key]
                 except KeyError:
                     # If missing from variations_dict, fill with NaN
                     heatmap_data[i, j] = np.nan
@@ -1768,9 +1777,6 @@ def get_importance_informations(
     target_data, original_results, output_dir, log_file=None
 ):
     pass
-
-
-
 
 
 def rms_average(array, axis=1, log_file=None):

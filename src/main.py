@@ -97,9 +97,9 @@ def main():
 
             save_path = f"{args.output}/{file_name}"
 
-            plt_ut.plot_results(res, colnames, save_path, "model_simulation", log_file)
+            # plt_ut.plot_results(res, colnames, save_path, "model_simulation", log_file)
             #
-            # plt_ut.plot_results_interactive(res, colnames, log_file=file_name)
+            plt_ut.plot_results_interactive(res, colnames, log_file=file_name)
 
         elif args.command == "importance_assessment":
 
@@ -336,56 +336,57 @@ def main():
 
                 all_species = set()
 
-                try:
+                relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
+                    sim_variations, all_species, ko_species_list, log_file=log_file
+                )
 
-                    relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
-                        sim_variations, all_species, ko_species_list, log_file=log_file
+                absolute_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
+                    sim_variations,
+                    all_species,
+                    ko_species_list,
+                    "absolute",
+                    log_file=log_file,
+                )
+
+                if args.save_output:
+
+                    saving_path = f"./report/{file_name}/No Perturbations"
+
+                    # Check if the destinations folder exists otherwise create it
+                    if not os.path.exists(saving_path):
+                        os.makedirs(saving_path, exist_ok=True)
+                        ut.print_log(log_file, f"Created directory: {saving_path}")
+
+                    relative_data_frame = pd.DataFrame(
+                        relative_map, columns=all_species_rel, index=ko_species_list
                     )
 
-                    log_rel_map = np.log10(relative_map + 1)
-
-                    plt_ut.plot_variations_heatmap_relative(
-                        log_rel_map,
-                        all_species_rel,
-                        ko_species_list,
-                        title="Relative log variations heatmap",
+                    absolute_data_frame = pd.DataFrame(
+                        absolute_map, columns=all_species_abs, index=ko_species_list
                     )
 
-                    if args.save_output:
-                        relative_data_frame = pd.DataFrame(
-                            relative_map, columns=all_species_rel, index=ko_species_list
-                        )
-                        relative_data_frame.to_csv(
-                            f"./report/{file_name}/relative_variations.csv"
-                        )
+                    relative_data_frame.to_csv(f"{saving_path}/relative_variations.csv")
 
-                except ZeroDivisionError:
+                    absolute_data_frame.to_csv(f"{saving_path}/absolute_variations.csv")
 
-                    abs_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
-                        sim_variations,
-                        all_species,
-                        ko_species_list,
-                        "absolute",
-                        log_file,
-                    )
+                plt_ut.plot_heatmap(
+                    relative_map,
+                    ko_species_list,
+                    all_species_rel,
+                    title="Relative variations without perturbations",
+                    save_path=f"./imgs/{file_name}/No Perturbations",
+                    img_name="Relative variations Heatmap.png",
+                )
 
-                    log_abs_map = np.log10(abs_map + 1)
-
-                    plt_ut.plot_variations_heatmap_absolute(
-                        log_abs_map,
-                        all_species_abs,
-                        ko_species_list,
-                        title="Absolute log variations heatmap",
-                    )
-
-                    if args.save_output:
-                        absolute_data_frame = pd.DataFrame(
-                            abs_map, columns=all_species_abs, index=ko_species_list
-                        )
-
-                        absolute_data_frame.to_csv(
-                            f"./report/{file_name}/absolute_variations.csv"
-                        )
+                plt_ut.plot_heatmap(
+                    absolute_map,
+                    ko_species_list,
+                    all_species_abs,
+                    cmap="plasma",
+                    title="Absolute variations without perturbations",
+                    save_path=f"./imgs/{file_name}/No Perturbations",
+                    img_name="Absolute variations Heatmap.png",
+                )
 
             else:  # === IF SAMPLES ===
                 try:
@@ -490,6 +491,7 @@ def main():
                         samples_log_absolute_map,
                         ko_species_list,
                         all_species_abs,
+                        cmap="plasma",
                         title="Absolute variations with perturbations (Log scaled)",
                         save_path=f"./imgs/{file_name}/",
                         img_name="Log scaled absolute variations Heatmap.png",
@@ -497,6 +499,13 @@ def main():
 
                     # SAVING THE VARAITIONS HEATMAPS
                     if args.save_output:  # Saving the variation heatmaps
+
+                        save_path = f"./report/{file_name}/No Perturbations"
+
+                        os.makedirs(
+                            save_path,
+                        )
+
                         relative_data_frame = pd.DataFrame(
                             samples_relative_map,
                             columns=all_species_rel,
@@ -517,13 +526,13 @@ def main():
                             f"./report/{file_name}/absolute_variations.csv"
                         )
 
-                        _, ko_ranking_relative = ut.get_ko_species_importance(
-                            samples_log_relative_map, ko_species_list, log_file=log_file
-                        )
+                    _, ko_ranking_relative = ut.get_ko_species_importance(
+                        samples_log_relative_map, ko_species_list, log_file=log_file
+                    )
 
-                        _, ko_ranking_absolute = ut.get_ko_species_importance(
-                            samples_log_absolute_map, ko_species_list, log_file
-                        )
+                    _, ko_ranking_absolute = ut.get_ko_species_importance(
+                        samples_log_absolute_map, ko_species_list, log_file
+                    )
 
                     if args.perturbations_importance:
                         ut.print_log(log_file, "=== IMPORTANCE ANALYSIS ===")
@@ -585,7 +594,7 @@ def main():
                             relative_values_distances,
                             all_species_rel,
                             ko_species_list,
-                            cmap="BrBG_r",
+                            cmap="PiYG_r",
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                             title="Perturbations VS No Perturbations Distance (Relative map)",
                             img_name="Relative Perturbations VS No Perturbations distance",
@@ -595,7 +604,7 @@ def main():
                             absolute_values_distances,
                             all_species_abs,
                             ko_species_list,
-                            cmap="BrBG_r",
+                            cmap="PRGn_r",
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                             title="Perturbations VS No Perturbations Distance (Absolute map)",
                             img_name="Absolute Perturbations VS No Perturbations distance",
@@ -653,23 +662,21 @@ def main():
                             " Simulating multiporcessing with fixed samples",
                         )
 
-                        fixed_knockout_data = (
-                            sim_ut.process_species_multiprocessing(
-                                ids_to_ko,
-                                model_dict,
-                                fixed_combinations,
-                                input_species_ids,
-                                selections,
-                                integrator,
-                                start_time=0,
-                                end_time=end_time,
-                                steady_state=steady_state,
-                                max_end_time=max_end_time,
-                                min_ss_time=min_ss_time,
-                                log_file=log_file,
-                                preserve_input=args.preserve_inputs,
-                                use_perturbations=args.use_perturbations,
-                            )
+                        fixed_knockout_data = sim_ut.process_species_multiprocessing(
+                            ids_to_ko,
+                            model_dict,
+                            fixed_combinations,
+                            input_species_ids,
+                            selections,
+                            integrator,
+                            start_time=0,
+                            end_time=end_time,
+                            steady_state=steady_state,
+                            max_end_time=max_end_time,
+                            min_ss_time=min_ss_time,
+                            log_file=log_file,
+                            preserve_input=args.preserve_inputs,
+                            use_perturbations=args.use_perturbations,
                         )
 
                         fixed_variation_dict = sim_ut.get_knockout_variations_samples(
@@ -765,7 +772,7 @@ def main():
                             fixed_relative_values_distances,
                             fixed_all_species_rel,
                             ko_species_list,
-                            cmap="PuOr_r",
+                            cmap="cividis",
                             save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
                             title="Random Perturbations VS Fixed Perturbations Distance (Relative map)",
                             img_name="Relative Random Perturbations VS Fixed Perturbations distance",
@@ -786,6 +793,12 @@ def main():
                     )
 
         elif args.command == "sensitivity_analysis":
+
+            saving_path = f"./report/{file_name}/"
+
+            if not os.path.exists(saving_path):
+                os.makedirs(saving_path, exist_ok=True)
+                ut.print_log(log_file, "Repository successfully cerated")
 
             # LOADING MODEL
             sbml_doc = sbml_ut.load_model(args.input_path)
@@ -817,7 +830,7 @@ def main():
 
             spec = ProblemSpec(problem)
 
-            params = spec.sample(sobol_sample.sample, 2).samples
+            params = spec.sample(sobol_sample.sample, 4096).samples
 
             # RES = np.zeros([params.shape[0], len(internal_nodes)])
 
@@ -907,7 +920,17 @@ def main():
             random_std = np.std(RES, axis=0)
             random_mean = np.mean(RES, axis=0)
 
-            mean_diff = np.abs(fixed_mean - random_mean)
+            # mean_diff = np.abs(fixed_mean - random_mean)
+            mean_diff = (fixed_mean - random_mean) / fixed_mean
+
+            ut.print_log(
+                f"{saving_path}/RandomVsFixed infos",
+                f"Max: {np.nanmax(mean_diff)} | Min:{np.nanmin(mean_diff)} | Avg: {np.nanmean(mean_diff)} | Std. Dev: {np.std(mean_diff)}",
+            )
+
+            # __import__("pprint").pprint(
+            #     f"Max: {np.nanmax(mean_diff)} | Min{np.nanmin(mean_diff)} | Avg: {np.nanmean(mean_diff)} | Std. Dev: {np.std(mean_diff)}"
+            # )
 
             normalized_diff = mean_diff / random_std
 
@@ -930,7 +953,7 @@ def main():
                 )
 
             if args.check_convergence:
-                sample_sizes = [64, 128]#, 256, 512, 1024, 2048, 4096]
+                sample_sizes = [64, 128, 256, 512, 1024, 2048, 4096]
 
                 informations_dict = {}
 
@@ -971,7 +994,7 @@ def main():
                     informations_dict,
                     available_internal_nodes,
                     min_consecutive=2,
-                    relative=False
+                    relative=False,
                 )
 
                 sens_ut.convergence_report(
@@ -1001,13 +1024,13 @@ def main():
             )
 
             # Inhibit the species
-            # modified_model = sbml_ut.knockout_species(
-            #     sbml_model, args.species_id, log_file
-            # )
-
-            modified_model, r = sbml_ut.knockout_species_via_reaction(
+            modified_model = sbml_ut.knockout_species(
                 sbml_model, args.species_id, log_file
             )
+
+            # modified_model, r = sbml_ut.knockout_species_via_reaction(
+            #     sbml_model, args.species_id, log_file
+            # )
 
             # if r is None:
             #     raise Exception("Knockout species failed")
