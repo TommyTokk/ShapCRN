@@ -856,7 +856,7 @@ def main():
             c_sample_size = 64
 
             if args.check_convergence:
-                sample_sizes = [64, 128]  # , 256, 512, 1024, 2048, 4096]
+                sample_sizes = [64, 128, 256, 512, 1024, 2048, 4096]
 
                 informations_dict = {}
 
