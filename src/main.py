@@ -853,7 +853,7 @@ def main():
 
             spec = ProblemSpec(problem)
 
-            c_sample_size = 64
+            c_sample_size = None
 
             if args.check_convergence:
                 sample_sizes = [64, 128, 256, 512, 1024, 2048, 4096]
@@ -905,6 +905,8 @@ def main():
                         c_sample_size = 4096
                         break
                     else:
+                        if c_sample_size is None:
+                            c_sample_size = 64
                         if node_info["converged_at"] > c_sample_size:
                             c_sample_size = node_info["converged_at"]
 
