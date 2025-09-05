@@ -994,9 +994,10 @@ def main():
             # mean_diff = np.abs(fixed_mean - random_mean)
             mean_diff = (fixed_mean - random_mean) / fixed_mean
 
+            rms_diff = np.sqrt(np.mean(mean_diff**2))
             ut.print_log(
                 f"{saving_path}/RandomVsFixed infos",
-                f"Max: {np.nanmax(mean_diff)} | Min:{np.nanmin(mean_diff)} | Avg: {np.nanmean(mean_diff)} | Std. Dev: {np.std(mean_diff)}",
+                f"Max: {np.nanmax(mean_diff)} | Min:{np.nanmin(mean_diff)} | Avg: {rms_diff} | Std. Dev: {np.std(mean_diff)}",
             )
 
             # __import__("pprint").pprint(
