@@ -40,7 +40,7 @@ from src.utils import sens_utils as sens_ut
 
 
 def main():
-    load_dotenv()
+    # load_dotenv()
     # Use the parse_args function to get command-line arguments
     args = ut.parse_args()
 
@@ -823,17 +823,6 @@ def main():
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
-            # Creating the problem
-            problem = sens_ut.get_problem_parameters(
-                sbml_model, len(input_ids), input_ids, 20, log_file=log_file
-            )
-
-            spec = ProblemSpec(problem)
-
-            params = spec.sample(sobol_sample.sample, 4096).samples
-
-            # RES = np.zeros([params.shape[0], len(internal_nodes)])
-
             res_dict = {}
             needed_selections = [f"[{n}]" for n in internal_nodes]
             selections = rr.timeCourseSelections
@@ -857,6 +846,86 @@ def main():
             ut.print_log(
                 log_file, f"Available internal nodes: {available_needed_selections}"
             )
+
+            problem = sens_ut.get_problem_parameters(
+                sbml_model, len(input_ids), input_ids, 20, log_file=log_file
+            )
+
+            spec = ProblemSpec(problem)
+
+            c_sample_size = 64
+
+            if args.check_convergence:
+                sample_sizes = [64, 128]  # , 256, 512, 1024, 2048, 4096]
+
+                informations_dict = {}
+
+                ut.print_log(log_file, "Starting convergence analysis")
+
+                for i, size in enumerate(sample_sizes):
+                    ut.print_log(log_file, f" Running  with {size} samples")
+                    start = time.perf_counter()
+                    params = sobol_sample.sample(problem, sample_sizes[i])
+
+                    RES_i = sens_ut.run_simulation_with_params(
+                        rr,
+                        params,
+                        available_needed_selections,
+                        selection_to_idx,
+                        input_ids,
+                        log_file,
+                    )
+
+                    # cv = sens_ut.assess_model_linearity(RES, size)
+
+                    res_dict_conv = {}
+
+                    for j, node_id in enumerate(available_internal_nodes):
+                        Si = sobol_analyze.analyze(problem, RES_i[:, j])
+                        res_dict_conv[node_id] = Si
+
+                    informations_dict[size] = res_dict_conv
+
+                    end = time.perf_counter()
+
+                    ut.print_log(
+                        log_file, f"{size} samples analyzed in {(end - start)}s"
+                    )
+                    ut.print_log(log_file, 40 * "=")
+
+                convergence_informations = sens_ut.check_convergence(
+                    informations_dict,
+                    available_internal_nodes,
+                    min_consecutive=2,
+                    relative=False,
+                )
+
+                for node, node_info in convergence_informations.items():
+                    if node_info["converged_at"] is None:
+                        c_sample_size = 4096
+                        break
+                    else:
+                        if node_info["converged_at"] > c_sample_size:
+                            c_sample_size = node_info["converged_at"]
+
+                sens_ut.convergence_report(
+                    convergence_informations,
+                    f"./report/{file_name}/convergence_analysis",
+                )
+
+                sens_ut.plot_convergence_single_plot(
+                    convergence_informations, file_name=file_name
+                )
+
+            # Creating the problem
+            #
+            base_samples = 4096 if c_sample_size is None else c_sample_size
+
+            __import__("pprint").pprint(base_samples)
+
+            params = spec.sample(sobol_sample.sample, base_samples).samples
+
+            # RES = np.zeros([params.shape[0], len(internal_nodes)])
 
             start = time.perf_counter()
 
@@ -950,60 +1019,6 @@ def main():
 
                 sens_ut.report_sensitivity(
                     res_dict, input_ids, f"./report/{file_name}/sens_analysis"
-                )
-
-            if args.check_convergence:
-                sample_sizes = [64, 128, 256, 512, 1024, 2048, 4096]
-
-                informations_dict = {}
-
-                ut.print_log(log_file, "Starting convergence analysis")
-
-                for i, size in enumerate(sample_sizes):
-                    ut.print_log(log_file, f" Running  with {size} samples")
-                    start = time.perf_counter()
-                    params = sobol_sample.sample(problem, sample_sizes[i])
-
-                    RES_i = sens_ut.run_simulation_with_params(
-                        rr,
-                        params,
-                        available_needed_selections,
-                        selection_to_idx,
-                        input_ids,
-                        log_file,
-                    )
-
-                    cv = sens_ut.assess_model_linearity(RES, size)
-
-                    res_dict_conv = {}
-
-                    for j, node_id in enumerate(available_internal_nodes):
-                        Si = sobol_analyze.analyze(problem, RES_i[:, j])
-                        res_dict_conv[node_id] = Si
-
-                    informations_dict[size] = res_dict_conv
-
-                    end = time.perf_counter()
-
-                    ut.print_log(
-                        log_file, f"{size} samples analyzed in {(end - start)}s"
-                    )
-                    ut.print_log(log_file, 40 * "=")
-
-                convergence_informations = sens_ut.check_convergence(
-                    informations_dict,
-                    available_internal_nodes,
-                    min_consecutive=2,
-                    relative=False,
-                )
-
-                sens_ut.convergence_report(
-                    convergence_informations,
-                    f"./report/{file_name}/convergence_analysis",
-                )
-
-                sens_ut.plot_convergence_single_plot(
-                    convergence_informations, file_name=file_name
                 )
 
         elif args.command == "knockout_species":
