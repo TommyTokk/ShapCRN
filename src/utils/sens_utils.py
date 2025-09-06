@@ -485,13 +485,13 @@ def convergence_analysis(random_samples, fixed_samples, n_inputs):
     plt.tight_layout()
 
 
-def statistical_tests(random_samples, fixed_samples):
+def statistical_tests(random_samples, fixed_samples, num_nodes):
     """
     Perform statistical tests to compare distributions
     """
     print("=== STATISTICAL TESTS ===")
 
-    for node in range(3):
+    for node in range(num_nodes):
         random_node = random_samples[:, node]
         fixed_node = fixed_samples[:, node]
 

@@ -1014,8 +1014,10 @@ def main():
 
             normalized_diff = mean_diff / random_std
 
-            sens_ut.convergence_analysis(RES, FIXED_RES, len(input_ids))
-            sens_ut.statistical_tests(RES, FIXED_RES)
+            num_nodes = len(available_needed_selections)
+
+            # sens_ut.convergence_analysis(RES, FIXED_RES, num_nodes)
+            sens_ut.statistical_tests(RES, FIXED_RES, num_nodes)
 
             __import__("pprint").pprint(
                 f"fixed mean: {fixed_mean} | random_mean{random_mean} | mean diff: {mean_diff} | normalized diff: {normalized_diff}"
