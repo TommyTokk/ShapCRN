@@ -76,7 +76,13 @@ def parse_args():
         "--threshold",
         type=float,
         default=1e-6,
-        help="Threshold for steady state detection (default: 1e-6)",
+        help="Threshold for steady state detection (default: 1e-12)",
+    )
+
+    simulate_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Generate an intereactive plot instead of a static one",
     )
 
     # === SIMULATE_SAMPLES command ===
@@ -212,7 +218,10 @@ def parse_args():
     )
 
     simulate_samples_parser.add_argument(
-        "-so", "--save-output", default=False, help="Save importance analysis results"
+        "-so",
+        "--save-output",
+        action="store_true",
+        help="Save importance analysis results",
     )
 
     # === SENSITIVITY_ANALYSIS command ===
@@ -258,8 +267,8 @@ def parse_args():
     knockout_species_parser.add_argument(
         "-o",
         "--output",
-        default="./imgs",
-        help="Output directory for plots (default: ./imgs)",
+        default="./models",
+        help="Output directory for plots (default: ./models)",
     )
 
     # === KNOCKOUT_REACTION command ===
@@ -280,24 +289,24 @@ def parse_args():
     )
 
     # === CREATE PETRINET command ==
-    create_petrinet_parser = subparsers.add_parser(
-        "create_petrinet", help="Create the PetriNet of the given model"
-    )
-
-    create_petrinet_parser.add_argument("input_path", help="Path to the SBML model")
-
-    create_petrinet_parser.add_argument(
-        "-o",
-        "--output",
-        default="./imgs/PetriNets",
-        help="Output directory for plots (default: ./imgs/PetriNets)",
-    )
-
-    create_petrinet_parser.add_argument(
-        "-tn", "--tests_number", default=10, help="Number of tests to perform"
-    )
-
-    create_petrinet_parser.add_argument("-iq", "--increase_quantity", default=5)
+    # create_petrinet_parser = subparsers.add_parser(
+    #     "create_petrinet", help="Create the PetriNet of the given model"
+    # )
+    #
+    # create_petrinet_parser.add_argument("input_path", help="Path to the SBML model")
+    #
+    # create_petrinet_parser.add_argument(
+    #     "-o",
+    #     "--output",
+    #     default="./imgs/PetriNets",
+    #     help="Output directory for plots (default: ./imgs/PetriNets)",
+    # )
+    #
+    # create_petrinet_parser.add_argument(
+    #     "-tn", "--tests_number", default=10, help="Number of tests to perform"
+    # )
+    #
+    # create_petrinet_parser.add_argument("-iq", "--increase_quantity", default=5)
 
     # Common arguments for all commands
     for subparser in [

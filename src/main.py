@@ -97,9 +97,15 @@ def main():
 
             save_path = f"{args.output}/{file_name}"
 
-            # plt_ut.plot_results(res, colnames, save_path, "model_simulation", log_file)
-            #
-            plt_ut.plot_results_interactive(res, colnames, log_file=file_name)
+            if args.interactive:
+                plt_ut.plot_results_interactive(
+                    res, colnames, model_name=file_name, log_file=log_file
+                )
+
+            else:
+                plt_ut.plot_results(
+                    res, colnames, save_path, "model_simulation", log_file
+                )
 
         elif args.command == "importance_assessment":
 
@@ -618,21 +624,23 @@ def main():
                             "[WARNING] Notice that the number of samples will equals to the number of variations",
                         )
 
-                        env_pert = os.getenv("FIXED_PERTURBATIONS").split(
-                            ","
-                        )  # pyright:ignore
+                        # env_pert = os.getenv("FIXED_PERTURBATIONS").split(
+                        #     ","
+                        # )  # pyright:ignore
+                        #
+                        # if env_pert is not None:
+                        #     fixed_variations = [np.float64(v) for v in env_pert]
+                        # else:
+                        #     raise TypeError("Perturbations are None")
 
-                        if env_pert is not None:
-                            fixed_variations = [np.float64(v) for v in env_pert]
-                        else:
-                            raise TypeError("Perturbations are None")
+                        fp = [int(p) for p in args.fixed_perturbations]
 
                         ut.print_log(log_file, "Generating fixed combinations")
 
                         fixed_combinations = sbml_ut.get_fixed_combinations(
                             sbml_model,
                             input_species_ids,
-                            fixed_variations,
+                            fp,
                             log_file,
                         )
 
@@ -1099,6 +1107,10 @@ def main():
             # res_modified = sim_ut.simulate(rr_modified)
             # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
         elif args.command == "create_petrinet":
+            print(
+                "Hi!\n This command is still under construction...\n Thanks for your patience."
+            )
+            exit(1)
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
             dir_name = os.path.dirname(args.input_path)

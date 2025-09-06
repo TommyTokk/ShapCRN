@@ -106,7 +106,8 @@ def plot_results(
 def plot_results_interactive(
     simulation_data,
     colnames,
-    html_dir_path="./plots",
+    model_name,
+    html_dir_path="./imgs",
     html_name="simulation",
     log_file=None,
     ss_time=None,
@@ -133,15 +134,16 @@ def plot_results_interactive(
     """
     species_names = colnames[1:]
 
-    # Create directory if it doesn't exist
-    os.makedirs(html_dir_path, exist_ok=True)
-
     # Ensure html_name has .html extension
     if not html_name.endswith(".html"):
         html_name = f"{html_name}.html"
 
+    saving_path = os.path.join(html_dir_path, model_name)
+    # Create directory if it doesn't exist
+    os.makedirs(saving_path, exist_ok=True)
+
     # Combine directory path and filename
-    html_file_path = os.path.join(html_dir_path, html_name)
+    html_file_path = os.path.join(saving_path, html_name)
 
     time = simulation_data[:, 0]
 
@@ -467,13 +469,13 @@ def plot_all_simulation_traces(
 def plot_heatmap(data, y_labels, x_labels, **kwargs):
     """
     Simple heatmap plotting with customizable color mapping.
-    
+
     Args:
         data (np.ndarray): 2D array with heatmap values
         y_labels (list): Labels for y-axis (rows)
         x_labels (list): Labels for x-axis (columns)
         **kwargs: Optional customization parameters
-        
+
     Optional kwargs:
         title (str): Title for the heatmap. Default: "Heatmap"
         cmap (str): Colormap name. Default: "viridis"
@@ -482,80 +484,80 @@ def plot_heatmap(data, y_labels, x_labels, **kwargs):
         save_path (str): Directory path to save figure. Default: None (don't save)
         img_name (str): Filename for saved image. Default: "heatmap.png"
         annot (bool): Show values in cells. Default: False
-        
+
     Returns:
         fig, ax: matplotlib figure and axes objects
     """
-    
+
     # Default parameters
     defaults = {
-        'title': 'Heatmap',
-        'cmap': 'viridis',
-        'figsize': (12, 8),
-        'annot': False,
-        'save_path': "./imgs",
-        'img_name': "heatmap.png"
+        "title": "Heatmap",
+        "cmap": "viridis",
+        "figsize": (12, 8),
+        "annot": False,
+        "save_path": "./imgs",
+        "img_name": "heatmap.png",
     }
-    
+
     # Update defaults with user kwargs
     params = {**defaults, **kwargs}
-    
+
     # Create custom colormap if colors provided
-    if 'colors' in kwargs:
-        cmap = LinearSegmentedColormap.from_list("custom", kwargs['colors'])
+    if "colors" in kwargs:
+        cmap = LinearSegmentedColormap.from_list("custom", kwargs["colors"])
     else:
-        cmap = params['cmap']
-    
+        cmap = params["cmap"]
+
     # Set NaN values to be displayed as black
     if isinstance(cmap, str):
         cmap = plt.cm.get_cmap(cmap).copy()
     else:
         cmap = cmap.copy()
-    cmap.set_bad(color='black')
-    
+    cmap.set_bad(color="black")
+
     # Create plot
-    fig, ax = plt.subplots(figsize=params['figsize'])
-    
+    fig, ax = plt.subplots(figsize=params["figsize"])
+
     # Create heatmap
     sns.heatmap(
         data,
         xticklabels=x_labels,
         yticklabels=y_labels,
-        annot=params['annot'],
+        annot=params["annot"],
         cmap=cmap,
-        ax=ax
+        ax=ax,
     )
-    
+
     # Set title and labels
-    ax.set_title(params['title'], fontsize=14, pad=20)
-    ax.set_xlabel('Species')
-    ax.set_ylabel('Knocked-out Ids')
-    
+    ax.set_title(params["title"], fontsize=14, pad=20)
+    ax.set_xlabel("Species")
+    ax.set_ylabel("Knocked-out Ids")
+
     # Rotate x-axis labels for better readability
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
-    
+
     # Save if requested
-    if params['save_path']:
+    if params["save_path"]:
         # Create directory if it doesn't exist
-        os.makedirs(params['save_path'], exist_ok=True)
-        
+        os.makedirs(params["save_path"], exist_ok=True)
+
         # Construct full file path
-        full_file_path = os.path.join(params['save_path'], params['img_name'])
-        
+        full_file_path = os.path.join(params["save_path"], params["img_name"])
+
         # Debug logging
         print(f"Saving to directory: {params['save_path']}")
         print(f"File name: {params['img_name']}")
         print(f"Full file path: {full_file_path}")
-        
+
         # Verify that the directory exists and the full path is not a directory
         # if os.path.isdir(full_file_path):
         #     raise ValueError(f"Cannot save file: '{full_file_path}' is a directory, not a file path")
-        
+
         # Save the figure
-        plt.savefig(full_file_path, bbox_inches='tight', dpi=300)
+        plt.savefig(full_file_path, bbox_inches="tight", dpi=300)
         print(f"Heatmap saved successfully to: {full_file_path}")
-    
+
     return fig, ax
 
 

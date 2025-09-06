@@ -63,11 +63,18 @@ def create_ko_models(target_ids, sbml_model, sbml_str, log_file=None):
     return model_dict
 
 
-def save_file(file_name, operation_name, model, save_output=False, log_file=None):
+def save_file(
+    file_name,
+    operation_name,
+    model,
+    save_output=False,
+    save_path="./models",
+    log_file=None,
+):
     # Generate output filename
     base_name, extension = os.path.splitext(file_name)
     output_filename = f"{base_name}_{operation_name}{extension}"
-    output_path = os.path.join("models", output_filename)
+    output_path = os.path.join(save_path, output_filename)
 
     # Get the XML representation of the modified model
     xml_string = get_sbml_as_xml(model, log_file)
