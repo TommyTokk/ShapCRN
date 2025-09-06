@@ -138,19 +138,17 @@ def main():
                 ids_to_ko = [s.getId() for s in sbml_model.getListOfSpecies()]
             else:
                 # Else only the provided ones will be used
-                ids_to_ko = args.knockout
+                ids_to_ko = list(set(species_list).intersection(set(args.knockout)))
 
             if args.preserve_inputs:
                 # Removing the input species from the species to analyze
                 ids_to_ko = list(set(ids_to_ko) - set(input_species_ids))
 
-            ids_to_ko.sort()
-
             # Init the combinations array
             combinations = None
 
             if args.use_perturbations:
-                if args.fixed_perturbations is None:
+                if True:  # args.fixed_perturbations is None:
                     ut.print_log(log_file, "Running with random samples generations")
 
                     # Create the combinations
@@ -209,7 +207,7 @@ def main():
             )
 
             if args.use_perturbations:
-                if args.fixed_perturbations is None:
+                if True:  # args.fixed_perturbations is None:
                     # Simulate the original model with samples
                     ut.print_log(
                         log_file, "Simulating original model with random samples"
@@ -343,12 +341,12 @@ def main():
                 all_species = set()
 
                 relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
-                    sim_variations, all_species, ko_species_list, log_file=log_file
+                    sim_variations, species_list, ko_species_list, log_file=log_file
                 )
 
                 absolute_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
                     sim_variations,
-                    all_species,
+                    species_list,
                     ko_species_list,
                     "absolute",
                     log_file=log_file,
@@ -364,11 +362,11 @@ def main():
                         ut.print_log(log_file, f"Created directory: {saving_path}")
 
                     relative_data_frame = pd.DataFrame(
-                        relative_map, columns=all_species_rel, index=ko_species_list
+                        relative_map, columns=species_list, index=ko_species_list
                     )
 
                     absolute_data_frame = pd.DataFrame(
-                        absolute_map, columns=all_species_abs, index=ko_species_list
+                        absolute_map, columns=species_list, index=ko_species_list
                     )
 
                     relative_data_frame.to_csv(f"{saving_path}/relative_variations.csv")
@@ -378,7 +376,7 @@ def main():
                 plt_ut.plot_heatmap(
                     relative_map,
                     ko_species_list,
-                    all_species_rel,
+                    species_list,
                     title="Relative variations without perturbations",
                     save_path=f"./imgs/{file_name}/No Perturbations",
                     img_name="Relative variations Heatmap.png",
@@ -387,7 +385,7 @@ def main():
                 plt_ut.plot_heatmap(
                     absolute_map,
                     ko_species_list,
-                    all_species_abs,
+                    species_list,
                     cmap="plasma",
                     title="Absolute variations without perturbations",
                     save_path=f"./imgs/{file_name}/No Perturbations",
@@ -411,7 +409,7 @@ def main():
                     )
 
                     # Collect all species and knocked-out species
-                    all_species = set()
+                    # all_species = set()
                     ko_species_list = list(variation_dict.keys())
 
                     # GETTING ALL THE MAPS
@@ -419,7 +417,7 @@ def main():
                     no_samples_relative_map, all_species_rel = (
                         sim_ut.get_no_samples_variations(
                             variation_dict,
-                            all_species,
+                            species_list,
                             ko_species_list,
                             variation_type="relative",
                             log_file=log_file,
@@ -429,7 +427,7 @@ def main():
                     no_samples_absolute_map, all_species_abs = (
                         sim_ut.get_no_samples_variations(
                             variation_dict,
-                            all_species,
+                            species_list,
                             ko_species_list,
                             "absolute",
                             log_file,
@@ -440,7 +438,7 @@ def main():
                     samples_relative_map, all_species_rel = (
                         sim_ut.get_variations_hm_samples(
                             variation_dict,
-                            all_species,
+                            species_list,
                             ko_species_list,
                             variation_type="relative",
                             log_file=log_file,
@@ -450,7 +448,7 @@ def main():
                     samples_absolute_map, all_species_abs = (
                         sim_ut.get_variations_hm_samples(
                             variation_dict,
-                            all_species,
+                            species_list,
                             ko_species_list,
                             variation_type="absolute",
                             log_file=log_file,
@@ -487,7 +485,7 @@ def main():
                     plt_ut.plot_heatmap(
                         samples_log_relative_map,
                         ko_species_list,
-                        all_species_rel,
+                        species_list,
                         title="Relative variations with perturbations (Log scaled)",
                         save_path=f"./imgs/{file_name}/",
                         img_name="Log scaled relative variations Heatmap.png",
@@ -496,7 +494,7 @@ def main():
                     plt_ut.plot_heatmap(
                         samples_log_absolute_map,
                         ko_species_list,
-                        all_species_abs,
+                        species_list,
                         cmap="plasma",
                         title="Absolute variations with perturbations (Log scaled)",
                         save_path=f"./imgs/{file_name}/",
@@ -508,13 +506,11 @@ def main():
 
                         save_path = f"./report/{file_name}/No Perturbations"
 
-                        os.makedirs(
-                            save_path,
-                        )
+                        os.makedirs(save_path, exist_ok=True)
 
                         relative_data_frame = pd.DataFrame(
                             samples_relative_map,
-                            columns=all_species_rel,
+                            columns=species_list,
                             index=ko_species_list,
                         )
 
@@ -524,7 +520,7 @@ def main():
 
                         absolute_data_frame = pd.DataFrame(
                             samples_absolute_map,
-                            columns=all_species_abs,
+                            columns=species_list,
                             index=ko_species_list,
                         )
 
@@ -598,8 +594,8 @@ def main():
                         # PLOTTING THE VALUES DISTANCES
                         plt_ut.plot_heatmap(
                             relative_values_distances,
-                            all_species_rel,
                             ko_species_list,
+                            species_list,
                             cmap="PiYG_r",
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                             title="Perturbations VS No Perturbations Distance (Relative map)",
@@ -608,8 +604,8 @@ def main():
 
                         plt_ut.plot_heatmap(
                             absolute_values_distances,
-                            all_species_abs,
                             ko_species_list,
+                            species_list,
                             cmap="PRGn_r",
                             save_path=f"./imgs/{file_name}/Perturbations importance analysis",
                             title="Perturbations VS No Perturbations Distance (Absolute map)",
@@ -696,7 +692,7 @@ def main():
                         fixed_relative_map, fixed_all_species_rel = (
                             sim_ut.get_variations_hm_samples(
                                 fixed_variation_dict,
-                                all_species,
+                                species_list,
                                 ko_species_list,
                                 variation_type="relative",
                                 log_file=log_file,
@@ -706,7 +702,7 @@ def main():
                         fixed_absolute_map, fixed_all_species_abs = (
                             sim_ut.get_variations_hm_samples(
                                 fixed_variation_dict,
-                                all_species,
+                                species_list,
                                 ko_species_list,
                                 variation_type="absolute",
                                 log_file=log_file,
@@ -778,8 +774,8 @@ def main():
                         # PLOTTING VALUES DISTANCES HEATMAPS
                         plt_ut.plot_heatmap(
                             fixed_relative_values_distances,
-                            fixed_all_species_rel,
                             ko_species_list,
+                            species_list,
                             cmap="cividis",
                             save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
                             title="Random Perturbations VS Fixed Perturbations Distance (Relative map)",
@@ -788,8 +784,8 @@ def main():
 
                         plt_ut.plot_heatmap(
                             fixed_absolute_values_distances,
-                            fixed_all_species_abs,
                             ko_species_list,
+                            species_list,
                             cmap="PuOr_r",
                             save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
                             title="Random Perturbations VS Fixed Perturbations Distance (Absolute map)",
@@ -827,7 +823,11 @@ def main():
                 else:
                     continue
 
-            internal_nodes = list(set(all_species_ids))  # - set(input_ids))
+            if args.preserve_inputs:
+
+                internal_nodes = list(set(all_species_ids) - set(input_ids))
+            else:
+                internal_nodes = list(set(all_species_ids))
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
@@ -929,7 +929,7 @@ def main():
 
             # Creating the problem
             #
-            base_samples = 4096 if c_sample_size is None else c_sample_size
+            base_samples = args.base_samples if c_sample_size is None else c_sample_size
 
             __import__("pprint").pprint(base_samples)
 

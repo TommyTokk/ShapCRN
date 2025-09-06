@@ -10,9 +10,9 @@
                 hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" />
             <species id="B" compartment="cell" initialConcentration="10"
                 hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" />
-            <species id="D" compartment="cell" initialConcentration="5"
-                hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" />
             <species id="C" compartment="cell" initialConcentration="0"
+                    hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" />
+            <species id="D" compartment="cell" initialConcentration="5"
                 hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" />
             <species id="Out1" compartment="cell" initialConcentration="0"
                 hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false" />

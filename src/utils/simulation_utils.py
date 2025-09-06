@@ -1591,11 +1591,11 @@ def get_no_samples_variations(
     """
 
     # Updating the all_species set with the model's species
-    for combinations in variations_dict.values():
-        for species_data in combinations.values():
-            all_species.update(species_data.keys())
+    # for combinations in variations_dict.values():
+    #     for species_data in combinations.values():
+    #         all_species.update(species_data.keys())
 
-    all_species = sorted(list(all_species))
+    # all_species = sorted(list(all_species))
 
     # Creating the result matrix with shape (ko_species, all_species)
     res_matrix = np.zeros((len(ko_species_list), len(all_species)))
@@ -1640,11 +1640,11 @@ def get_variations_hm_samples(
     """
 
     # Updating the all_species set
-    for combinations in variations_dict.values():
-        for species_data in combinations.values():
-            all_species.update(species_data.keys())
-
-    all_species = sorted(list(all_species))
+    # for combinations in variations_dict.values():
+    #     for species_data in combinations.values():
+    #         all_species.update(species_data.keys())
+    #
+    # all_species = sorted(list(all_species))
 
     # Calculate the variation's matrix with shape (ko_species_list, all_species)
     heatmap_data = np.zeros((len(ko_species_list), len(all_species)))

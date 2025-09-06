@@ -240,6 +240,21 @@ def parse_args():
     )
 
     sens_parser.add_argument(
+        "-bs",
+        "--base-samples",
+        type=float,
+        default=4096,
+        help="Base samples size used to run SOBOL analysis with SALib",
+    )
+
+    sens_parser.add_argument(
+        "--preserve-inputs",
+        action="store_true",
+        default=False,
+        help="Ignore the input nodes for the analysis",
+    )
+
+    sens_parser.add_argument(
         "-fp",
         "--fixed-perturbations",
         nargs="+",
