@@ -108,10 +108,10 @@ def plot_results_interactive(
     colnames,
     model_name,
     html_dir_path="./imgs",
-    html_name="simulation",
+    html_name="interactive_model_simulation",
     log_file=None,
     ss_time=None,
-    show_plot=True,
+    show_plot=False,
     height=600,
     width=1000,
 ):
@@ -121,11 +121,11 @@ def plot_results_interactive(
     Args:
         simulation_data: NumPy array with simulation results
         colnames: List of column names (first should be time, rest are species)
-        html_dir_path: Directory where to save the HTML file (default: "./plots")
-        html_name: Name of the HTML file without extension (default: "simulation")
+        html_dir_path: Directory where to save the HTML file (default: "./imgs")
+        html_name: Name of the HTML file without extension (default: "interactive_model_simulation")
         log_file: Log file for messages (optional)
         ss_time: Steady state time marker (optional, adds vertical line)
-        show_plot: Whether to display the plot in browser (default: True)
+        show_plot: Whether to display the plot in browser (default: False)
         height: Plot height in pixels (default: 600)
         width: Plot width in pixels (default: 1000)
 
@@ -267,8 +267,8 @@ def plot_results_interactive(
     if success:
         try:
             print_log(log_file, f"Interactive plot saved to: {html_file_path}")
-        except NameError:
-            print(f"Interactive plot saved to: {html_file_path}")
+        except NameError as ne:
+            print_log(log_file, f"[WARNING] Error during saving the plot: {ne}")
 
     return fig
 

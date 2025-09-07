@@ -434,7 +434,7 @@ def plot_convergence_single_plot(
         tol_ci, color="red", linestyle="-", linewidth=2, label="CI Tolerance", alpha=0.8
     )
 
-    plt.title("Sobol Index Convergence Diagnostics - All Nodes")
+    plt.title("Sobol Index Convergence Diagnostics")
     plt.xlabel("Base sample size N")
     plt.ylabel("Metric Value")
 

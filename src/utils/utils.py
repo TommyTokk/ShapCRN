@@ -159,6 +159,12 @@ def parse_args():
         help="Run the analysis using inputs' perturbations",
     )
     simulate_samples_parser.add_argument(
+        "--use-fixed-perturbations",
+        action="store_true",
+        default=False,
+        help="Run the analysis using fixed perturbations",
+    )
+    simulate_samples_parser.add_argument(
         "-fp",
         "--fixed-perturbations",
         nargs="+",
@@ -211,17 +217,15 @@ def parse_args():
     )
 
     simulate_samples_parser.add_argument(
-        "-o",
-        "--output",
-        default="./imgs/samples",
-        help="Output directory for plots (default: ./imgs/samples)",
+        "-si",
+        "--save-images",
+        help="Output directory for plots",
     )
 
     simulate_samples_parser.add_argument(
-        "-so",
-        "--save-output",
-        action="store_true",
-        help="Save importance analysis results",
+        "-gr",
+        "--generate-report",
+        help="Output directory for reports",
     )
 
     # === SENSITIVITY_ANALYSIS command ===
@@ -558,7 +562,7 @@ def save_shapley_values_to_csv_pivot(shapley_dict, file_path, cols=None, log_fil
         print_log(log_file, f"Created pivot table with shape: {pivot_df.shape}")
         print_log(log_file, f"Pivot table columns: {list(pivot_df.columns)}")
 
-        # Fill NaN values with 0 or keep them as NaN (you can choose)
+        # Fill NaN values with 0 or keep them as NaN
         # pivot_df = pivot_df.fillna(0)  # Uncomment if you want to fill NaN with 0
 
         # Ensure the directory exists

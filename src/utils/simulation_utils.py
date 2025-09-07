@@ -1695,10 +1695,10 @@ def get_variations_hm_no_samples(
         - A couple (heatmap, all_species)
     """
 
-    for ko_spec, obj in variations_dict.items():
-        all_species.update(obj.keys())
+    # for ko_spec, obj in variations_dict.items():
+    #     all_species.update(obj.keys())
 
-    all_species = sorted(list(all_species))
+    # all_species = sorted(list(all_species))
 
     # Calculate the variation's matrix
     heatmap_data = np.zeros((len(ko_species_list), len(all_species)))
@@ -1718,10 +1718,7 @@ def get_variations_hm_no_samples(
                         else "variation"
                     )
 
-                    if np.isinf(variation_entry[key]):
-                        raise ZeroDivisionError
-                    else:
-                        heatmap_data[i, j] = variation_entry[key]
+                    heatmap_data[i, j] = variation_entry[key]
                 except KeyError:
                     # If missing from variations_dict, fill with NaN
                     heatmap_data[i, j] = np.nan
@@ -1730,7 +1727,7 @@ def get_variations_hm_no_samples(
                         f"Missing data for KO {ko_species}, species {species}.",
                     )
 
-    return heatmap_data, all_species
+    return heatmap_data
 
 
 def simulate_combinations(

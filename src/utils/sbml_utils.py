@@ -161,15 +161,29 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
     """
     in_rules = False
 
+    # Set the math of the target_species constant to 0
+    zero_ast = libsbml.ASTNode(libsbml.AST_INTEGER)
+    zero_ast.setValue(0)
+
     # For each Rules in the model, pin the rules to remove
     for rule in sbml_model.getListOfRules():
         if rule.getVariable() == target_species_id:  # Found the updating rule
             in_rules = True
-            # Set the math of the target_species constant to 0
-            zero_ast = libsbml.ASTNode(libsbml.AST_INTEGER)
-            zero_ast.setValue(0)
             rule.setMath(zero_ast)
             print_log(log_file, f"Set rule for {target_species_id} to 0")
+
+    # Removing every assigment events for the target species
+    for event in sbml_model.getListOfEvents():
+        eas = event.getListOfEventAssignments()
+        if eas.getVariable() == target_species_id:
+            print_log(log_file, f"Event assigment for {target_species_id} set to 0")
+            eas.setMath(zero_ast)
+
+    # Removing every initial assigments for the target species
+    for ias in sbml_model.getListOfInitialAssignments():
+        if ias.getSymbol() == target_species_id:
+            print_log(log_file, f"Initial assigment for {target_species_id} set to 0")
+            ias.setMath(zero_ast)
 
     reactions_to_knockout = []
 

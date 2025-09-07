@@ -54,67 +54,94 @@ def main():
     file_name = os.path.splitext(os.path.basename(args.input_path))[0]
 
     try:
-        # Process based on command
         if args.command == "simulate":
+
+            # Extracting the paramters
+            simulation_time = args.time
+            integrator = args.integrator
+            use_steady_state = args.steady_state
+            ss_max_time = args.max_time
+            ss_sim_steps = args.sim_Steps
+            sim_points = args.points
+            ss_threshold = args.threshold
+            interactive_plot = args.interactive
+
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
 
-            sbml_model = sbml_doc.getModel()
-            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
-            # file_name = os.path.basename(args.input_path)
-
-            # sbml_ut.split_reversible_reactions(sbml_model, log_file)
-            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            # sbml_model = sbml_doc.getModel()
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
 
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
             # Load and simulate
-            if args.integrator:
+            if integrator:
                 rr = sim_ut.load_roadrunner_model(
-                    sbml_model, integrator=args.integrator, log_file=log_file
+                    sbml_model, integrator=integrator, log_file=log_file
                 )
             else:
                 rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
             res, ss_time, colnames = sim_ut.simulate(
-                rr,
-                end_time=args.time,
+                rr_model=rr,
                 start_time=0,
+                end_time=simulation_time,
+                steady_state=use_steady_state,
+                max_end_time=ss_max_time,
+                sim_step=ss_sim_steps,
+                threshold=ss_threshold,
                 log_file=log_file,
-                steady_state=args.steady_state,
-                max_end_time=args.max_time,
             )
-
-            ut.print_log(log_file, f"Colnames: {colnames}")
-
-            # ut.print_log(log_file, rr["[Px]"])
-            # ut.print_log(
-            #     log_file,
-            #     f"tolerances: abs {rr.integrator.absolute_tolerance} | rel {rr.integrator.relative_tolerance}",
-            # )
-
-            __import__("pprint").pprint(res[-1, :])
 
             save_path = f"{args.output}/{file_name}"
 
-            if args.interactive:
+            if interactive_plot:
                 plt_ut.plot_results_interactive(
-                    res, colnames, model_name=file_name, log_file=log_file
+                    res,
+                    colnames,
+                    model_name=file_name,
+                    log_file=log_file,
                 )
 
             else:
                 plt_ut.plot_results(
-                    res, colnames, save_path, "model_simulation", log_file
+                    res, colnames, save_path, "interactive_model_simulation", log_file
                 )
 
         elif args.command == "importance_assessment":
 
-            steady_state = args.steady_state
-            max_end_time = args.max_time
-            min_ss_time = args.max_time
-            ss_time = args.max_time
-            end_time = args.time
+            # Getting the input species ids
+            input_species_ids = args.input_species
+
+            use_perturbations = args.use_perturbations
+            use_fixed_perturbations = args.use_fixed_perturbations
+
+            __import__("pprint").pprint(
+                (use_fixed_perturbations and args.fixed_perturbations is not None)
+            )
+
+            # Check for consistency
+            if use_fixed_perturbations:
+                if args.fixed_perturbations is None:
+                    ut.print_log(
+                        log_file,
+                        "[ERROR] --use_fixed_perturbations and --fixed_perturbations must be both present to be used",
+                    )
+                else:
+                    fixed_perturbations = [int(p) for p in args.fixed_perturbations]
+
+            num_samples = args.num_samples
+            variation = args.variation
+            simulation_time = args.time
             integrator = args.integrator
+            use_steady_state = args.steady_state
+            ss_max_end_time = args.max_time
+            ss_min_time = args.max_time
+            ss_sim_steps = args.sim_step
+            sim_points = args.points
+            ss_threshold = args.threshold
+
+            preserve_inputs = args.preserve_inputs
 
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
@@ -126,9 +153,6 @@ def main():
 
             # Getting the model name
             # file_name = os.path.basename(args.input_path)
-
-            # Getting the input species ids
-            input_species_ids = args.input_species
 
             # Get the list of species
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
@@ -147,8 +171,18 @@ def main():
             # Init the combinations array
             combinations = None
 
-            if args.use_perturbations:
-                if True:  # args.fixed_perturbations is None:
+            if use_perturbations:
+                if use_fixed_perturbations:  # args.fixed_perturbations is None:
+                    ut.print_log(log_file, "Running with fixed samples generations")
+
+                    combinations = sbml_ut.get_fixed_combinations(
+                        sbml_model=sbml_model,
+                        input_species=input_species_ids,
+                        fixed_variations=fixed_perturbations,
+                        log_file=log_file,
+                    )
+
+                else:
                     ut.print_log(log_file, "Running with random samples generations")
 
                     # Create the combinations
@@ -156,15 +190,8 @@ def main():
                         sbml_model,
                         target_species=input_species_ids,
                         log_file=log_file,
-                        n_samples=args.num_samples,
-                        variation=args.variation,
-                    )
-                else:
-                    ut.print_log(log_file, "Running with fixed samples generations")
-                    fp = [int(p) for p in args.fixed_perturbations]
-
-                    combinations = sbml_ut.get_fixed_combinations(
-                        sbml_model, input_species_ids, fp, log_file
+                        n_samples=num_samples,
+                        variation=variation,
                     )
 
             else:
@@ -194,35 +221,20 @@ def main():
                 end_time=args.time,
                 start_time=0,
                 log_file=log_file,
-                steady_state=args.steady_state,
-                max_end_time=args.max_time,
+                steady_state=use_steady_state,
+                max_end_time=ss_max_end_time,
             )
 
             # ut.print_log("orig_res", original_results[:, :])
 
             min_ss_time = (
                 ss_time
-                if ss_time is not None and ss_time <= min_ss_time
-                else min_ss_time
+                if ss_time is not None and ss_time <= ss_min_time
+                else ss_min_time
             )
 
-            if args.use_perturbations:
-                if True:  # args.fixed_perturbations is None:
-                    # Simulate the original model with samples
-                    ut.print_log(
-                        log_file, "Simulating original model with random samples"
-                    )
-                    samples_simulations_results, _ = sim_ut.simulate_combinations(
-                        rr,
-                        combinations,
-                        input_species_ids,
-                        min_ss_time,
-                        args.time,
-                        args.max_time,
-                        steady_state,
-                        log_file,
-                    )
-                else:
+            if use_perturbations:
+                if use_fixed_perturbations:
                     ut.print_log(
                         log_file, "Simulating original model with fixed perturbations"
                     )
@@ -231,10 +243,25 @@ def main():
                         rr,
                         combinations,
                         input_species_ids,
-                        min_ss_time,
-                        args.time,
-                        args.max_time,
-                        steady_state,
+                        ss_min_time,
+                        simulation_time,
+                        ss_max_end_time,
+                        use_steady_state,
+                        log_file,
+                    )
+                else:
+                    # Simulate the original model with samples
+                    ut.print_log(
+                        log_file, "Simulating original model with random samples"
+                    )
+                    samples_simulations_results, _ = sim_ut.simulate_combinations(
+                        rr,
+                        combinations,
+                        input_species_ids,
+                        ss_min_time,
+                        simulation_time,
+                        ss_max_end_time,
+                        use_steady_state,
                         log_file,
                     )
 
@@ -259,9 +286,6 @@ def main():
 
             knockout_data = []
 
-            # FOR DEBUG ONLY
-            early_stop = 0
-
             # Copying the SBML model
             sbml_str = libsbml.writeSBMLToString(sbml_doc)
 
@@ -282,13 +306,13 @@ def main():
                 selections,
                 integrator,
                 start_time=0,
-                end_time=end_time,
-                steady_state=steady_state,
-                max_end_time=max_end_time,
-                min_ss_time=min_ss_time,
+                end_time=simulation_time,
+                steady_state=use_steady_state,
+                max_end_time=ss_max_end_time,
+                min_ss_time=ss_min_time,
                 log_file=log_file,
-                use_perturbations=args.use_perturbations,
-                preserve_input=args.preserve_inputs,
+                use_perturbations=use_perturbations,
+                preserve_input=preserve_inputs,
             )
 
             # for ko_species, comb_dict in knockout_data:
@@ -301,20 +325,21 @@ def main():
             end_time = time.perf_counter()
 
             # === SHAPLEY VALUE ===
-            if args.use_perturbations:
+            if use_perturbations:
                 payoff_dict = sim_ut.get_payoff_vals(
                     original_model_simulations_info,  # pyright:ignore
                     knockout_data,
                     log_file=log_file,  # pyright:ignore
                 )
 
+                n_combinations = np.power(num_samples, len(input_species_ids))
+
                 shap_values = sim_ut.get_shapley_values(
-                    payoff_dict, len(combinations), log_file=log_file
+                    payoff_dict, n_combinations, log_file=log_file
                 )
 
-                if args.save_output:
-                    save_path = f"./report/{file_name}"
-
+                if args.generate_report is not None:
+                    save_path = args.generate_report
                     # Create the directory if it doesn't exist
                     os.makedirs(save_path, exist_ok=True)
 
@@ -328,7 +353,7 @@ def main():
                     )
 
             # === IF NO SAMPLES ===
-            if not args.use_perturbations:
+            if not use_perturbations:
 
                 ut.print_log(log_file, "Printing without samples")
 
@@ -338,13 +363,11 @@ def main():
 
                 ko_species_list = list(sim_variations.keys())
 
-                all_species = set()
-
-                relative_map, all_species_rel = sim_ut.get_variations_hm_no_samples(
+                relative_map = sim_ut.get_variations_hm_no_samples(
                     sim_variations, species_list, ko_species_list, log_file=log_file
                 )
 
-                absolute_map, all_species_abs = sim_ut.get_variations_hm_no_samples(
+                absolute_map = sim_ut.get_variations_hm_no_samples(
                     sim_variations,
                     species_list,
                     ko_species_list,
@@ -352,11 +375,11 @@ def main():
                     log_file=log_file,
                 )
 
-                if args.save_output:
+                if args.generate_report is not None:
 
-                    saving_path = f"./report/{file_name}/No Perturbations"
-
-                    # Check if the destinations folder exists otherwise create it
+                    saving_path = (
+                        args.generate_report
+                    )  # Check if the destinations folder exists otherwise create it
                     if not os.path.exists(saving_path):
                         os.makedirs(saving_path, exist_ok=True)
                         ut.print_log(log_file, f"Created directory: {saving_path}")
@@ -373,24 +396,30 @@ def main():
 
                     absolute_data_frame.to_csv(f"{saving_path}/absolute_variations.csv")
 
-                plt_ut.plot_heatmap(
-                    relative_map,
-                    ko_species_list,
-                    species_list,
-                    title="Relative variations without perturbations",
-                    save_path=f"./imgs/{file_name}/No Perturbations",
-                    img_name="Relative variations Heatmap.png",
-                )
+                if args.save_images is not None:
 
-                plt_ut.plot_heatmap(
-                    absolute_map,
-                    ko_species_list,
-                    species_list,
-                    cmap="plasma",
-                    title="Absolute variations without perturbations",
-                    save_path=f"./imgs/{file_name}/No Perturbations",
-                    img_name="Absolute variations Heatmap.png",
-                )
+                    saving_path = args.save_images
+
+                    os.makedirs(saving_path, exist_ok=True)
+
+                    plt_ut.plot_heatmap(
+                        relative_map,
+                        ko_species_list,
+                        species_list,
+                        title="Relative variations without perturbations",
+                        save_path=f"{saving_path}/No Samples",
+                        img_name="Relative variations Heatmap.png",
+                    )
+
+                    plt_ut.plot_heatmap(
+                        absolute_map,
+                        ko_species_list,
+                        species_list,
+                        cmap="plasma",
+                        title="Absolute variations without perturbations",
+                        save_path=f"{saving_path}/No Samples",
+                        img_name="Absolute variations Heatmap.png",
+                    )
 
             else:  # === IF SAMPLES ===
                 try:
@@ -481,30 +510,35 @@ def main():
                         samples_log_absolute_map
                     )
 
-                    # PLOTTING HEATMAPS
-                    plt_ut.plot_heatmap(
-                        samples_log_relative_map,
-                        ko_species_list,
-                        species_list,
-                        title="Relative variations with perturbations (Log scaled)",
-                        save_path=f"./imgs/{file_name}/",
-                        img_name="Log scaled relative variations Heatmap.png",
-                    )
+                    if args.save_images is not None:
+                        saving_path = args.save_images
 
-                    plt_ut.plot_heatmap(
-                        samples_log_absolute_map,
-                        ko_species_list,
-                        species_list,
-                        cmap="plasma",
-                        title="Absolute variations with perturbations (Log scaled)",
-                        save_path=f"./imgs/{file_name}/",
-                        img_name="Log scaled absolute variations Heatmap.png",
-                    )
+                        os.makedirs(saving_path, exist_ok=True)
+
+                        # PLOTTING HEATMAPS
+                        plt_ut.plot_heatmap(
+                            samples_log_relative_map,
+                            ko_species_list,
+                            species_list,
+                            title="Relative variations with perturbations (Log scaled)",
+                            save_path=saving_path,
+                            img_name="Log scaled relative variations Heatmap.png",
+                        )
+
+                        plt_ut.plot_heatmap(
+                            samples_log_absolute_map,
+                            ko_species_list,
+                            species_list,
+                            cmap="plasma",
+                            title="Absolute variations with perturbations (Log scaled)",
+                            save_path=saving_path,
+                            img_name="Log scaled absolute variations Heatmap.png",
+                        )
 
                     # SAVING THE VARAITIONS HEATMAPS
-                    if args.save_output:  # Saving the variation heatmaps
+                    if args.generate_report:  # Saving the variation heatmaps
 
-                        save_path = f"./report/{file_name}/No Perturbations"
+                        save_path = args.generate_report
 
                         os.makedirs(save_path, exist_ok=True)
 
@@ -515,7 +549,7 @@ def main():
                         )
 
                         relative_data_frame.to_csv(
-                            f"./report/{file_name}/relative_variations.csv"
+                            f"{save_path}/relative_variations.csv"
                         )
 
                         absolute_data_frame = pd.DataFrame(
@@ -525,7 +559,7 @@ def main():
                         )
 
                         absolute_data_frame.to_csv(
-                            f"./report/{file_name}/absolute_variations.csv"
+                            f"{save_path}/absolute_variations.csv"
                         )
 
                     _, ko_ranking_relative = ut.get_ko_species_importance(
@@ -591,26 +625,31 @@ def main():
                             log_file=log_file,
                         )
 
-                        # PLOTTING THE VALUES DISTANCES
-                        plt_ut.plot_heatmap(
-                            relative_values_distances,
-                            ko_species_list,
-                            species_list,
-                            cmap="PiYG_r",
-                            save_path=f"./imgs/{file_name}/Perturbations importance analysis",
-                            title="Perturbations VS No Perturbations Distance (Relative map)",
-                            img_name="Relative Perturbations VS No Perturbations distance",
-                        )
+                        if args.save_images is not None:
+                            saving_path = args.save_images
 
-                        plt_ut.plot_heatmap(
-                            absolute_values_distances,
-                            ko_species_list,
-                            species_list,
-                            cmap="PRGn_r",
-                            save_path=f"./imgs/{file_name}/Perturbations importance analysis",
-                            title="Perturbations VS No Perturbations Distance (Absolute map)",
-                            img_name="Absolute Perturbations VS No Perturbations distance",
-                        )
+                            os.makedirs(saving_path, exist_ok=True)
+
+                            # PLOTTING THE VALUES DISTANCES
+                            plt_ut.plot_heatmap(
+                                relative_values_distances,
+                                ko_species_list,
+                                species_list,
+                                cmap="PiYG_r",
+                                save_path=f"{saving_path}/Perturbations importance analysis",
+                                title="Perturbations VS No Perturbations Distance (Relative map)",
+                                img_name="Relative Perturbations VS No Perturbations distance",
+                            )
+
+                            plt_ut.plot_heatmap(
+                                absolute_values_distances,
+                                ko_species_list,
+                                species_list,
+                                cmap="PRGn_r",
+                                save_path=f"{saving_path}/Perturbations importance analysis",
+                                title="Perturbations VS No Perturbations Distance (Absolute map)",
+                                img_name="Absolute Perturbations VS No Perturbations distance",
+                            )
 
                     if args.random_perturbations_importance:
                         ut.print_log(log_file, "=== FIXED SAMPLES ANALYSIS ===")
@@ -619,6 +658,14 @@ def main():
                             log_file,
                             "[WARNING] Notice that the number of samples will equals to the number of variations",
                         )
+
+                        if args.fixed_perturbations is None:
+                            ut.print_log(
+                                log_file,
+                                "[ERROR] You need to specify the variations to use setting the -fp parameter",
+                            )
+
+                            exit(1)
 
                         # env_pert = os.getenv("FIXED_PERTURBATIONS").split(
                         #     ","
@@ -646,8 +693,8 @@ def main():
                             input_species_ids,
                             min_ss_time,
                             end_time,
-                            max_end_time,
-                            steady_state,
+                            ss_max_end_time,
+                            use_steady_state,
                             log_file,
                         )
 
@@ -675,8 +722,8 @@ def main():
                             integrator,
                             start_time=0,
                             end_time=end_time,
-                            steady_state=steady_state,
-                            max_end_time=max_end_time,
+                            steady_state=use_steady_state,
+                            max_end_time=ss_max_end_time,
                             min_ss_time=min_ss_time,
                             log_file=log_file,
                             preserve_input=args.preserve_inputs,
@@ -746,51 +793,62 @@ def main():
                             samples_log_absolute_map, fixed_log_absolute_map
                         )
 
-                        # GENERATING DISTANCES REPORT
-                        _ = sim_ut.generate_values_distance_report(
-                            fixed_relative_values_distances,
-                            fixed_pearson_coefficient_relative,
-                            fixed_p_value_relative,
-                            correlation_type,
-                            ko_species_list,
-                            file_name,
-                            f"./report/{file_name}/Fixed perturbations importance analysis",
-                            report_title="Log scaled Fixed perturbations values distance report analysis (Relative map)",
-                            log_file=log_file,
-                        )
+                        if args.generate_report is not None:
 
-                        _ = sim_ut.generate_values_distance_report(
-                            fixed_absolute_values_distances,
-                            fixed_pearson_coefficient_absolute,
-                            fixed_p_value_absolute,
-                            correlation_type,
-                            ko_species_list,
-                            file_name,
-                            f"./report/{file_name}/Fixed perturbations importance analysis",
-                            report_title="Log scaled Fixed perturbations values distance report analysis (Absolute map)",
-                            log_file=log_file,
-                        )
+                            saving_path = args.generate_report
 
-                        # PLOTTING VALUES DISTANCES HEATMAPS
-                        plt_ut.plot_heatmap(
-                            fixed_relative_values_distances,
-                            ko_species_list,
-                            species_list,
-                            cmap="cividis",
-                            save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
-                            title="Random Perturbations VS Fixed Perturbations Distance (Relative map)",
-                            img_name="Relative Random Perturbations VS Fixed Perturbations distance",
-                        )
+                            os.makedirs(saving_path, exist_ok=True)
 
-                        plt_ut.plot_heatmap(
-                            fixed_absolute_values_distances,
-                            ko_species_list,
-                            species_list,
-                            cmap="PuOr_r",
-                            save_path=f"./imgs/{file_name}/Random Perturbations Importance Analysis",
-                            title="Random Perturbations VS Fixed Perturbations Distance (Absolute map)",
-                            img_name="Absolute Random Perturbations VS Fixed Perturbations distance",
-                        )
+                            # GENERATING DISTANCES REPORT
+                            _ = sim_ut.generate_values_distance_report(
+                                fixed_relative_values_distances,
+                                fixed_pearson_coefficient_relative,
+                                fixed_p_value_relative,
+                                correlation_type,
+                                ko_species_list,
+                                file_name,
+                                f"{saving_path}/Fixed perturbations importance analysis",
+                                report_title="Log scaled Fixed perturbations values distance report analysis (Relative map)",
+                                log_file=log_file,
+                            )
+
+                            _ = sim_ut.generate_values_distance_report(
+                                fixed_absolute_values_distances,
+                                fixed_pearson_coefficient_absolute,
+                                fixed_p_value_absolute,
+                                correlation_type,
+                                ko_species_list,
+                                file_name,
+                                f"{saving_path}/Fixed perturbations importance analysis",
+                                report_title="Log scaled Fixed perturbations values distance report analysis (Absolute map)",
+                                log_file=log_file,
+                            )
+
+                        if args.save_images:
+                            saving_path = args.save_images
+
+                            os.makedirs(saving_path, exist_ok=True)
+
+                            # PLOTTING VALUES DISTANCES HEATMAPS
+                            plt_ut.plot_heatmap(
+                                fixed_relative_values_distances,
+                                ko_species_list,
+                                species_list,
+                                cmap="cividis",
+                                save_path=f"{saving_path}/Random Perturbations Importance Analysis",
+                                title="Random Perturbations VS Fixed Perturbations Distance (Relative map)",
+                                img_name="Relative Random Perturbations VS Fixed Perturbations distance",
+                            )
+
+                            plt_ut.plot_heatmap(
+                                fixed_absolute_values_distances,
+                                ko_species_list,
+                                species_list,
+                                cmap="PuOr_r",
+                                save_path=f"{saving_path}/Random Perturbations Importance Analysis",
+                                title="Random Perturbations VS Fixed Perturbations Distance (Absolute map)",
+                                img_name="Absolute Random Perturbations VS Fixed Perturbations distance",
+                            )
                 except AssertionError as ae:
                     ut.print_log(
                         log_file, f"Error during samples results elaboration: {ae}"
