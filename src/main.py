@@ -168,6 +168,13 @@ def main():
                 # Removing the input species from the species to analyze
                 ids_to_ko = list(set(ids_to_ko) - set(input_species_ids))
 
+            id_to_idx = {}
+
+            for indx, s in enumerate(species_list):
+                id_to_idx[s] = indx
+
+            ids_to_ko.sort(key=lambda x: id_to_idx[x])
+
             # Init the combinations array
             combinations = None
 
@@ -1011,7 +1018,6 @@ def main():
             end = time.perf_counter()
 
             ut.print_log(log_file, f"Time: {end - start}")
-
             # Running the fixed simulations
 
             fp = [int(p) for p in args.fixed_perturbations]

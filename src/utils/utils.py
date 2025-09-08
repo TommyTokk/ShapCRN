@@ -219,12 +219,14 @@ def parse_args():
     simulate_samples_parser.add_argument(
         "-si",
         "--save-images",
+        default="./imgs",
         help="Output directory for plots",
     )
 
     simulate_samples_parser.add_argument(
         "-gr",
         "--generate-report",
+        default="./report",
         help="Output directory for reports",
     )
 
