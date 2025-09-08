@@ -61,7 +61,7 @@ def main():
             integrator = args.integrator
             use_steady_state = args.steady_state
             ss_max_time = args.max_time
-            ss_sim_steps = args.sim_Steps
+            ss_sim_steps = args.sim_step
             sim_points = args.points
             ss_threshold = args.threshold
             interactive_plot = args.interactive
@@ -93,7 +93,7 @@ def main():
                 log_file=log_file,
             )
 
-            save_path = f"{args.output}/{file_name}"
+            save_path = f"{args.save_images}/{file_name}"
 
             if interactive_plot:
                 plt_ut.plot_results_interactive(
@@ -607,30 +607,35 @@ def main():
                             )
                         )
 
-                        # GETTING THE VALUE DISTANCES REPORT
-                        _ = sim_ut.generate_values_distance_report(
-                            relative_values_distances,
-                            pearson_coefficient_relative,
-                            p_value_relative,
-                            correlation_type,
-                            ko_species_list,
-                            file_name,
-                            f"./report/{file_name}/Perturbations importance analysis",
-                            report_title="Log scaled value distances report analysis (Relative map)",
-                            log_file=log_file,
-                        )
+                        if args.generate_report:
+                            saving_path = args.generate_report
 
-                        _ = sim_ut.generate_values_distance_report(
-                            absolute_values_distances,
-                            pearson_coefficient_absolute,
-                            p_value_absolute,
-                            correlation_type,
-                            ko_species_list,
-                            file_name,
-                            f"./report/{file_name}/Perturbations importance analysis",
-                            report_title="Log scaled value distances report analysis (Absolute map)",
-                            log_file=log_file,
-                        )
+                            os.makedirs(saving_path, exist_ok=True)
+
+                            # GETTING THE VALUE DISTANCES REPORT
+                            _ = sim_ut.generate_values_distance_report(
+                                relative_values_distances,
+                                pearson_coefficient_relative,
+                                p_value_relative,
+                                correlation_type,
+                                ko_species_list,
+                                file_name,
+                                f"{saving_path}/Perturbations importance analysis",
+                                report_title="Log scaled value distances report analysis (Relative map)",
+                                log_file=log_file,
+                            )
+
+                            _ = sim_ut.generate_values_distance_report(
+                                absolute_values_distances,
+                                pearson_coefficient_absolute,
+                                p_value_absolute,
+                                correlation_type,
+                                ko_species_list,
+                                file_name,
+                                f"{saving_path}/Perturbations importance analysis",
+                                report_title="Log scaled value distances report analysis (Absolute map)",
+                                log_file=log_file,
+                            )
 
                         if args.save_images is not None:
                             saving_path = args.save_images
@@ -1066,10 +1071,10 @@ def main():
             # mean_diff = np.abs(fixed_mean - random_mean)
             mean_diff = (fixed_mean - random_mean) / fixed_mean
 
-            rms_diff = np.sqrt(np.mean(mean_diff**2))
+            rms_diff = np.sqrt(np.nanmean(mean_diff**2))
             ut.print_log(
                 f"{saving_path}/RandomVsFixed infos",
-                f"Max: {np.nanmax(mean_diff)} | Min:{np.nanmin(mean_diff)} | Avg: {rms_diff} | Std. Dev: {np.std(mean_diff)}",
+                f"Max: {np.nanmax(mean_diff)} | Min:{np.nanmin(mean_diff)} | Avg: {rms_diff} | Std. Dev: {np.nanstd(mean_diff)}",
             )
 
             # __import__("pprint").pprint(

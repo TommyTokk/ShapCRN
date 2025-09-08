@@ -175,9 +175,11 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
     # Removing every assigment events for the target species
     for event in sbml_model.getListOfEvents():
         eas = event.getListOfEventAssignments()
-        if eas.getVariable() == target_species_id:
-            print_log(log_file, f"Event assigment for {target_species_id} set to 0")
-            eas.setMath(zero_ast)
+        for ea in eas:
+
+            if ea.getVariable() == target_species_id:
+                print_log(log_file, f"Event assigment for {target_species_id} set to 0")
+                eas.setMath(zero_ast)
 
     # Removing every initial assigments for the target species
     for ias in sbml_model.getListOfInitialAssignments():

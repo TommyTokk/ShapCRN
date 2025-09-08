@@ -43,8 +43,8 @@ def parse_args():
         help="Integrator to use",
     )
     simulate_parser.add_argument(
-        "-o",
-        "--output",
+        "-si",
+        "--save-images",
         default="./imgs",
         help="Output directory for plots (default: ./imgs)",
     )
