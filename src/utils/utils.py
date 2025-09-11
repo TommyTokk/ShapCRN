@@ -436,13 +436,12 @@ def pretty_print_variations(variations_dict, precision=4, show_zero=False):
 # === DEBUG ===
 
 
-def save_shapley_values_to_csv_pivot(shapley_dict, file_path, cols=None, log_file=None):
+def save_shapley_values_to_csv_pivot(shapley_vals, file_path, cols=None, log_file=None):
     """
     Save Shapley values to a CSV file in pivot table format (knockout species as rows, species as columns).
 
     Args:
-        shapley_dict: Dictionary with structure:
-                     {ko_species: {species: {"shap": value}}}
+        shapley_vals: DataFrame with the shapley values
         file_path: Path where to save the CSV file
         cols: Optional list of target species to include as columns (if None, use all available)
         log_file: Optional log file for messages
@@ -450,165 +449,12 @@ def save_shapley_values_to_csv_pivot(shapley_dict, file_path, cols=None, log_fil
     Returns:
         str: Path of the saved CSV file
     """
-    try:
-        # Debug: analyze the structure of shapley_dict
-        print_log(log_file, "=== SHAPLEY VALUES STRUCTURE DEBUG ===")
 
-        all_ko_species = list(shapley_dict.keys())
-        all_available_species = set()
+    if not os.path.isdir(file_path):
+        os.makedirs(file_path, exist_ok=True)
 
-        # Collect all available species across all ko_species
-        for ko_species, ko_info in shapley_dict.items():
-            species = list(ko_info.keys())
-            all_available_species.update(species)
-
-        all_available_species = sorted(list(all_available_species))
-        print_log(
-            log_file, f"Total unique species available: {len(all_available_species)}"
-        )
-        print_log(log_file, f"Total ko species: {len(all_ko_species)}")
-
-        # Determine which species to use as columns
-        if cols is not None:
-            # Filter to only include specified columns that exist in the data
-            available_cols = [col for col in cols if col in all_available_species]
-            missing_cols = [col for col in cols if col not in all_available_species]
-
-            if missing_cols:
-                print_log(
-                    log_file,
-                    f"Warning: Specified columns not found in data: {missing_cols}",
-                )
-
-            if available_cols:
-                species_to_use = available_cols
-                print_log(
-                    log_file, f"Using specified columns: {len(species_to_use)} species"
-                )
-                print_log(log_file, f"Specified species: {species_to_use}")
-            else:
-                print_log(
-                    log_file,
-                    "Warning: None of the specified columns found, using all available",
-                )
-                species_to_use = all_available_species
-        else:
-            species_to_use = all_available_species
-            print_log(log_file, f"Using all available species: {len(species_to_use)}")
-
-        # Create lists to store the data with consistent structure
-        ko_species_list = []
-        species_list = []
-        shapley_values = []
-
-        # Extract data ensuring all combinations are represented
-        for ko_species in all_ko_species:
-            ko_info = shapley_dict[ko_species]
-
-            for species in species_to_use:
-                ko_species_list.append(ko_species)
-                species_list.append(species)
-
-                # Check if this species exists for this ko_species
-                if species in ko_info:
-                    shap_value = ko_info[species]
-                    # Handle special cases
-                    if shap_value is None:
-                        shapley_values.append(np.nan)
-                    elif isinstance(shap_value, (int, float)) and np.isnan(shap_value):
-                        shapley_values.append(np.nan)
-                    else:
-                        shapley_values.append(float(shap_value))
-                else:
-                    # Species not present for this ko_species
-                    shapley_values.append(np.nan)
-                    print_log(
-                        log_file,
-                        f"Missing data for ko_species='{ko_species}', species='{species}'",
-                    )
-
-        # Verify all lists have the same length
-        expected_length = len(all_ko_species) * len(species_to_use)
-        print_log(log_file, f"Expected length: {expected_length}")
-        print_log(log_file, f"ko_species_list length: {len(ko_species_list)}")
-        print_log(log_file, f"species_list length: {len(species_list)}")
-        print_log(log_file, f"shapley_values length: {len(shapley_values)}")
-
-        if not (
-            len(ko_species_list)
-            == len(species_list)
-            == len(shapley_values)
-            == expected_length
-        ):
-            raise ValueError(
-                f"Inconsistent data structure: ko={len(ko_species_list)}, species={len(species_list)}, values={len(shapley_values)}, expected={expected_length}"
-            )
-
-        # Create DataFrame in long format
-        df = pd.DataFrame(
-            {
-                "knockout_species": ko_species_list,
-                "species": species_list,
-                "shapley_value": shapley_values,
-            }
-        )
-
-        print_log(log_file, f"Created DataFrame with shape: {df.shape}")
-        print_log(log_file, f"DataFrame columns: {list(df.columns)}")
-
-        # Create pivot table
-        pivot_df = df.pivot(
-            index="knockout_species", columns="species", values="shapley_value"
-        )
-
-        print_log(log_file, f"Created pivot table with shape: {pivot_df.shape}")
-        print_log(log_file, f"Pivot table columns: {list(pivot_df.columns)}")
-
-        # Fill NaN values with 0 or keep them as NaN
-        # pivot_df = pivot_df.fillna(0)  # Uncomment if you want to fill NaN with 0
-
-        # Ensure the directory exists
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-        # Save to CSV
-        pivot_df.to_csv(f"{file_path}/shap.csv", float_format="%.10f")
-
-        print_log(log_file, f"Shapley values (pivot format) saved to: {file_path}")
-        print_log(
-            log_file,
-            f"Final CSV contains {len(pivot_df.index)} ko_species and {len(pivot_df.columns)} target_species",
-        )
-
-        return file_path
-
-    except Exception as e:
-        error_msg = f"Error saving Shapley values (pivot) to CSV: {e}"
-        print_log(log_file, error_msg)
-
-        # Additional debug information
-        print_log(log_file, "=== DEBUG INFO ===")
-        if "shapley_dict" in locals():
-            print_log(log_file, f"shapley_dict type: {type(shapley_dict)}")
-            if isinstance(shapley_dict, dict):
-                print_log(
-                    log_file, f"shapley_dict keys: {list(shapley_dict.keys())[:3]}..."
-                )  # Show first 3
-                if shapley_dict:
-                    first_ko = list(shapley_dict.keys())[0]
-                    print_log(
-                        log_file,
-                        f"First ko_species '{first_ko}' data type: {type(shapley_dict[first_ko])}",
-                    )
-                    if isinstance(shapley_dict[first_ko], dict):
-                        print_log(
-                            log_file,
-                            f"First ko_species targets: {list(shapley_dict[first_ko].keys())[:3]}...",
-                        )
-
-        if "cols" in locals():
-            print_log(log_file, f"cols parameter: {cols}")
-
-        raise Exception(error_msg)
+    # Saving
+    shapley_vals.to_csv(f"{file_path}/shap.csv")
 
 
 # === ANALYSIS ===

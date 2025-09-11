@@ -93,6 +93,8 @@ def main():
                 log_file=log_file,
             )
 
+            res_df = pd.DataFrame(res, columns=colnames)
+
             save_path = f"{args.save_images}/{file_name}"
 
             if interactive_plot:
@@ -275,21 +277,17 @@ def main():
                 ut.print_log(
                     log_file, "Getting simulations informations of the original model"
                 )
+                original_data = [
+                    pd.DataFrame(original_results[:, 1:], columns=colnames[1:])
+                ]
+
+                for i in range(len(combinations)):
+                    sim_res_i = samples_simulations_results[i]
+                    original_data.append(
+                        pd.DataFrame(sim_res_i[:, 1:], columns=colnames[1:])
+                    )
 
                 ut.print_log(log_file, f"{len(species_list)}")
-                # Getting the information about the original model
-                original_model_simulations_info = sim_ut.get_simulations_informations(
-                    samples_simulations_results,
-                    original_results,
-                    combinations,
-                    colnames,
-                    log_file,
-                )
-
-                # for combination, info_dict in original_model_simulations_info.items():
-                #     ut.print_log("orig", f"{combination}:")
-                #     for species, values in info_dict.items():
-                #         ut.print_log("orig", f" {species}: {values}")
 
             knockout_data = []
 
@@ -322,27 +320,24 @@ def main():
                 preserve_input=preserve_inputs,
             )
 
-            # for ko_species, comb_dict in knockout_data:
-            #     ut.print_log("samples", f"{ko_species}:")
-            #     for combination, info_dict in comb_dict.items():
-            #         ut.print_log("samples", f"  {combination}:")
-            #         for species, value in info_dict.items():
-            #             ut.print_log("samples", f"      {species}: {value}")
-
             end_time = time.perf_counter()
 
             # === SHAPLEY VALUE ===
             if use_perturbations:
                 payoff_dict = sim_ut.get_payoff_vals(
-                    original_model_simulations_info,  # pyright:ignore
+                    original_data,  # pyright:ignore
                     knockout_data,
+                    colnames[1:],
                     log_file=log_file,  # pyright:ignore
                 )
 
-                n_combinations = np.power(num_samples, len(input_species_ids))
+                n_combinations = np.power(num_samples, len(input_species_ids)) + 1
 
                 shap_values = sim_ut.get_shapley_values(
-                    payoff_dict, n_combinations, log_file=log_file
+                    payoff_dict,
+                    n_combinations,
+                    len(input_species_ids),
+                    log_file=log_file,
                 )
 
                 if args.generate_report is not None:
@@ -1141,7 +1136,7 @@ def main():
 
             # Save
             xml_string, output_filename = sbml_ut.save_file(
-                file_name, operation_name, modified_model, True, log_file
+                file_name, operation_name, modified_model, True, log_file=log_file
             )
 
             # Simulate the modified model

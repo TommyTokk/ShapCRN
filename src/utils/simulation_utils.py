@@ -1,8 +1,9 @@
 from decimal import *
 import math
 
-from networkx import current_flow_betweenness
-from pandas.core.generic import pprint_thing
+import pandas as pd
+from pandas.io.html import pprint_thing
+from scipy.special import factorial
 
 import roadrunner as rr
 import libsbml
@@ -385,17 +386,13 @@ def process_species_samples(args):
             log_file,
         )
 
-        # Contains information, for each knockedout species,
-        # and foreach combination, about the simulation's results
-        combinations_knockout_model_simualtions_info = get_simulations_informations(
-            combinations_knockout_model_results,
-            knockout_model_results,
-            combinations,
-            colnames,
-            log_file,
-        )
+        ko_data = [pd.DataFrame(knockout_model_results[:, 1:], columns=colnames[1:])]
 
-        return (knockedout_species, combinations_knockout_model_simualtions_info)
+        for i in range(len(combinations)):
+            ko_res_i = combinations_knockout_model_results[i]
+            ko_data.append(pd.DataFrame(ko_res_i[:, 1:], columns=colnames[1:]))
+
+        return (knockedout_species, ko_data)
     except Exception as e:
         raise Exception(f"Error during processing species:\n Error: {e}")
 
@@ -702,80 +699,60 @@ def get_knockout_variations_samples(
 def get_payoff_vals(
     final_results_original_model,
     final_results_knocked_model,
+    colnames,
     epsilon=1e-20,
     log_file=None,
 ):
 
-    payoff_dict = {}
+    res = []
 
-    # Looping through knockedout results
-    for ko_species, species_dict in final_results_knocked_model:
-        payoff_dict[ko_species] = {}
+    ko_species_list = []
 
-        # Looping through combinations in original model
-        for combination, original_info_dict in final_results_original_model.items():
-            # Looping through original simulation dict
-            for species, original_value in original_info_dict.items():
+    for ko_species, _ in final_results_knocked_model:
+        ko_species_list.append(ko_species)
 
-                # Initialize species dict if not exists
-                if species not in payoff_dict[ko_species]:
-                    payoff_dict[ko_species][species] = {}
+    for ko_species, ko_data in final_results_knocked_model:
+        payoffs = []
 
-                if species == ko_species:  # Setting nan if ko species
-                    payoff = np.nan
+        for c in range(len(ko_data)):
+            ko_sim_i = ko_data[c]
+            original_sim_i = final_results_original_model[c]
 
-                elif (
-                    species not in species_dict[combination]
-                ):  # Setting nan if species not present
-                    payoff = np.nan
-                else:
+            diff = original_sim_i - ko_sim_i
 
-                    # Cutting off the original value if too small
-                    original_val = np.where(
-                        np.abs(np.float64(original_value)) < epsilon,
-                        0,
-                        np.float64(original_value),
-                    )
+            last_diff_values = diff.tail(1)
 
-                    # Cutting off the ko value if too small
-                    ko_value = np.where(
-                        np.abs(np.float64(species_dict[combination][species]))
-                        < epsilon,
-                        0,
-                        np.float64(species_dict[combination][species]),
-                    )
+            payoffs.append(last_diff_values)
 
-                    # Getting the variation
-                    payoff = original_val - ko_value
+        # Convert payoffs in an unique DataFrame
+        payoffs_df = pd.concat(payoffs, ignore_index=True)
+        # Append to the results
 
-                    # Store the variation for this species and combination
-                    payoff_dict[ko_species][species][combination] = payoff
-
-    return payoff_dict
+        res.append((ko_species, payoffs_df))
+    # Return a list of tuple (ko_species, payoffs)
+    return res
 
 
-def get_shapley_values(payoff_dict, n_combinations, log_file=None):
-    shapley_dict = {}
+def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
 
-    for ko_species, ko_info in payoff_dict.items():
-        shapley_dict[ko_species] = {}
-        for species, species_info in ko_info.items():
-            if species == ko_species:
-                sum = np.nan
-            else:
-                sum = 0
+    shap_vals = []
+    # (fact(comb) - fact(n_combs - comb))/fact(n_combs)
+    left_factor = (
+        factorial(n_inputs) * factorial(n_combinations - n_inputs)
+    ) / factorial(n_combinations)
 
-                for combination, payoff_value in species_info.items():
-                    comb_len = len(combination.split("_"))
-                    left_factor = (
-                        math.factorial(comb_len)
-                        * math.factorial((n_combinations - comb_len))
-                    ) / math.factorial(n_combinations)
-                    sum += left_factor * payoff_value
+    for ko_species, payoffs in payoff_values:
+        factors = left_factor * payoffs
+        # __import__("pprint").pprint(factors)
+        sums = factors.sum()
+        sums.name = ko_species
+        shap_vals.append(sums)
 
-            shapley_dict[ko_species][species] = sum
+    shap_df = pd.DataFrame(shap_vals)
 
-    return shapley_dict
+    # __import__("pprint").pprint(shap_df["[species_10]"])
+
+    return shap_df
 
 
 def generate_values_distance_report(
