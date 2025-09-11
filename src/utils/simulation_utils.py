@@ -4,6 +4,7 @@ import math
 import pandas as pd
 from pandas.io.html import pprint_thing
 from scipy.special import factorial
+from scipy.stats import variation
 
 import roadrunner as rr
 import libsbml
@@ -606,94 +607,184 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
     return variations_dict
 
 
-def get_knockout_variations_samples(
-    final_results_original_model, final_results_knocked_model, log_file=None
+def get_absolute_variations_samples(
+    final_results_original_model,
+    final_results_knocked_model,
+    epsilon=1e-20,
+    log_file=None,
 ):
     """
     Calculate variations and relative variation between original and knocked model results.
 
     Args:
-        final_results_original_model: Dict with original model results
-        final_results_knocked_model: List of tuples (species, info_dict)
+        final_results_original_model: DataFrame with original model results
+        final_results_knocked_model: List of tuples (species, ko_dfs)
         log_file: Optional logging file (unused in current implementation)
 
     Returns:
         Dict: Nested dictionary with variations per species and combination
     """
-    variations_dict = {}
-    epsilon = 1e-20  # Variable used as values cutoff and to avoid division by 0
-    inf_vals = set()
+    rms = []
+    for ko_species, ko_data in final_results_knocked_model:
+        variations = []
 
-    # Looping through knockedout results
-    for ko_species, species_dict in final_results_knocked_model:
-        variations_dict[ko_species] = {}
-        # print_log("G_KO_V", f"  {ko_species}:")
-        # Looping through combinations in original model
-        for combination, original_info_dict in final_results_original_model.items():
-            variations_dict[ko_species][combination] = {}
+        for c in range(len(ko_data)):
+            ko_sim_i = ko_data[c]
+            original_sim_i = final_results_original_model[c]
 
-            # Looping through original simulation dict
-            for species, original_value in original_info_dict.items():
-                # print_log("G_KO_V", f"  {species}:")
+            # Getting the last values
+            last_ko_values = ko_sim_i.tail(1)
+            last_original_values = original_sim_i.tail(1)
 
-                if species == ko_species:  # Setting nan if ko species
-                    variation = np.nan
-                    relative_variation = np.nan
-
-                elif (
-                    species not in species_dict[combination]
-                ):  # Setting nan if species not present
-                    variation = np.nan
-                    relative_variation = np.nan
-                else:
-
-                    # Cutting off the original value if too small
-                    original_val = np.where(
-                        np.abs(np.float64(original_value)) < epsilon,
-                        0,
-                        np.float64(original_value),
-                    )
-
-                    # Cutting off the ko value if too small
-                    ko_value = np.where(
-                        np.abs(np.float64(species_dict[combination][species]))
-                        < epsilon,
-                        0,
-                        np.float64(species_dict[combination][species]),
-                    )
-
-                    # Getting the variation
-                    variation = ko_value - original_val
-
-                    # Getting the relative variation
-                    # If original_value is too small use epsilon
-                    # Avoid division by 0
-
-                    if original_val > epsilon:
-                        relative_variation = (ko_value - original_val) / original_val
-                    else:
-                        inf_vals.add((ko_species, species))
-                        relative_variation = np.nan
-
-                    # print_log("G_KO_V", f"      variation:{ko_value} - {original_val}: {variation}")
-                    # print_log("G_KO_V", f"      relative-variation:({ko_value} - {original_val})/{np.maximum(
-                    #     np.abs(original_val), epsilon
-                    # )}: {relative_variation}")
-
-                variations_dict[ko_species][combination][species] = {
-                    "variation": variation,
-                    "relative-variation": relative_variation,
-                }
-
-    if bool(inf_vals):
-        for ko_s, s in list(inf_vals):
-            print_log(
-                log_file,
-                f"[WARNING] Infinite values detected for couple {(ko_s, s)} during relative calculation.",
+            # Masking
+            last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+            last_original_values = last_original_values.mask(
+                last_original_values <= epsilon, 0
             )
-            print_log(log_file, "Relative results may be unreliable.")
 
-    return variations_dict
+            var = last_ko_values - last_original_values
+            variations.append(var)
+
+        variations_df = pd.concat(variations, ignore_index=True)
+        variations_rms = np.sqrt((variations_df**2).mean())
+        variations_rms.name = ko_species
+        rms.append(variations_rms)
+
+    res_df = pd.DataFrame(rms)
+
+    # Applying the mas for inf values
+    res_df = res_df.mask(np.isinf(res_df), np.nan)
+    col_names = res_df.columns.str.strip("[]")
+    rows = res_df.index.get_indexer(col_names)
+    valid = rows != -1
+    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+
+    return res_df
+
+
+def get_absolute_variations_no_samples(
+    original_data, ko_data, epsilon=1e-20, log_file=None
+):
+
+    variations = []
+
+    for ko_species, ko_info in ko_data:
+
+        last_ko_values = ko_info.tail(1)
+        last_original_values = original_data.tail(1)
+
+        # Masking
+        last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+        last_original_values = last_original_values.mask(
+            last_original_values <= epsilon, 0
+        )
+
+        var = last_ko_values - last_original_values
+        rms_vars = np.sqrt(var**2)
+        var_series = rms_vars.squeeze()
+        var_series.name = ko_species
+        variations.append(var_series)
+
+    res_df = pd.DataFrame(variations)
+
+    # Applying the mas for inf values
+    res_df = res_df.mask(np.isinf(res_df), np.nan)
+    col_names = res_df.columns.str.strip("[]")
+    rows = res_df.index.get_indexer(col_names)
+    valid = rows != -1
+    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+
+    return res_df
+
+
+def get_relative_variations_samples(
+    final_results_original_model,
+    final_results_knocked_model,
+    epsilon=1e-20,
+    log_file=None,
+):
+    """
+    Calculate variations and relative variation between original and knocked model results.
+
+    Args:
+        final_results_original_model: DataFrame with original model results
+        final_results_knocked_model: List of tuples (species, ko_dfs)
+        log_file: Optional logging file (unused in current implementation)
+
+    Returns:
+        Dict: Nested dictionary with variations per species and combination
+    """
+    rms = []
+    for ko_species, ko_data in final_results_knocked_model:
+        variations = []
+
+        for c in range(len(ko_data)):
+            ko_sim_i = ko_data[c]
+            original_sim_i = final_results_original_model[c]
+
+            # Getting the last values
+            last_ko_values = ko_sim_i.tail(1)
+            last_original_values = original_sim_i.tail(1)
+
+            # Masking
+            last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+            last_original_values = last_original_values.mask(
+                last_original_values <= epsilon, 0
+            )
+
+            var = (last_ko_values - last_original_values) / last_original_values
+            variations.append(var)
+
+        variations_df = pd.concat(variations, ignore_index=True)
+        variations_rms = np.sqrt((variations_df**2).mean())
+        variations_rms.name = ko_species
+        rms.append(variations_rms)
+
+    res_df = pd.DataFrame(rms)
+
+    # Applying the mas for inf values
+    res_df = res_df.mask(np.isinf(res_df), np.nan)
+    col_names = res_df.columns.str.strip("[]")
+    rows = res_df.index.get_indexer(col_names)
+    valid = rows != -1
+    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+
+    return res_df
+
+
+def get_relative_variations_no_samples(
+    original_data, ko_data, epsilon=1e-20, log_file=None
+):
+
+    variations = []
+
+    for ko_species, ko_info in ko_data:
+
+        last_ko_values = ko_info.tail(1)
+        last_original_values = original_data.tail(1)
+
+        # Masking
+        last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+        last_original_values = last_original_values.mask(
+            last_original_values <= epsilon, 0
+        )
+
+        var = (last_ko_values - last_original_values) / last_original_values
+        rms_vars = np.sqrt(var**2)
+        var_series = rms_vars.squeeze()
+        var_series.name = ko_species
+        variations.append(var_series)
+
+    res_df = pd.DataFrame(variations)
+
+    # Applying the mas for inf values
+    res_df = res_df.mask(np.isinf(res_df), np.nan)
+    col_names = res_df.columns.str.strip("[]")
+    rows = res_df.index.get_indexer(col_names)
+    valid = rows != -1
+    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+
+    return res_df
 
 
 def get_payoff_vals(
@@ -894,12 +985,12 @@ def generate_values_distance_report(
             f.write(f"Minimum global Distance: {min_diff}\n")
             f.write(f"Mean gloabl Distance: {mean_diff}\n")
             f.write(f"Gloabl standard Deviation: {std_diff}\n")
-            f.write(
-                f"Significant Differences: {significant_differences}/{total_comparisons}\n"
-            )
-            f.write(
-                f"Significance Rate: {(significant_differences/total_comparisons)*100:.20f}%\n\n"
-            )
+            # f.write(
+            #     f"Significant Differences: {significant_differences}/{total_comparisons}\n"
+            # )
+            # f.write(
+            #     f"Significance Rate: {(significant_differences/total_comparisons)*100:.20f}%\n\n"
+            # )
 
             if ko_impact is not None and ko_ranking is not None:
                 f.write("KNOCKOUT SPECIES RANKING:\n")

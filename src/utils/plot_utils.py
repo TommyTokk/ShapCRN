@@ -466,12 +466,12 @@ def plot_all_simulation_traces(
     plt.close()
 
 
-def plot_heatmap(data, y_labels, x_labels, **kwargs):
+def plot_heatmap(data, y_labels, x_labels, colnames_to_index, **kwargs):
     """
     Simple heatmap plotting with customizable color mapping.
 
     Args:
-        data (np.ndarray): 2D array with heatmap values
+        data: Pandas DataFrame
         y_labels (list): Labels for y-axis (rows)
         x_labels (list): Labels for x-axis (columns)
         **kwargs: Optional customization parameters
@@ -488,6 +488,8 @@ def plot_heatmap(data, y_labels, x_labels, **kwargs):
     Returns:
         fig, ax: matplotlib figure and axes objects
     """
+
+    # Setting the NaN values
 
     # Default parameters
     defaults = {

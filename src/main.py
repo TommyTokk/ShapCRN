@@ -234,6 +234,12 @@ def main():
                 max_end_time=ss_max_end_time,
             )
 
+            colnames_to_index = {}
+            for i, el in enumerate(colnames):
+                if el == "time":
+                    continue
+                colnames_to_index[el] = i
+
             # ut.print_log("orig_res", original_results[:, :])
 
             min_ss_time = (
@@ -425,12 +431,212 @@ def main():
 
             else:  # === IF SAMPLES ===
                 try:
-                    assert original_model_simulations_info is not None  # pyright:ignore
+                    assert original_data is not None  # pyright:ignore
                     ut.print_log(log_file, "Printing with samples")
                     ut.print_log(
                         log_file,
                         f"Time to process species: {(end_time-start_time):.2f}s",
                     )
+
+                    # Getting the variations with no samples
+
+                    # Getting the ko without samples
+                    ko_no_samples = []
+                    for ko_species, ko_data in knockout_data:
+                        ko_or = ko_data[0]
+
+                        ko_no_samples.append((ko_species, ko_or))
+
+                    # Taking the first original
+                    ori_no_samples = original_data[0]
+
+                    # Getting the variations without samples
+                    no_samples_relative_vars = (
+                        sim_ut.get_relative_variations_no_samples(
+                            ori_no_samples, ko_no_samples, log_file=log_file
+                        )
+                    )
+
+                    no_samples_absolute_vars = (
+                        sim_ut.get_absolute_variations_no_samples(
+                            ori_no_samples, ko_no_samples, log_file=log_file
+                        )
+                    )
+
+                    # Getting the variations with samples
+                    samples_relative_vars = sim_ut.get_relative_variations_samples(
+                        original_data, knockout_data
+                    )
+
+                    samples_absolute_vars = sim_ut.get_absolute_variations_samples(
+                        original_data, knockout_data, log_file=log_file
+                    )
+
+                    # Normalizing the variations with log
+                    log_no_samples_relative = np.log10(no_samples_relative_vars + 1)
+                    log_no_samples_absolute = np.log10(no_samples_absolute_vars + 1)
+
+                    log_samples_relative = np.log10(samples_relative_vars + 1)
+                    log_samples_absolute = np.log10(samples_absolute_vars + 1)
+
+                    # Normalizing using minMax
+                    # minMax_no_samples_relative = ut.minMax_normalize(
+                    #     log_no_samples_relative
+                    # )
+                    # minMax_no_samples_absolute = ut.minMax_normalize(
+                    #     log_no_samples_absolute
+                    # )
+                    #
+                    # minMax_samples_relative = ut.minMax_normalize(
+                    #     (log_samples_relative)
+                    # )
+                    # minMax_samples_absolute = ut.minMax_normalize(log_samples_absolute)
+
+                    if args.save_images is not None:
+                        saving_path = args.save_images
+
+                        os.makedirs(saving_path, exist_ok=True)
+
+                        # PLOTTING HEATMAPS
+                        plt_ut.plot_heatmap(
+                            log_samples_relative,
+                            log_samples_relative.index.tolist(),
+                            log_no_samples_relative.columns.tolist(),
+                            colnames_to_index,
+                            title="Relative variations with perturbations (Log scaled)",
+                            save_path=saving_path,
+                            img_name="Log scaled relative variations Heatmap.png",
+                        )
+
+                        plt_ut.plot_heatmap(
+                            log_samples_absolute,
+                            log_samples_absolute.index.tolist(),
+                            log_samples_absolute.columns.tolist(),
+                            colnames_to_index,
+                            cmap="plasma",
+                            title="Absolute variations with perturbations (Log scaled)",
+                            save_path=saving_path,
+                            img_name="Log scaled absolute variations Heatmap.png",
+                        )
+
+                    # SAVING THE VARAITIONS HEATMAPS
+                    if args.generate_report:  # Saving the variation heatmaps
+
+                        save_path = args.generate_report
+
+                        os.makedirs(save_path, exist_ok=True)
+
+                        samples_relative_vars.to_csv(
+                            f"{save_path}/relative_variations.csv"
+                        )
+
+                        samples_absolute_vars.to_csv(
+                            f"{save_path}/absolute_variations.csv"
+                        )
+
+                    _, ko_ranking_relative = ut.get_ko_species_importance(
+                        samples_relative_vars,
+                        samples_relative_vars.index.tolist(),
+                        log_file=log_file,
+                    )
+
+                    _, ko_ranking_absolute = ut.get_ko_species_importance(
+                        samples_absolute_vars,
+                        samples_absolute_vars.index.tolist(),
+                        log_file,
+                    )
+
+                    if args.perturbations_importance:
+                        ut.print_log(log_file, "=== IMPORTANCE ANALYSIS ===")
+
+                        # Setting the correlation type
+                        correlation_type = "two-sided"
+
+                        # GETTING THE RELATIVE VALUES DISTANCES
+                        relative_values_distances = np.abs(
+                            log_samples_relative - log_no_samples_relative
+                        )
+                        __import__("pprint").pprint(relative_values_distances)
+
+                        absolute_values_distances = np.abs(
+                            log_samples_absolute - log_no_samples_absolute
+                        )
+
+                        __import__("pprint").pprint(absolute_values_distances)
+
+                        # GETTING THE PEARSON COEFFICIENT
+                        pearson_coefficient_relative, p_value_relative = (
+                            ut.pearson_correlation(
+                                log_samples_relative, log_no_samples_relative
+                            )
+                        )
+
+                        pearson_coefficient_absolute, p_value_absolute = (
+                            ut.pearson_correlation(
+                                log_samples_absolute,
+                                log_no_samples_absolute,
+                            )
+                        )
+
+                        if args.generate_report:
+                            saving_path = args.generate_report
+
+                            os.makedirs(saving_path, exist_ok=True)
+
+                            # GETTING THE VALUE DISTANCES REPORT
+                            _ = sim_ut.generate_values_distance_report(
+                                relative_values_distances,
+                                pearson_coefficient_relative,
+                                p_value_relative,
+                                correlation_type,
+                                samples_relative_vars.index.tolist(),
+                                file_name,
+                                f"{saving_path}/Perturbations importance analysis",
+                                report_title="Log scaled value distances report analysis (Relative map)",
+                                log_file=log_file,
+                            )
+
+                            _ = sim_ut.generate_values_distance_report(
+                                absolute_values_distances,
+                                pearson_coefficient_absolute,
+                                p_value_absolute,
+                                correlation_type,
+                                samples_absolute_vars.index.tolist(),
+                                file_name,
+                                f"{saving_path}/Perturbations importance analysis",
+                                report_title="Log scaled value distances report analysis (Absolute map)",
+                                log_file=log_file,
+                            )
+
+                        if args.save_images is not None:
+                            saving_path = args.save_images
+
+                            os.makedirs(saving_path, exist_ok=True)
+
+                            # PLOTTING THE VALUES DISTANCES
+                            plt_ut.plot_heatmap(
+                                relative_values_distances,
+                                samples_relative_vars.index.tolist(),
+                                samples_relative_vars.columns.tolist(),
+                                colnames_to_index,
+                                cmap="PiYG_r",
+                                save_path=f"{saving_path}/Perturbations importance analysis",
+                                title="Perturbations VS No Perturbations Distance (Relative map)",
+                                img_name="Relative Perturbations VS No Perturbations distance",
+                            )
+
+                            plt_ut.plot_heatmap(
+                                absolute_values_distances,
+                                samples_absolute_vars.index.tolist(),
+                                samples_absolute_vars.index.tolist(),
+                                colnames_to_index,
+                                cmap="PRGn_r",
+                                save_path=f"{saving_path}/Perturbations importance analysis",
+                                title="Perturbations VS No Perturbations Distance (Absolute map)",
+                                img_name="Absolute Perturbations VS No Perturbations distance",
+                            )
+
+                    exit(1)
 
                     # Get the variation informations
                     variation_dict = sim_ut.get_knockout_variations_samples(

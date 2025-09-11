@@ -463,29 +463,57 @@ def save_shapley_values_to_csv_pivot(shapley_vals, file_path, cols=None, log_fil
 def pearson_correlation(
     matrix_1, matrix_2, permutations=999, seed=None, alternative="two-sided"
 ):
-    rng = np.random.RandomState(seed)
-    a = matrix_1.ravel()
-    b = matrix_2.ravel()
+    if alternative not in {"two-sided", "greater", "less"}:
+        raise ValueError("alternative must be one of 'two-sided', 'greater', 'less'")
 
+    # Align: prendiamo l'intersezione di righe e colonne
+    if not isinstance(matrix_1, pd.DataFrame) or not isinstance(matrix_2, pd.DataFrame):
+        raise TypeError("Both inputs must be pandas.DataFrame")
+
+    common_index = matrix_1.index.intersection(matrix_2.index)
+    common_cols = matrix_1.columns.intersection(matrix_2.columns)
+
+    if len(common_index) == 0 or len(common_cols) == 0:
+        raise ValueError("No overlapping index/columns between the two DataFrames")
+
+    a = matrix_1.loc[common_index, common_cols].to_numpy().ravel()
+    b = matrix_2.loc[common_index, common_cols].to_numpy().ravel()
+
+    # Keep only pairs where neither is NaN
     valid = ~np.isnan(a) & ~np.isnan(b)
-    a_valid, b_valid = a[valid], b[valid]
+    a_valid = a[valid]
+    b_valid = b[valid]
 
-    r_obs = pearsonr(a_valid, b_valid)[0]
+    # If not enough data, return NaN
+    if a_valid.size < 2:
+        return np.nan, np.nan
 
+    # compute observed Pearson r (handle caso di input costanti)
+    try:
+        r_obs = pearsonr(a_valid, b_valid)[0]
+    except Exception:
+        # ad es. ConstantInputWarning / errori numerici -> nessuna correlazione definita
+        return np.nan, np.nan
+
+    # Permutation test
+    rng = np.random.RandomState(seed)
     count = 0
     for _ in range(permutations):
         b_perm = rng.permutation(b_valid)
-        r_perm = pearsonr(a_valid, b_perm)[0]
+        try:
+            r_perm = pearsonr(a_valid, b_perm)[0]
+        except Exception:
+            # se la permutazione genera valori costanti, considera r_perm = 0 (o skip)
+            r_perm = 0.0
 
-        # Correct logic based on alternative hypothesis
         if alternative == "two-sided":
-            if abs(r_perm) >= abs(r_obs):  # pyright:ignore
+            if abs(r_perm) >= abs(r_obs):
                 count += 1
         elif alternative == "greater":
-            if r_perm >= r_obs:  # pyright:ignore
+            if r_perm >= r_obs:
                 count += 1
-        elif alternative == "less":
-            if r_perm <= r_obs:  # pyright:ignore
+        else:  # "less"
+            if r_perm <= r_obs:
                 count += 1
 
     pvalue = (count + 1) / (permutations + 1)
@@ -521,22 +549,29 @@ def get_ko_species_importance(matrix, ko_species_list, log_file=None):
 # === NORMALIZATION ===
 
 
-def minMax_normalize(heatmap_data, log_file=None):
+def minMax_normalize(df, epsilon=1e-20, log_file=None):
 
     try:
-        global_min = np.nanmax(heatmap_data)
-        global_max = np.nanmin(heatmap_data)
+        global_min = df.min().min()
+        global_max = df.max().max()
 
-        if global_max == global_min:
-            return np.zeros_like(heatmap_data)
+        if np.isclose(global_max, global_min, atol=epsilon):
+            normalized_df = pd.DataFrame(0.0, index=df.index, columns=df.columns)
+        else:
+            normalized_df = (df - global_min) / (global_max - global_min)
+            normalized_df = normalized_df.clip(0.0, 1.0)
 
-        if global_max - global_min > 1e-20:
-            heatmap_data = (heatmap_data - global_min) / (global_max - global_min)
+        return normalized_df
 
-        return np.clip(heatmap_data, 0.0, 1.0)
     except Exception as e:
-        print_log(log_file, f"[ERROR] error during minMax normalization: {e}")
-        exit(1)
+        # Log opzionale
+        msg = f"[ERROR] error during minMax normalization: {e}"
+        if log_file is not None:
+            with open(log_file, "a") as f:
+                f.write(msg + "\n")
+        else:
+            print(msg)
+        raise  # rilancia l'eccezione
 
 
 def z_score_normalize(heatmap_data, log_file=None):
