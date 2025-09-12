@@ -234,6 +234,8 @@ def main():
                 max_end_time=ss_max_end_time,
             )
 
+            original_df = pd.DataFrame(original_results[:, 1:], columns=colnames[1:])
+
             colnames_to_index = {}
             for i, el in enumerate(colnames):
                 if el == "time":
@@ -283,9 +285,8 @@ def main():
                 ut.print_log(
                     log_file, "Getting simulations informations of the original model"
                 )
-                original_data = [
-                    pd.DataFrame(original_results[:, 1:], columns=colnames[1:])
-                ]
+
+                original_data = [original_df]
 
                 for i in range(len(combinations)):
                     sim_res_i = samples_simulations_results[i]
@@ -365,23 +366,20 @@ def main():
 
                 ut.print_log(log_file, "Printing without samples")
 
-                sim_variations = sim_ut.get_knockout_variation(
-                    original_results, knockout_data, colnames, log_file
-                )
-
-                ko_species_list = list(sim_variations.keys())
-
-                relative_map = sim_ut.get_variations_hm_no_samples(
-                    sim_variations, species_list, ko_species_list, log_file=log_file
-                )
-
-                absolute_map = sim_ut.get_variations_hm_no_samples(
-                    sim_variations,
-                    species_list,
-                    ko_species_list,
-                    "absolute",
+                relative_vars = sim_ut.get_relative_variations_no_samples(
+                    original_df,
+                    knockout_data,
                     log_file=log_file,
                 )
+
+                absolute_vars = sim_ut.get_absolute_variations_no_samples(
+                    original_df, knockout_data, log_file=log_file
+                )
+
+                # Normalizing with logs
+
+                log_relative = np.log10(relative_vars + 1)
+                log_absolute = np.log10(absolute_vars + 1)
 
                 if args.generate_report is not None:
 
@@ -392,17 +390,9 @@ def main():
                         os.makedirs(saving_path, exist_ok=True)
                         ut.print_log(log_file, f"Created directory: {saving_path}")
 
-                    relative_data_frame = pd.DataFrame(
-                        relative_map, columns=species_list, index=ko_species_list
-                    )
+                    relative_vars.to_csv(f"{saving_path}/relative_variations.csv")
 
-                    absolute_data_frame = pd.DataFrame(
-                        absolute_map, columns=species_list, index=ko_species_list
-                    )
-
-                    relative_data_frame.to_csv(f"{saving_path}/relative_variations.csv")
-
-                    absolute_data_frame.to_csv(f"{saving_path}/absolute_variations.csv")
+                    absolute_vars.to_csv(f"{saving_path}/absolute_variations.csv")
 
                 if args.save_images is not None:
 
@@ -411,18 +401,20 @@ def main():
                     os.makedirs(saving_path, exist_ok=True)
 
                     plt_ut.plot_heatmap(
-                        relative_map,
-                        ko_species_list,
-                        species_list,
+                        log_relative,
+                        log_relative.index.tolist(),
+                        log_relative.columns.tolist(),
+                        colnames_to_index=colnames_to_index,
                         title="Relative variations without perturbations",
                         save_path=f"{saving_path}/No Samples",
                         img_name="Relative variations Heatmap.png",
                     )
 
                     plt_ut.plot_heatmap(
-                        absolute_map,
-                        ko_species_list,
-                        species_list,
+                        log_absolute,
+                        log_absolute.index.tolist(),
+                        log_absolute.columns.tolist(),
+                        colnames_to_index=colnames_to_index,
                         cmap="plasma",
                         title="Absolute variations without perturbations",
                         save_path=f"{saving_path}/No Samples",

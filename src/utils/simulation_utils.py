@@ -439,7 +439,10 @@ def process_species_no_samples(args):
             ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
         )
 
-        return (knockedout_species, knockout_model_results)
+        return (
+            knockedout_species,
+            pd.DataFrame(knockout_model_results[:, 1:], columns=colnames[1:]),
+        )
     except Exception as e:
         raise Exception(f"Error during processing species :\n Error: {e}")
 
@@ -769,7 +772,13 @@ def get_relative_variations_no_samples(
             last_original_values <= epsilon, 0
         )
 
+        __import__("pprint").pprint(last_ko_values)
+        __import__("pprint").pprint(last_original_values)
+
         var = (last_ko_values - last_original_values) / last_original_values
+        __import__("pprint").pprint(var)
+
+        __import__("pprint").pprint("///////////")
         rms_vars = np.sqrt(var**2)
         var_series = rms_vars.squeeze()
         var_series.name = ko_species
