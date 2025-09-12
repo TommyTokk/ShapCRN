@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import enum
+import itertools
 from logging import raiseExceptions
 from math import log, nan
 import os
@@ -178,13 +179,12 @@ def main():
             ids_to_ko.sort(key=lambda x: id_to_idx[x])
 
             # Init the combinations array
-            combinations = None
-
+            samples = None
             if use_perturbations:
                 if use_fixed_perturbations:  # args.fixed_perturbations is None:
                     ut.print_log(log_file, "Running with fixed samples generations")
 
-                    combinations = sbml_ut.get_fixed_combinations(
+                    samples = sbml_ut.get_fixed_combinations(
                         sbml_model=sbml_model,
                         input_species=input_species_ids,
                         fixed_variations=fixed_perturbations,
@@ -195,7 +195,7 @@ def main():
                     ut.print_log(log_file, "Running with random samples generations")
 
                     # Create the combinations
-                    combinations = sbml_ut.generate_species_random_combinations(
+                    samples = sbml_ut.generate_species_random_combinations(
                         sbml_model,
                         target_species=input_species_ids,
                         log_file=log_file,
@@ -258,7 +258,7 @@ def main():
 
                     samples_simulations_results, _ = sim_ut.simulate_combinations(
                         rr,
-                        combinations,
+                        sbml_ut.create_combinations(samples),
                         input_species_ids,
                         ss_min_time,
                         simulation_time,
@@ -273,7 +273,7 @@ def main():
                     )
                     samples_simulations_results, _ = sim_ut.simulate_combinations(
                         rr,
-                        combinations,
+                        sbml_ut.create_combinations(samples),
                         input_species_ids,
                         ss_min_time,
                         simulation_time,
@@ -288,7 +288,7 @@ def main():
 
                 original_data = [original_df]
 
-                for i in range(len(combinations)):
+                for i in range(len(samples_simulations_results)):
                     sim_res_i = samples_simulations_results[i]
                     original_data.append(
                         pd.DataFrame(sim_res_i[:, 1:], columns=colnames[1:])
@@ -310,10 +310,14 @@ def main():
 
             start_time = time.perf_counter()
 
+            iterators = itertools.tee(
+                sbml_ut.create_combinations(samples), len(ids_to_ko)
+            )
+
             knockout_data = sim_ut.process_species_multiprocessing(
                 ids_to_ko,
                 model_dict,
-                combinations,
+                iterators,
                 input_species_ids,
                 selections,
                 integrator,
@@ -659,7 +663,7 @@ def main():
 
                         ut.print_log(log_file, "Generating fixed combinations")
 
-                        fixed_combinations = sbml_ut.get_fixed_combinations(
+                        fixed_samples = sbml_ut.get_fixed_combinations(
                             sbml_model,
                             input_species_ids,
                             fp,
@@ -668,7 +672,7 @@ def main():
 
                         fixed_samples_results, _ = sim_ut.simulate_combinations(
                             rr,
-                            fixed_combinations,
+                            sbml_ut.create_combinations(fixed_samples),
                             input_species_ids,
                             min_ss_time,
                             end_time,
@@ -681,7 +685,7 @@ def main():
                             pd.DataFrame(original_results[:, 1:], columns=colnames[1:])
                         ]
 
-                        for i in range(len(fixed_combinations)):
+                        for i in range(len(fixed_samples_results)):
                             fixed_original_data.append(
                                 pd.DataFrame(
                                     fixed_samples_results[i][:, 1:],
@@ -694,10 +698,14 @@ def main():
                             " Simulating multiporcessing with fixed samples",
                         )
 
+                        iterators = itertools.tee(
+                            sbml_ut.create_combinations(samples), len(ids_to_ko)
+                        )
+
                         fixed_knockout_data = sim_ut.process_species_multiprocessing(
                             ids_to_ko,
                             model_dict,
-                            fixed_combinations,
+                            iterators,
                             input_species_ids,
                             selections,
                             integrator,

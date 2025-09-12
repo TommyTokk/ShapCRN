@@ -898,15 +898,12 @@ def generate_species_random_combinations(
 
     # print_log(log_file, f"[GENERATE SAMPLES]{res}")
 
-    return create_combinations(res, log_file)
+    return res
 
 
 def create_combinations(input_samples, log_file=None):
     # input_samples is a 2D array: e.g., [[1, 2], [3, 4], [5, 6]]
-    combinations = list(itertools.product(*input_samples))
-
-    # print_log(log_file, f"Combinations: {combinations}")
-    return combinations
+    return itertools.product(*input_samples)
 
 
 def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file=None):
@@ -964,7 +961,7 @@ def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file
 
         samples.append(tmp)
 
-    return create_combinations(samples, log_file)
+    return samples
 
 
 # FOR DEBUG ONLY

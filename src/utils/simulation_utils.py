@@ -389,7 +389,7 @@ def process_species_samples(args):
 
         ko_data = [pd.DataFrame(knockout_model_results[:, 1:], columns=colnames[1:])]
 
-        for i in range(len(combinations)):
+        for i in range(len(combinations_knockout_model_results)):
             ko_res_i = combinations_knockout_model_results[i]
             ko_data.append(pd.DataFrame(ko_res_i[:, 1:], columns=colnames[1:]))
 
@@ -481,13 +481,14 @@ def process_species_multiprocessing(
 
     # Prepare the arguments
     process_args = []
+    i = 0
 
     for ts in target_ids:
         if ts in modified_models_dict.keys():
             args = (
                 ts,
                 modified_models_dict[ts],
-                combinations,
+                combinations[i],
                 input_species_ids,
                 selections,
                 integrator,
@@ -502,6 +503,7 @@ def process_species_multiprocessing(
             process_args.append(args)
         else:
             print_log(log_file, f"Warning: No knockout model found for species {ts}")
+        i += 1
 
     # print_log(log_file, f"[DEBUG]{len(process_args)}")
 
@@ -1818,13 +1820,13 @@ def simulate_combinations(
     log_file=None,
 ):
     samples_simulations_results = []
-    for i in range(len(combinations)):
+    for comb in combinations:
         # rr.reset()
         # print_log(log_file, f"Simulation nr. {i}")
 
         sim_res, ss_time, colnames = simulate_samples(
             rr,
-            combinations[i],
+            comb,
             input_species_ids,
             start_time=0,
             end_time=end_time,
