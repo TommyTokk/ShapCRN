@@ -556,12 +556,13 @@ def main():
                         relative_values_distances = np.abs(
                             log_samples_relative - log_no_samples_relative
                         )
-                        __import__("pprint").pprint(relative_values_distances)
 
                         absolute_values_distances = np.abs(
                             log_samples_absolute - log_no_samples_absolute
                         )
 
+                        __import__("pprint").pprint(log_samples_absolute)
+                        __import__("pprint").pprint(log_no_samples_absolute)
                         __import__("pprint").pprint(absolute_values_distances)
 
                         # GETTING THE PEARSON COEFFICIENT
@@ -636,236 +637,9 @@ def main():
                                 img_name="Absolute Perturbations VS No Perturbations distance",
                             )
 
-                    exit(1)
-
-                    # Get the variation informations
-                    variation_dict = sim_ut.get_knockout_variations_samples(
-                        original_model_simulations_info,  # pyright:ignore
-                        knockout_data,
-                        log_file=None,
-                    )
-
-                    # Collect all species and knocked-out species
-                    # all_species = set()
-                    ko_species_list = list(variation_dict.keys())
-
-                    # GETTING ALL THE MAPS
-                    # Getting the informations about the original variations
-                    no_samples_relative_map, all_species_rel = (
-                        sim_ut.get_no_samples_variations(
-                            variation_dict,
-                            species_list,
-                            ko_species_list,
-                            variation_type="relative",
-                            log_file=log_file,
-                        )
-                    )
-
-                    no_samples_absolute_map, all_species_abs = (
-                        sim_ut.get_no_samples_variations(
-                            variation_dict,
-                            species_list,
-                            ko_species_list,
-                            "absolute",
-                            log_file,
-                        )
-                    )
-
-                    # Getting the samples informations
-                    samples_relative_map, all_species_rel = (
-                        sim_ut.get_variations_hm_samples(
-                            variation_dict,
-                            species_list,
-                            ko_species_list,
-                            variation_type="relative",
-                            log_file=log_file,
-                        )
-                    )
-
-                    samples_absolute_map, all_species_abs = (
-                        sim_ut.get_variations_hm_samples(
-                            variation_dict,
-                            species_list,
-                            ko_species_list,
-                            variation_type="absolute",
-                            log_file=log_file,
-                        )
-                    )
-
-                    # NORMALIZING WITH LOGS
-                    no_samples_log_relative_map = np.log10(no_samples_relative_map + 1)
-
-                    no_samples_log_absolute_map = np.log10(no_samples_absolute_map + 1)
-
-                    samples_log_relative_map = np.log10(samples_relative_map + 1)
-
-                    samples_log_absolute_map = np.log10(samples_absolute_map + 1)
-
-                    # NORMALIZING WITH MINMAX
-                    normalized_no_samples_relative_map = ut.minMax_normalize(
-                        no_samples_log_relative_map
-                    )
-
-                    normalized_samples_relative_map_map = ut.minMax_normalize(
-                        samples_log_relative_map
-                    )
-
-                    normalized_no_samples_absolute_map = ut.minMax_normalize(
-                        no_samples_log_absolute_map
-                    )
-
-                    normalized_samples_absolute_map = ut.minMax_normalize(
-                        samples_log_absolute_map
-                    )
-
-                    if args.save_images is not None:
-                        saving_path = args.save_images
-
-                        os.makedirs(saving_path, exist_ok=True)
-
-                        # PLOTTING HEATMAPS
-                        plt_ut.plot_heatmap(
-                            samples_log_relative_map,
-                            ko_species_list,
-                            species_list,
-                            title="Relative variations with perturbations (Log scaled)",
-                            save_path=saving_path,
-                            img_name="Log scaled relative variations Heatmap.png",
-                        )
-
-                        plt_ut.plot_heatmap(
-                            samples_log_absolute_map,
-                            ko_species_list,
-                            species_list,
-                            cmap="plasma",
-                            title="Absolute variations with perturbations (Log scaled)",
-                            save_path=saving_path,
-                            img_name="Log scaled absolute variations Heatmap.png",
-                        )
-
-                    # SAVING THE VARAITIONS HEATMAPS
-                    if args.generate_report:  # Saving the variation heatmaps
-
-                        save_path = args.generate_report
-
-                        os.makedirs(save_path, exist_ok=True)
-
-                        relative_data_frame = pd.DataFrame(
-                            samples_relative_map,
-                            columns=species_list,
-                            index=ko_species_list,
-                        )
-
-                        relative_data_frame.to_csv(
-                            f"{save_path}/relative_variations.csv"
-                        )
-
-                        absolute_data_frame = pd.DataFrame(
-                            samples_absolute_map,
-                            columns=species_list,
-                            index=ko_species_list,
-                        )
-
-                        absolute_data_frame.to_csv(
-                            f"{save_path}/absolute_variations.csv"
-                        )
-
-                    _, ko_ranking_relative = ut.get_ko_species_importance(
-                        samples_log_relative_map, ko_species_list, log_file=log_file
-                    )
-
-                    _, ko_ranking_absolute = ut.get_ko_species_importance(
-                        samples_log_absolute_map, ko_species_list, log_file
-                    )
-
-                    if args.perturbations_importance:
-                        ut.print_log(log_file, "=== IMPORTANCE ANALYSIS ===")
-
-                        # Setting the correlation type
-                        correlation_type = "two-sided"
-
-                        # GETTING THE RELATIVE VALUES DISTANCES
-                        relative_values_distances = np.abs(
-                            samples_log_relative_map - no_samples_log_relative_map
-                        )
-
-                        absolute_values_distances = np.abs(
-                            samples_log_absolute_map - no_samples_log_absolute_map
-                        )
-
-                        # GETTING THE PEARSON COEFFICIENT
-                        pearson_coefficient_relative, p_value_relative = (
-                            ut.pearson_correlation(
-                                samples_log_relative_map,
-                                no_samples_log_relative_map,
-                            )
-                        )
-
-                        pearson_coefficient_absolute, p_value_absolute = (
-                            ut.pearson_correlation(
-                                samples_log_absolute_map,
-                                no_samples_log_absolute_map,
-                            )
-                        )
-
-                        if args.generate_report:
-                            saving_path = args.generate_report
-
-                            os.makedirs(saving_path, exist_ok=True)
-
-                            # GETTING THE VALUE DISTANCES REPORT
-                            _ = sim_ut.generate_values_distance_report(
-                                relative_values_distances,
-                                pearson_coefficient_relative,
-                                p_value_relative,
-                                correlation_type,
-                                ko_species_list,
-                                file_name,
-                                f"{saving_path}/Perturbations importance analysis",
-                                report_title="Log scaled value distances report analysis (Relative map)",
-                                log_file=log_file,
-                            )
-
-                            _ = sim_ut.generate_values_distance_report(
-                                absolute_values_distances,
-                                pearson_coefficient_absolute,
-                                p_value_absolute,
-                                correlation_type,
-                                ko_species_list,
-                                file_name,
-                                f"{saving_path}/Perturbations importance analysis",
-                                report_title="Log scaled value distances report analysis (Absolute map)",
-                                log_file=log_file,
-                            )
-
-                        if args.save_images is not None:
-                            saving_path = args.save_images
-
-                            os.makedirs(saving_path, exist_ok=True)
-
-                            # PLOTTING THE VALUES DISTANCES
-                            plt_ut.plot_heatmap(
-                                relative_values_distances,
-                                ko_species_list,
-                                species_list,
-                                cmap="PiYG_r",
-                                save_path=f"{saving_path}/Perturbations importance analysis",
-                                title="Perturbations VS No Perturbations Distance (Relative map)",
-                                img_name="Relative Perturbations VS No Perturbations distance",
-                            )
-
-                            plt_ut.plot_heatmap(
-                                absolute_values_distances,
-                                ko_species_list,
-                                species_list,
-                                cmap="PRGn_r",
-                                save_path=f"{saving_path}/Perturbations importance analysis",
-                                title="Perturbations VS No Perturbations Distance (Absolute map)",
-                                img_name="Absolute Perturbations VS No Perturbations distance",
-                            )
-
                     if args.random_perturbations_importance:
                         ut.print_log(log_file, "=== FIXED SAMPLES ANALYSIS ===")
+                        correlation_type = "two-sided"
 
                         ut.print_log(
                             log_file,
@@ -911,15 +685,17 @@ def main():
                             log_file,
                         )
 
-                        fixed_samples_original_model_informations = (
-                            sim_ut.get_simulations_informations(
-                                fixed_samples_results,
-                                original_results,
-                                fixed_combinations,
-                                colnames,
-                                log_file,
+                        fixed_original_data = [
+                            pd.DataFrame(original_results[:, 1:], columns=colnames[1:])
+                        ]
+
+                        for i in range(len(fixed_combinations)):
+                            fixed_original_data.append(
+                                pd.DataFrame(
+                                    fixed_samples_results[i][:, 1:],
+                                    columns=colnames[1:],
+                                )
                             )
-                        )
 
                         ut.print_log(
                             log_file,
@@ -943,51 +719,33 @@ def main():
                             use_perturbations=args.use_perturbations,
                         )
 
-                        fixed_variation_dict = sim_ut.get_knockout_variations_samples(
-                            fixed_samples_original_model_informations,  # pyright:ignore
-                            fixed_knockout_data,
-                            log_file=None,
+                        fixed_relative_vars = sim_ut.get_relative_variations_samples(
+                            fixed_original_data, fixed_knockout_data, log_file=log_file
                         )
 
-                        fixed_relative_map, fixed_all_species_rel = (
-                            sim_ut.get_variations_hm_samples(
-                                fixed_variation_dict,
-                                species_list,
-                                ko_species_list,
-                                variation_type="relative",
-                                log_file=log_file,
-                            )
-                        )
-
-                        fixed_absolute_map, fixed_all_species_abs = (
-                            sim_ut.get_variations_hm_samples(
-                                fixed_variation_dict,
-                                species_list,
-                                ko_species_list,
-                                variation_type="absolute",
-                                log_file=log_file,
-                            )
+                        fixed_absolute_vars = sim_ut.get_absolute_variations_samples(
+                            fixed_original_data, fixed_knockout_data, log_file=log_file
                         )
 
                         # NORMALIZING WITH LOGS
-                        fixed_log_relative_map = np.log10(fixed_relative_map + 1)
-                        fixed_log_absolute_map = np.log10(fixed_absolute_map + 1)
+                        fixed_log_relative = np.log10(fixed_relative_vars + 1)
+                        fixed_log_absolute = np.log10(fixed_absolute_vars + 1)
 
                         # NORMALIZING WITH MINMAX
-                        normalized_fixed_relative_map = ut.minMax_normalize(
-                            fixed_log_relative_map
+                        normalized_fixed_relative = ut.minMax_normalize(
+                            fixed_log_relative
                         )
-                        normalized_fixed_absolute_map = ut.minMax_normalize(
-                            fixed_log_absolute_map
+                        normalized_fixed_absolute = ut.minMax_normalize(
+                            fixed_log_absolute
                         )
 
                         # GETTING THE DISTANCES
                         fixed_relative_values_distances = np.abs(
-                            samples_log_relative_map - fixed_log_relative_map
+                            log_samples_relative - fixed_log_relative
                         )
 
                         fixed_absolute_values_distances = np.abs(
-                            samples_log_absolute_map - fixed_log_absolute_map
+                            log_samples_absolute - fixed_log_absolute
                         )
 
                         # GETTING THE PEARSON COEFFICIENT
@@ -996,14 +754,14 @@ def main():
                             fixed_pearson_coefficient_relative,
                             fixed_p_value_relative,
                         ) = ut.pearson_correlation(
-                            samples_log_relative_map, fixed_log_relative_map
+                            log_samples_relative, fixed_log_relative
                         )
 
                         (
                             fixed_pearson_coefficient_absolute,
                             fixed_p_value_absolute,
                         ) = ut.pearson_correlation(
-                            samples_log_absolute_map, fixed_log_absolute_map
+                            log_samples_absolute, fixed_log_absolute
                         )
 
                         if args.generate_report is not None:
@@ -1018,7 +776,7 @@ def main():
                                 fixed_pearson_coefficient_relative,
                                 fixed_p_value_relative,
                                 correlation_type,
-                                ko_species_list,
+                                fixed_relative_vars.index.tolist(),
                                 file_name,
                                 f"{saving_path}/Fixed perturbations importance analysis",
                                 report_title="Log scaled Fixed perturbations values distance report analysis (Relative map)",
@@ -1030,7 +788,7 @@ def main():
                                 fixed_pearson_coefficient_absolute,
                                 fixed_p_value_absolute,
                                 correlation_type,
-                                ko_species_list,
+                                fixed_absolute_vars.index.tolist(),
                                 file_name,
                                 f"{saving_path}/Fixed perturbations importance analysis",
                                 report_title="Log scaled Fixed perturbations values distance report analysis (Absolute map)",
@@ -1045,8 +803,9 @@ def main():
                             # PLOTTING VALUES DISTANCES HEATMAPS
                             plt_ut.plot_heatmap(
                                 fixed_relative_values_distances,
-                                ko_species_list,
+                                fixed_relative_vars.index.tolist(),
                                 species_list,
+                                colnames_to_index=colnames_to_index,
                                 cmap="cividis",
                                 save_path=f"{saving_path}/Random Perturbations Importance Analysis",
                                 title="Random Perturbations VS Fixed Perturbations Distance (Relative map)",
@@ -1055,13 +814,15 @@ def main():
 
                             plt_ut.plot_heatmap(
                                 fixed_absolute_values_distances,
-                                ko_species_list,
+                                fixed_absolute_vars.index.tolist(),
                                 species_list,
+                                colnames_to_index=colnames_to_index,
                                 cmap="PuOr_r",
                                 save_path=f"{saving_path}/Random Perturbations Importance Analysis",
                                 title="Random Perturbations VS Fixed Perturbations Distance (Absolute map)",
                                 img_name="Absolute Random Perturbations VS Fixed Perturbations distance",
                             )
+
                 except AssertionError as ae:
                     ut.print_log(
                         log_file, f"Error during samples results elaboration: {ae}"
