@@ -953,9 +953,7 @@ def main():
 
             # Creating the problem
             #
-            base_samples = (
-                128  # args.base_samples if c_sample_size is None else c_sample_size
-            )
+            base_samples = args.base_samples if c_sample_size is None else c_sample_size
 
             __import__("pprint").pprint(base_samples)
 
