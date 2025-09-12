@@ -1,5 +1,5 @@
 from decimal import *
-import math
+import sys
 
 import pandas as pd
 from pandas.io.html import pprint_thing
@@ -23,6 +23,7 @@ from src.utils.utils import (
     truncate_small_values,
 )
 from src.utils import plot_utils as plt_ut
+from utils.sbml_utils import create_combinations
 
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 
@@ -337,7 +338,7 @@ def process_species_samples(args):
         (
             knockedout_species,
             modified_model,
-            combinations,
+            samples,
             input_species_ids,
             selections,
             integrator,
@@ -378,7 +379,7 @@ def process_species_samples(args):
         # Simulating the modified model with the perturbations
         combinations_knockout_model_results, colnames = simulate_combinations(
             modified_rr,
-            combinations,
+            create_combinations(samples),
             input_species_ids,
             min_ss_time,
             end_time,
@@ -450,7 +451,7 @@ def process_species_no_samples(args):
 def process_species_multiprocessing(
     target_ids,
     modified_models_dict,
-    combinations,
+    samples,
     input_species_ids,
     selections,
     integrator,
@@ -488,7 +489,7 @@ def process_species_multiprocessing(
             args = (
                 ts,
                 modified_models_dict[ts],
-                combinations[i],
+                samples,
                 input_species_ids,
                 selections,
                 integrator,
@@ -842,6 +843,8 @@ def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
     left_factor = (
         factorial(n_inputs) * factorial(n_combinations - n_inputs)
     ) / factorial(n_combinations)
+
+    __import__("pprint").pprint(f"lf: {left_factor}")
 
     for ko_species, payoffs in payoff_values:
         factors = left_factor * payoffs
@@ -1820,9 +1823,12 @@ def simulate_combinations(
     log_file=None,
 ):
     samples_simulations_results = []
+    i = 1
     for comb in combinations:
+
         # rr.reset()
-        # print_log(log_file, f"Simulation nr. {i}")
+
+        # __import__("pprint").pprint(f"comb:{comb}")
 
         sim_res, ss_time, colnames = simulate_samples(
             rr,

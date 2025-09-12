@@ -310,14 +310,10 @@ def main():
 
             start_time = time.perf_counter()
 
-            iterators = itertools.tee(
-                sbml_ut.create_combinations(samples), len(ids_to_ko)
-            )
-
             knockout_data = sim_ut.process_species_multiprocessing(
                 ids_to_ko,
                 model_dict,
-                iterators,
+                samples,
                 input_species_ids,
                 selections,
                 integrator,
@@ -557,9 +553,9 @@ def main():
                             log_samples_absolute - log_no_samples_absolute
                         )
 
-                        __import__("pprint").pprint(log_samples_absolute)
-                        __import__("pprint").pprint(log_no_samples_absolute)
-                        __import__("pprint").pprint(absolute_values_distances)
+                        # __import__("pprint").pprint(log_samples_absolute)
+                        # __import__("pprint").pprint(log_no_samples_absolute)
+                        # __import__("pprint").pprint(absolute_values_distances)
 
                         # GETTING THE PEARSON COEFFICIENT
                         pearson_coefficient_relative, p_value_relative = (
@@ -698,14 +694,10 @@ def main():
                             " Simulating multiporcessing with fixed samples",
                         )
 
-                        iterators = itertools.tee(
-                            sbml_ut.create_combinations(samples), len(ids_to_ko)
-                        )
-
                         fixed_knockout_data = sim_ut.process_species_multiprocessing(
                             ids_to_ko,
                             model_dict,
-                            iterators,
+                            fixed_samples,
                             input_species_ids,
                             selections,
                             integrator,

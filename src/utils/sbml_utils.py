@@ -903,7 +903,8 @@ def generate_species_random_combinations(
 
 def create_combinations(input_samples, log_file=None):
     # input_samples is a 2D array: e.g., [[1, 2], [3, 4], [5, 6]]
-    return itertools.product(*input_samples)
+    for comb in itertools.product(*input_samples):
+        yield comb
 
 
 def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file=None):
