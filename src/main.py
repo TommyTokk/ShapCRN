@@ -953,7 +953,9 @@ def main():
 
             # Creating the problem
             #
-            base_samples = args.base_samples if c_sample_size is None else c_sample_size
+            base_samples = (
+                128  # args.base_samples if c_sample_size is None else c_sample_size
+            )
 
             __import__("pprint").pprint(base_samples)
 
@@ -981,7 +983,7 @@ def main():
 
             fp = [int(p) for p in args.fixed_perturbations]
 
-            fixed_combinations = sbml_ut.get_fixed_combinations(
+            fixed_samples = sbml_ut.get_fixed_combinations(
                 sbml_model, input_ids, fp, log_file
             )
 
@@ -989,7 +991,7 @@ def main():
 
             fixed_samples_results, _ = sim_ut.simulate_combinations(
                 rr,
-                fixed_combinations,
+                sim_ut.create_combinations(fixed_samples),
                 input_ids,
                 1000,
                 5000,
@@ -998,14 +1000,16 @@ def main():
                 log_file,
             )
 
+            __import__("pprint").pprint(len(fixed_samples_results))
+
             FIXED_RES = np.zeros(
                 [
-                    np.array(fixed_combinations).shape[0],
+                    len(fixed_samples_results),
                     len(available_needed_selections),
                 ]
             )
 
-            for i, fc in enumerate(fixed_combinations):
+            for i in range(len(fixed_samples_results)):
                 sim = fixed_samples_results[i]
                 idx = 0
 
