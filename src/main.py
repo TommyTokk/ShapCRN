@@ -1157,7 +1157,7 @@ def main():
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
-            N = nu.get_network_from_sbml(reactions_list, species_list, log_file)
+            N = nu.get_network_from_sbml(sbml_model, log_file)
             nu.plot_network(
                 N,
                 engine=layout,  # or "sfdp" for very large networks

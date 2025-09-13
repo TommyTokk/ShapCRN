@@ -12,59 +12,46 @@ from src.utils.utils import print_log
 # ============
 
 
-def get_network_from_sbml(list_of_reactions, list_of_species, log_file=None):
+def get_network_from_sbml(sbml_model, log_file=None):
     # #TODO: Model also the reversible reactions adding the edges
     """
     Create a directed graph from the SBML model using the class structure.
 
     Args:
-        list_of_reactions: List of Reaction objects
-        list_of_species: List of Species objects
+       sbml_model: The SBML model to use to generate the network
 
     Returns:
         nx.DiGraph: A directed graph representing the reaction network
     """
     DG = nx.DiGraph()
 
-    s_list = []
-    r_list = []
-
     # Creates the species dict for nodes
-    for s in list_of_species:
-        DG.add_node(s.get_id(), species=s, label=s.get_id(), type="species")
-        # s_dict = s.to_dict()
-        # s_dict['label'] = (s.get_id(), s.get_initial_concentration())
-        # s_list.append((s.get_id(), s))
+    for s in sbml_model.getListOfSpecies():
+        DG.add_node(s.getId(), species=s, label=s.getId(), type="species")
 
     # Creates the reaction dict for nodes
-    for r in list_of_reactions:
-        DG.add_node(r.get_id(), reaction=r, label=r.get_id(), type="reaction")
+    for r in sbml_model.getListOfReactions():
+        DG.add_node(r.getId(), reaction=r, label=r.getId(), type="reaction")
 
     weight_list = []
     # Add reaction nodes and edges
-    for reaction in list_of_reactions:
+    for reaction in sbml_model.getListOfReactions():
 
-        # Add edges from reagents to the reaction
-        for reagent in reaction.get_reagents():
-            weight_list.append(
-                (
-                    reagent.get_species()["id"],
-                    reaction.get_id(),
-                    reagent.get_stoichiometry(),
-                )
+        for reagent in reaction.getListOfReactants():
+            DG.add_edge(
+                sbml_model.getSpecies(reagent.getSpecies()).getId(),
+                reaction.getId(),
+                weight=reagent.getStoichiometry(),
+                label=str(reagent.getStoichiometry()),  # <-- label per Graphviz
             )
-            # DG.add_edge(reagent.get_species()['id'], reaction.get_id(), stoichiometry=reagent.get_stoichiometry())
 
-        # Add edges from the reaction to products
-        for product in reaction.get_products():
-            weight_list.append(
-                (
-                    reaction.get_id(),
-                    product.get_species()["id"],
-                    product.get_stoichiometry(),
-                )
+        for product in reaction.getListOfProducts():
+            DG.add_edge(
+                reaction.getId(),
+                sbml_model.getSpecies(product.getSpecies()).getId(),
+                weight=product.getStoichiometry(),
+                label=str(product.getStoichiometry()),  # <-- label per Graphviz
             )
-            # DG.add_edge(reaction.get_id(), product.get_species()['id'], stoichiometry=product.get_stoichiometry())
 
     # Add all weighted edges to the graph
     DG.add_weighted_edges_from(weight_list)
@@ -146,6 +133,7 @@ def plot_network(
     orientation="TB",
     ranksep="0.5",
     nodesep="0.3",
+    edge_label_distance=2.0,
 ):
     """
     Plot the reaction network using Petri Net notation with Graphviz layout.
@@ -203,6 +191,18 @@ def plot_network(
                 A.get_node(n).attr.update(shape="box", fillcolor="#ffcc99")
             else:  # species
                 A.get_node(n).attr.update(shape="ellipse", fillcolor="#99ccff")
+
+        # Customize edges to display labels if present
+        for u, v, data in graph.edges(data=True):
+            label = data.get("label", "")
+            if label:
+                A.get_edge(u, v).attr.update(
+                    label=str(label),
+                    fontsize="10",
+                    fontcolor="black",
+                    labeldistance=str(edge_label_distance),
+                    labelangle="0",
+                )
 
         # Graph-level layout tuning
         A.graph_attr.update(
