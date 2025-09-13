@@ -1,6 +1,5 @@
 import networkx as nx
-import libsbml
-import roadrunner
+import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -137,199 +136,97 @@ def inhibit_species_from_network(network, target_species_id, sbml_model, log_fil
     return network, sbml_model
 
 
-def plot_network(graph, img_dir_path="./imgs", img_name="network", log_file=None):
+def plot_network(
+    graph,
+    img_dir_path="./imgs/PetriNets",
+    save_dot_dir="./dots",
+    img_name="network",
+    log_file=None,
+    engine="dot",
+    orientation="TB",
+    ranksep="0.5",
+    nodesep="0.3",
+):
     """
-    Plot the reaction network using Petri Net notation with improved layout.
+    Plot the reaction network using Petri Net notation with Graphviz layout.
+    - Species = circles
+    - Reactions = rectangles
+    - Node size adapts automatically to label length
+    - Supports tuning for orientation and spacing
 
     Args:
-        graph: A networkx DiGraph representing the reaction network
+        graph: A networkx DiGraph with node attribute "type" in {"species", "reaction"}
         img_dir_path: Directory where to save the image (default: "./imgs")
         img_name: Name of the image file without extension (default: "network")
         log_file: Optional log file handler
+        engine: Graphviz layout engine ("dot", "neato", "fdp", "sfdp", ...)
+        orientation: Graph orientation, "TB" (top-bottom), "LR" (left-right), etc.
+        ranksep: Vertical spacing between ranks (default: 0.5)
+        nodesep: Horizontal spacing between nodes (default: 0.3)
     """
-    # Gestione dei valori None
     if img_dir_path is None:
         img_dir_path = "./imgs/PetriNets"
+
+    if save_dot_dir is None:
+        save_dot_dir = "./dots"
 
     if img_name is None:
         img_name = "network"
 
-    plt.figure(figsize=(12, 10))
-
-    # Create a better layout for the graph to minimize overlaps
-    # Using Kamada-Kawai layout for better node distribution
-    pos = nx.kamada_kawai_layout(graph)
-
-    # Further adjust positions to prevent overlaps
-    pos = adjust_positions(pos, spacing=1.0)
-
-    # Separate nodes by type
-    species_nodes = [
-        node for node, data in graph.nodes(data=True) if data["type"] == "species"
-    ]
-    reaction_nodes = [
-        node for node, data in graph.nodes(data=True) if data["type"] == "reaction"
-    ]
-
-    # Draw species as circles (places in Petri Net notation)
-    nx.draw_networkx_nodes(
-        graph,
-        pos,
-        nodelist=species_nodes,
-        node_color="skyblue",
-        node_size=700,
-        node_shape="o",  # Circle for species/places
-        edgecolors="black",
-        linewidths=2,
-    )
-
-    # Draw reactions as squares (transitions in Petri Net notation)
-    nx.draw_networkx_nodes(
-        graph,
-        pos,
-        nodelist=reaction_nodes,
-        node_color="lightcoral",
-        node_size=550,
-        node_shape="s",  # Square for reactions/transitions
-        edgecolors="black",
-        linewidths=2,
-    )
-
-    # Create custom edge styles based on Petri Net conventions
-    edge_styles = []
-    edge_weights = []
-    edge_colors = []
-
-    for u, v, data in graph.edges(data=True):
-        weight = data.get("weight", 1.0)
-        edge_weights.append(weight)
-
-        # Different colors for input and output arcs
-        if graph.nodes[u]["type"] == "species":
-            edge_colors.append("navy")  # Input to reaction
-        else:
-            edge_colors.append("darkred")  # Output from reaction
-
-        edge_styles.append("solid")
-
-    # Draw the edges with arrows
-    nx.draw_networkx_edges(
-        graph,
-        pos,
-        arrowstyle="-|>",
-        arrowsize=15,
-        edge_color=edge_colors,
-        width=[max(1.0, min(2.5, w / 2)) for w in edge_weights],
-        style=edge_styles,
-        connectionstyle="arc3,rad=0.1",  # Slightly curved edges to avoid overlap
-    )
-
-    # Draw the labels for nodes with different font sizes and positions
-    species_labels = {n: graph.nodes[n]["label"] for n in species_nodes}
-    reaction_labels = {n: graph.nodes[n]["label"] for n in reaction_nodes}
-
-    nx.draw_networkx_labels(
-        graph,
-        pos,
-        labels=species_labels,
-        font_size=10,
-        font_color="black",
-        font_weight="bold",
-    )
-
-    nx.draw_networkx_labels(
-        graph,
-        pos,
-        labels=reaction_labels,
-        font_size=9,
-        font_color="black",
-        font_family="monospace",
-    )
-
-    # Create custom edge labels with weights
-    edge_labels = {}
-    for u, v, data in graph.edges(data=True):
-        weight = data.get("weight", 1.0)
-        if weight != 1.0:  # Only show weight if not 1
-            edge_labels[(u, v)] = f"{weight}"
-
-    # Draw edge weight labels
-    nx.draw_networkx_edge_labels(
-        graph,
-        pos,
-        edge_labels=edge_labels,
-        font_size=9,
-        font_color="black",
-        bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none", alpha=0.7),
-        rotate=False,
-        label_pos=0.5,
-    )
-
-    # Add a legend
-    species_patch = mpatches.Patch(
-        color="skyblue", label="Species (Places)", edgecolor="black"
-    )
-    reaction_patch = mpatches.Patch(
-        color="lightcoral", label="Reactions (Transitions)", edgecolor="black"
-    )
-    plt.legend(handles=[species_patch, reaction_patch], loc="upper right")
-
-    plt.title("Reaction Network (Petri Net Notation)")
-    plt.axis("off")
-    plt.tight_layout()
-
-    # Create directory if it doesn't exist
-    import os
-
+    # Ensure output directory exists
     os.makedirs(img_dir_path, exist_ok=True)
+    os.makedirs(save_dot_dir, exist_ok=True)
 
-    # Ensure img_name has .png extension
-    if not img_name.endswith(".png"):
-        img_name = f"{img_name}.png"
+    # Always save as PNG
+    png_path = os.path.join(img_dir_path, f"{img_name}.png")
+    dot_path = os.path.join(save_dot_dir, f"{img_name}.dot")
+    try:
+        # Convert to Graphviz AGraph
+        A = nx.nx_agraph.to_agraph(graph)
 
-    # Combine directory path and filename
-    img_file_path = os.path.join(img_dir_path, img_name)
+        # Default node style
+        A.node_attr.update(
+            fontsize="12",
+            fontname="Helvetica",
+            shape="ellipse",  # overridden per node type
+            style="filled",
+            fillcolor="white",
+            fixedsize="false",  # adaptive sizing
+            width="0",
+            height="0",
+        )
 
-    plt.show()
+        # Customize nodes based on type
+        for n in graph.nodes():
+            ntype = graph.nodes[n].get("type", "species")
+            if ntype == "reaction":
+                A.get_node(n).attr.update(shape="box", fillcolor="#ffcc99")
+            else:  # species
+                A.get_node(n).attr.update(shape="ellipse", fillcolor="#99ccff")
 
-    # Save the figure
-    plt.savefig(img_file_path, dpi=300, bbox_inches="tight")
-    print_log(log_file, f"Network plot saved to: {img_file_path}")
+        # Graph-level layout tuning
+        A.graph_attr.update(
+            rankdir=orientation,  # "TB" or "LR"
+            ranksep=str(ranksep),
+            nodesep=str(nodesep),
+            splines="true",
+            size="30,30!",
+        )
 
+        # Apply layout and render as PNG
+        A.layout(engine)
+        A.draw(png_path, format="png")
 
-def adjust_positions(pos, spacing=1.0):
-    """
-    Adjust node positions to prevent overlaps.
+        print_log(log_file, f"[INFO] Network plot saved at {png_path}")
+        # Saving the dot file
+        with open(dot_path, "w") as f:
+            f.write(A.to_string())
 
-    Args:
-        pos: Dictionary of node positions
-        spacing: Minimum distance between nodes
+        print_log(log_file, f"[INFO] Dot file saved at {dot_path}")
 
-    Returns:
-        Dictionary of adjusted node positions
-    """
-    import numpy as np
-
-    # Convert positions dictionary to array for easier manipulation
-    nodes = list(pos.keys())
-    pos_array = np.array([pos[node] for node in nodes])
-
-    # Simple repulsion algorithm
-    for _ in range(50):  # Number of iterations
-        for i in range(len(nodes)):
-            for j in range(i + 1, len(nodes)):
-                # Calculate distance between nodes
-                delta = pos_array[i] - pos_array[j]
-                distance = np.linalg.norm(delta)
-
-                if distance < spacing:
-                    # Calculate repulsion force
-                    force = delta * (spacing - distance) / distance
-
-                    # Apply force (move both nodes away from each other)
-                    pos_array[i] += force * 0.2
-                    pos_array[j] -= force * 0.2
-
-    # Convert back to dictionary
-    new_pos = {nodes[i]: tuple(pos_array[i]) for i in range(len(nodes))}
-    return new_pos
+    except Exception as e:
+        err_msg = f"[ERROR] Failed to plot network: {e}\n"
+        if log_file:
+            log_file.write(err_msg)
+        else:
+            print(err_msg)

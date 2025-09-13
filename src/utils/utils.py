@@ -310,24 +310,57 @@ def parse_args():
     )
 
     # === CREATE PETRINET command ==
-    # create_petrinet_parser = subparsers.add_parser(
-    #     "create_petrinet", help="Create the PetriNet of the given model"
-    # )
-    #
-    # create_petrinet_parser.add_argument("input_path", help="Path to the SBML model")
-    #
-    # create_petrinet_parser.add_argument(
-    #     "-o",
-    #     "--output",
-    #     default="./imgs/PetriNets",
-    #     help="Output directory for plots (default: ./imgs/PetriNets)",
-    # )
-    #
-    # create_petrinet_parser.add_argument(
-    #     "-tn", "--tests_number", default=10, help="Number of tests to perform"
-    # )
-    #
-    # create_petrinet_parser.add_argument("-iq", "--increase_quantity", default=5)
+    create_petrinet_parser = subparsers.add_parser(
+        "create_petrinet", help="Create the PetriNet of the given model"
+    )
+
+    create_petrinet_parser.add_argument("input_path", help="Path to the SBML model")
+
+    create_petrinet_parser.add_argument(
+        "-o",
+        "--output",
+        default="./imgs/PetriNets",
+        help="Output directory for plots (default: ./imgs/PetriNets)",
+    )
+
+    create_petrinet_parser.add_argument(
+        "-sd",
+        "--save-dot",
+        default=None,
+        help="directory where to save the dot code for the network",
+    )
+
+    create_petrinet_parser.add_argument(
+        "-or",
+        "--orientation",
+        choices=["TB", "BT", "LR", "RL"],
+        default="TB",
+        help="Orientation to use for the network: TB -> Top-Bottom, BT -> Bottom-Top, LR -> Left-Right, RL -> Right-Left",
+    )
+
+    create_petrinet_parser.add_argument(
+        "-l",
+        "--layout",
+        choices=["dot", "neato", "fdp", "sfdp"],
+        default="dot",
+        help="Layout used to plot the network",
+    )
+
+    create_petrinet_parser.add_argument(
+        "-vs",
+        "--vertical-spacing",
+        type=float,
+        default=0.5,
+        help="Vertical spacing between ranks",
+    )
+
+    create_petrinet_parser.add_argument(
+        "-hs",
+        "--horizontal-spacing",
+        type=float,
+        default=0.3,
+        help="Horizontal spacing between nodes",
+    )
 
     # Common arguments for all commands
     for subparser in [

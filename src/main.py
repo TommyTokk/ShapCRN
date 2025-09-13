@@ -334,7 +334,6 @@ def main():
                 payoff_dict = sim_ut.get_payoff_vals(
                     original_data,  # pyright:ignore
                     knockout_data,
-                    colnames[1:],
                     log_file=log_file,  # pyright:ignore
                 )
 
@@ -1134,15 +1133,20 @@ def main():
             # res_modified = sim_ut.simulate(rr_modified)
             # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
         elif args.command == "create_petrinet":
-            print(
-                "Hi!\n This command is still under construction...\n Thanks for your patience."
-            )
-            exit(1)
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
             dir_name = os.path.dirname(args.input_path)
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
             # file_name = os.path.basename(args.input_path)
+            #
+            ranksep = args.vertical_spacing
+            nodesep = args.horizontal_spacing
+            layout = args.layout
+            orientation = args.orientation
+            save_dot = args.save_dot
+
+            __import__("pprint").pprint(ranksep)
+            __import__("pprint").pprint(layout)
 
             species_list = sbml_ut.get_list_of_species(sbml_model)
             reactions_list = sbml_ut.get_list_of_reactions(
@@ -1155,10 +1159,13 @@ def main():
 
             N = nu.get_network_from_sbml(reactions_list, species_list, log_file)
             nu.plot_network(
-                graph=N,
-                img_dir_path=args.output,
-                img_name=f"{os.path.splitext(file_name)[0]}_network",  # Nome del file senza estensione + _network
-                log_file=log_file,
+                N,
+                engine=layout,  # or "sfdp" for very large networks
+                orientation=orientation,  # vertical
+                ranksep=ranksep,  # more vertical spacing
+                nodesep=nodesep,  # more horizontal spacing
+                img_name=file_name,
+                save_dot_dir=save_dot,
             )
 
     except Exception as e:

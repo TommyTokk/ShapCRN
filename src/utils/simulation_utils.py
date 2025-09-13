@@ -470,7 +470,7 @@ def process_species_multiprocessing(
     """
     # Determine number of workers
     # Use 75% of the available cores
-    n_core = int((mp.cpu_count() * 75) / 100)
+    n_core = int((mp.cpu_count() * 40) / 100)
     print_log(log_file, f" N core: {n_core}")
     if max_workers is None:
         max_workers = min(len(target_ids), n_core, 8)  # Don't use all CPUs
@@ -802,7 +802,6 @@ def get_relative_variations_no_samples(
 def get_payoff_vals(
     final_results_original_model,
     final_results_knocked_model,
-    colnames,
     epsilon=1e-20,
     log_file=None,
 ):
@@ -822,6 +821,7 @@ def get_payoff_vals(
             original_sim_i = final_results_original_model[c]
 
             diff = original_sim_i - ko_sim_i
+            diff = diff.mask(diff <= epsilon, 0)
 
             last_diff_values = diff.tail(1)
 
@@ -839,17 +839,14 @@ def get_payoff_vals(
 def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
 
     shap_vals = []
-    # (fact(comb) - fact(n_combs - comb))/fact(n_combs)
-    left_factor = (
-        factorial(n_inputs) * factorial(n_combinations - n_inputs)
-    ) / factorial(n_combinations)
-
-    __import__("pprint").pprint(f"lf: {left_factor}")
 
     for ko_species, payoffs in payoff_values:
+        left_factor = (
+            factorial(n_inputs) * factorial(n_combinations - n_inputs)
+        ) / factorial(n_combinations)
         factors = left_factor * payoffs
-        # __import__("pprint").pprint(factors)
-        sums = factors.sum()
+
+        sums = factors.sum(axis=0)
         sums.name = ko_species
         shap_vals.append(sums)
 
