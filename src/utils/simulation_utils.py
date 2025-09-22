@@ -821,7 +821,7 @@ def get_payoff_vals(
             original_sim_i = final_results_original_model[c]
 
             diff = original_sim_i - ko_sim_i
-            diff = diff.mask(diff <= epsilon, 0)
+            # diff = diff.mask(diff <= epsilon, 0)
 
             last_diff_values = diff.tail(1)
 
@@ -839,14 +839,17 @@ def get_payoff_vals(
 def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
 
     shap_vals = []
+    left_factor = (
+        factorial(n_inputs) * factorial(n_combinations - n_inputs)
+    ) / factorial(n_combinations)
+
+    __import__("pprint").pprint(left_factor)
 
     for ko_species, payoffs in payoff_values:
-        left_factor = (
-            factorial(n_inputs) * factorial(n_combinations - n_inputs)
-        ) / factorial(n_combinations)
+
         factors = left_factor * payoffs
 
-        sums = factors.sum(axis=0)
+        sums = factors.sum()
         sums.name = ko_species
         shap_vals.append(sums)
 

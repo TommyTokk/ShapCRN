@@ -867,17 +867,17 @@ def generate_species_random_combinations(
 
         if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
             print_log(log_file, f"Using amounts for {ts}")
-            t0_conc = species.getInitialAmount()
+            t0_val = species.getInitialAmount()
         elif species.isSetInitialConcentration():
             print_log(log_file, f"Using concentration for {ts}")
-            t0_conc = species.getInitialConcentration()
+            t0_val = species.getInitialConcentration()
         else:
             print_log(log_file, f"[ERROR] Cannot access species {ts} intial values")
             exit(1)
         tmp = []
 
         for i in range(n_samples):
-            if t0_conc == 0:
+            if t0_val == 0:
                 print_log(
                     log_file,
                     f"[WARNING] initial value is 0 for species {ts}, using a small value",
@@ -886,8 +886,8 @@ def generate_species_random_combinations(
                 lower_bound = 0
                 upper_bound = 1e-10
             else:
-                lower_bound = t0_conc * (1 - (variation / 100))
-                upper_bound = t0_conc * (1 + (variation / 100))
+                lower_bound = t0_val * (1 - (variation / 100))
+                upper_bound = t0_val * (1 + (variation / 100))
 
             rng = np.random.default_rng()
 

@@ -346,6 +346,19 @@ def main():
                     log_file=log_file,
                 )
 
+                col_names = shap_values.columns.str.strip("[]")
+                rows = shap_values.index.get_indexer(col_names)
+                valid = rows != -1
+                shap_values.values[
+                    rows[valid], np.arange(len(shap_values.columns))[valid]
+                ] = np.nan
+
+                nu.plot_interaction_graph(
+                    shap_values, input_species_ids, sbml_model, log_file=log_file
+                )
+
+                exit(1)
+
                 if args.generate_report is not None:
                     save_path = args.generate_report
                     # Create the directory if it doesn't exist
@@ -1132,7 +1145,7 @@ def main():
             # rr_modified = sim_ut.load_roadrunner_model(xml_string, log_file)
             # res_modified = sim_ut.simulate(rr_modified)
             # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
-        elif args.command == "create_petrinet":
+        elif args.command == "create_network":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
             dir_name = os.path.dirname(args.input_path)
