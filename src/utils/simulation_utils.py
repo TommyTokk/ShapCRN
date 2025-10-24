@@ -686,8 +686,8 @@ def get_absolute_variations_no_samples(
         )
 
         var = last_ko_values - last_original_values
-        rms_vars = np.sqrt(var**2)
-        var_series = rms_vars.squeeze()
+        # rms_vars = np.sqrt(var**2)
+        var_series = var.squeeze()
         var_series.name = ko_species
         variations.append(var_series)
 
@@ -782,8 +782,8 @@ def get_relative_variations_no_samples(
         __import__("pprint").pprint(var)
 
         __import__("pprint").pprint("///////////")
-        rms_vars = np.sqrt(var**2)
-        var_series = rms_vars.squeeze()
+        # rms_vars = np.sqrt(var**2)
+        var_series = var.squeeze()
         var_series.name = ko_species
         variations.append(var_series)
 

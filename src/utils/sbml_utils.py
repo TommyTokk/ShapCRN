@@ -1,6 +1,8 @@
 import enum
 import os
 
+from scipy.special import eval_sh_legendre
+
 import libsbml
 import json
 import numpy as np
@@ -281,6 +283,14 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
     species = sbml_model.getSpecies(target_species_id)
     species_comp = species.getCompartment()
 
+    # Creating the new kinetic constant
+    # parameters = list(sbml_model.getListOfParameters())
+    #
+    # if len(parameters) > 0:
+    #     max_p = np.max([p.getValue() for p in parameters]) * 100
+    # else:
+    #     max_p = 1e20
+
     # Create the new product species
 
     # p_species = sbml_model.createSpecies()
@@ -302,7 +312,7 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
     react.setConstant(species.getConstant())
 
     # Create the product
-    prod = new_reaction.createProduct()
+    # prod = new_reaction.createProduct()
     # prod.setSpecies(p_species.getId())
     # prod.setStoichiometry(1)
     # prod.setConstant(False)
@@ -313,7 +323,7 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
     ko_id = "k_ko"
     param_ko = kl_deactivation.createParameter()
     param_ko.setId(ko_id)
-    param_ko.setValue(1e10)
+    param_ko.setValue(1e20)
     param_ko.setConstant(True)
     # Create MathMlL for the reaction
     math_ast = libsbml.parseL3Formula(f"{ko_id} * {species_comp} * {species.getId()}")

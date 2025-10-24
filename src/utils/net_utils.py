@@ -7,15 +7,15 @@ from matplotlib.patches import FancyArrowPatch
 from networkx.algorithms.bipartite import color
 import numpy as np
 from pandas.core.groupby.generic import ScalarResult
+from scipy.special import eval_sh_legendre
 
 from src.utils import sbml_utils
 from src.utils.utils import print_log
 
+
 # ============
 # NETWORK
 # ============
-
-
 def get_network_from_sbml(sbml_model, log_file=None):
     # TODO: Add code to include modifiers in the graph
     """
@@ -64,6 +64,35 @@ def get_network_from_sbml(sbml_model, log_file=None):
     DG.add_weighted_edges_from(weight_list)
 
     return DG
+
+
+# TODO: Test this version
+def all_simple_paths_from_target(G: nx.DiGraph, target, cutoff=None):
+    """
+    Yield all simple paths in G that start at `target` and reach any other node in the network.
+    Explores all reachable nodes from the target.
+
+    Parameters:
+      G: directed graph
+      target: source node (starting point)
+      cutoff: optional depth cutoff (max path length)
+
+    Yields:
+      Lists representing simple paths from target to reachable nodes
+    """
+    if target not in G:
+        return
+
+    # Find all nodes reachable from target
+    for node in G.nodes():
+        if node == target:
+            yield [target]
+        else:
+            # Find all simple paths from target to this node
+            for path in nx.all_simple_paths(
+                G, source=node, target=target, cutoff=cutoff
+            ):
+                yield path
 
 
 def network_to_sbml(net, rr_model, sbml):
@@ -139,7 +168,7 @@ def plot_network(
     engine="dot",
     orientation="TB",
     ranksep="0.5",
-    nodesep="0.3",
+    nodesep="1",
     edge_label_distance=2.0,
 ):
     """
@@ -217,7 +246,7 @@ def plot_network(
             ranksep=str(ranksep),
             nodesep=str(nodesep),
             splines="true",
-            size="25,25!",
+            size="30,30!",
         )
 
         # Apply layout and render as PNG
@@ -239,96 +268,70 @@ def plot_network(
             print(err_msg)
 
 
-# TODO: Change graph creation counting also modifiers
-def plot_interaction_graph(shap_values, input_nodes, sbml_model, log_file=None):
+# TODO: Add the color scheme for the target node
+def plot_interaction_graph(
+    shap_values, input_nodes, sbml_model, target_node, log_file=None
+):
     all_species = shap_values.columns.str.strip("[]")
 
-    nodes = []
-    node_colors = []
+    N = get_network_from_sbml(sbml_model, log_file)
+    GN = nx.nx_agraph.to_agraph(N)
 
-    # Creating the nodes list
-    for node in all_species:
-        if node in input_nodes:
-            nodes.append(node)
-            node_colors.append("orange")
-        else:
-            nodes.append(node)
-            node_colors.append("lightblue")
+    # Customize nodes based on type
+    for n in N.nodes():
+        ntype = N.nodes[n].get("type", "species")
+        if ntype == "reaction":
+            GN.get_node(n).attr.update(shape="box", style="filled", fillcolor="#ffcc99")
+        else:  # species
+            GN.get_node(n).attr.update(
+                shape="ellipse", style="filled", fillcolor="#99ccff"
+            )
 
-    IG = nx.DiGraph()
-    IG.add_nodes_from(nodes)
+    GN.get_node(target_node).attr.update(fillcolor="#a98aff")
 
-    # Creating the edges
-    edges = set()
-    for reaction in sbml_model.getListOfReactions():
-        reactants = [r.getSpecies() for r in reaction.getListOfReactants()]
-        products = [p.getSpecies() for p in reaction.getListOfProducts()]
-        modifiers = [m.getSpecies() for m in reaction.getListOfModifiers()]
-
-        for r in reactants:
-            for p in products:
-                edges.add((r, p))
-
-        for m in modifiers:
-
-            for r in reactants:
-                edges.add((m, r))
-            for p in products:
-                edges.add((m, p))
-
-    IG.add_edges_from(list(edges))
-
-    # Convert to Graphviz
-    GG = nx.nx_agraph.to_agraph(IG)
-    GG.node_attr.update(
-        fontsize="12",
-        fontname="Helvetica",
-        shape="ellipse",  # overridden per node type
-        style="filled",
-        fillcolor="white",
-        fixedsize="false",  # adaptive sizing
-        width="0",
-        height="0",
-    )
-
-    for node in IG.nodes():
-
-        if node in input_nodes:
-            GG.get_node(node).attr.update(shape="ellipse", fillcolor="#ffcc99")
-        else:
-            GG.get_node(node).attr.update(shape="ellipse", fillcolor="#99ccff")
-
-    # Modifying the edges colors
+    # Customize edges to display labels if present
+    for u, v, data in N.edges(data=True):
+        label = data.get("label", "")
+        if label:
+            GN.get_edge(u, v).attr.update(
+                label=str(label),
+                fontsize="10",
+                fontcolor="black",
+                labeldistance=str(2.0),
+                labelangle="0",
+            )
 
     stacked = shap_values.stack()
+    # Retrieve only reaction nodes
+    # reaction_nodes = [n for n, d in N.nodes(data=True) if d.get("type") == "reaction"]
 
-    for edge in IG.edges():
-        src = edge[0]
-        dst = edge[1]
-        shap = stacked[src][f"[{dst}]"]
+    paths = list(all_simple_paths_from_target(N, target_node, None))
+    __import__("pprint").pprint(paths)
+    nodes_to_color = set()
 
-        if shap < 0:
-            GG.get_edge(src, dst).attr.update(color="#5FA96D", penwidth="2.5")
-        elif shap > 0:
-            GG.get_edge(src, dst).attr.update(color="#D9321C", penwidth="2.5")
+    for p in paths:
+        for node in p:
+            if N.nodes[node]["type"] == "reaction":
+                continue
+            nodes_to_color.add(node)
+
+    # Creating the colored graph
+    for node in list(nodes_to_color):
+
+        if node == target_node:
+            continue
+
+        shap = stacked[node][f"[{target_node}]"]
+        if shap > 0:
+            GN.get_node(node).attr.update(fillcolor="#5FA96D")
+        elif shap < 0:
+            GN.get_node(node).attr.update(fillcolor="#D9321C")
         else:
-            GG.get_edge(src, dst).attr.update(color="black", penwidth="2.5")
+            continue
 
-    GG.graph_attr.update(
-        rankdir="LR",
-        overlap="false",
-        ranksep="3.0",
-        # nodesep="0.7",
-        size="30,30!",
-        concentrate="false",
-        sep="+15,15",  # Additional separation between components
-        esep="+10,10",
-        splines="true",
-    )
-    #
     layout = "dot"
-    if len(all_species) >= 10:
-        layout = "sfdp"
+    # if len(all_species) >= 10:
+    #     layout = "sfdp"
 
-    GG.layout(layout)
-    GG.draw("./imgs/test.png", format="png", args="-Gdpi=300")
+    GN.layout(layout)
+    GN.draw("./imgs/test.png", format="png")

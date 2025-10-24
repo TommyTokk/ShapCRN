@@ -183,5 +183,5 @@ models/Test/*
 log
 
 report/*
-
+dots/*
 .DS_Store

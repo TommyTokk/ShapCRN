@@ -94,8 +94,6 @@ def main():
                 log_file=log_file,
             )
 
-            res_df = pd.DataFrame(res, columns=colnames)
-
             save_path = f"{args.save_images}/{file_name}"
 
             if interactive_plot:
@@ -110,6 +108,9 @@ def main():
                 plt_ut.plot_results(
                     res, colnames, save_path, "interactive_model_simulation", log_file
                 )
+
+            # ut.print_log(log_file, f"n. specs: {sbml_model.getNumSpecies()}")
+            # ut.print_log(log_file, f"n. reacts: {sbml_model.getNumReactions()}")
 
         elif args.command == "importance_assessment":
 
@@ -354,7 +355,11 @@ def main():
                 ] = np.nan
 
                 nu.plot_interaction_graph(
-                    shap_values, input_species_ids, sbml_model, log_file=log_file
+                    shap_values,
+                    input_species_ids,
+                    sbml_model,
+                    args.target_nodes[0],
+                    log_file=log_file,
                 )
 
                 exit(1)
@@ -364,10 +369,12 @@ def main():
                     # Create the directory if it doesn't exist
                     os.makedirs(save_path, exist_ok=True)
 
-                    if args.target_nodes:
-                        cols = args.target_nodes
-                    else:
-                        cols = None
+                    cols = None
+
+                    # if args.target_nodes:
+                    #     cols = args.target_nodes
+                    # else:
+                    #     cols = None
 
                     ut.save_shapley_values_to_csv_pivot(
                         shap_values, save_path, cols=cols, log_file=log_file
@@ -390,8 +397,8 @@ def main():
 
                 # Normalizing with logs
 
-                log_relative = np.log10(relative_vars + 1)
-                log_absolute = np.log10(absolute_vars + 1)
+                # log_relative = np.log10(relative_vars + 1)
+                # log_absolute = np.log10(absolute_vars + 1)
 
                 if args.generate_report is not None:
 
@@ -402,9 +409,13 @@ def main():
                         os.makedirs(saving_path, exist_ok=True)
                         ut.print_log(log_file, f"Created directory: {saving_path}")
 
-                    relative_vars.to_csv(f"{saving_path}/relative_variations.csv")
+                    csv_paths = os.path.join(saving_path, "NoSamples")
 
-                    absolute_vars.to_csv(f"{saving_path}/absolute_variations.csv")
+                    os.makedirs(csv_paths, exist_ok=True)
+
+                    relative_vars.to_csv(f"{csv_paths}/relative_variations.csv")
+
+                    absolute_vars.to_csv(f"{csv_paths}/absolute_variations.csv")
 
                 if args.save_images is not None:
 
@@ -413,9 +424,9 @@ def main():
                     os.makedirs(saving_path, exist_ok=True)
 
                     plt_ut.plot_heatmap(
-                        log_relative,
-                        log_relative.index.tolist(),
-                        log_relative.columns.tolist(),
+                        relative_vars,
+                        relative_vars.index.tolist(),
+                        relative_vars.columns.tolist(),
                         colnames_to_index=colnames_to_index,
                         title="Relative variations without perturbations",
                         save_path=f"{saving_path}/No Samples",
@@ -423,9 +434,9 @@ def main():
                     )
 
                     plt_ut.plot_heatmap(
-                        log_absolute,
-                        log_absolute.index.tolist(),
-                        log_absolute.columns.tolist(),
+                        absolute_vars,
+                        absolute_vars.index.tolist(),
+                        absolute_vars.columns.tolist(),
                         colnames_to_index=colnames_to_index,
                         cmap="plasma",
                         title="Absolute variations without perturbations",
@@ -587,6 +598,17 @@ def main():
                             saving_path = args.generate_report
 
                             os.makedirs(saving_path, exist_ok=True)
+
+                            rel_diff_df = pd.DataFrame(relative_values_distances)
+                            abs_diff_df = pd.DataFrame(absolute_values_distances)
+
+                            # Saving the csv files
+                            rel_diff_df.to_csv(
+                                f"{saving_path}/Perturbations importance analysis/relative_values_distances.csv"
+                            )
+                            abs_diff_df.to_csv(
+                                f"{saving_path}/Perturbations importance analysis/absolute_values_distances.csv"
+                            )
 
                             # GETTING THE VALUE DISTANCES REPORT
                             _ = sim_ut.generate_values_distance_report(
@@ -875,12 +897,10 @@ def main():
                     selections.append(sel)
             rr.timeCourseSelections = selections
 
-            # Mappa coerente selezione -> indice in rr.selections
             selection_to_idx = {
                 sel: rr.timeCourseSelections.index(sel) for sel in needed_selections
             }
 
-            # Limita ai soli nodi interni effettivamente disponibili
             available_pairs = [
                 (n, f"[{n}]") for n in internal_nodes if f"[{n}]" in selection_to_idx
             ]
