@@ -802,6 +802,7 @@ def get_relative_variations_no_samples(
 def get_payoff_vals(
     final_results_original_model,
     final_results_knocked_model,
+    payoff_function,
     epsilon=1e-20,
     log_file=None,
 ):
@@ -820,12 +821,15 @@ def get_payoff_vals(
             ko_sim_i = ko_data[c]
             original_sim_i = final_results_original_model[c]
 
-            diff = original_sim_i - ko_sim_i
-            # diff = diff.mask(diff <= epsilon, 0)
 
-            last_diff_values = diff.tail(1)
+            payoff_original = payoff_function(original_sim_i)
+            payoff_ko = payoff_function(ko_sim_i)
 
-            payoffs.append(last_diff_values)
+            payoff_diff = payoff_original - payoff_ko
+
+            __import__('pprint').pprint(payoff_diff)
+
+            payoffs.append(payoff_diff)
 
         # Convert payoffs in an unique DataFrame
         payoffs_df = pd.concat(payoffs, ignore_index=True)
@@ -843,7 +847,7 @@ def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
         factorial(n_inputs) * factorial(n_combinations - n_inputs)
     ) / factorial(n_combinations)
 
-    __import__("pprint").pprint(left_factor)
+    #__import__("pprint").pprint(left_factor)
 
     for ko_species, payoffs in payoff_values:
 

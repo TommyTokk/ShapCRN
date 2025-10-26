@@ -122,9 +122,18 @@ def parse_args():
     #     default=None,
     #     help="Multiple species to Knockout in the same model",
     # )
+    
+    simulate_samples_parser.add_argument(
+        "-pf",
+        "--payoff-function",
+        choices=["max", "min", "last"],
+        default="last",
+        help="Function to use to calculate the payoff in the Shapley value"
+    )
+
     simulate_samples_parser.add_argument(
         "-n",
-        "--num_samples",
+        "--num-samples",
         type=int,
         default=5,
         help="Number of samples for each species (default: 5)",
@@ -467,7 +476,24 @@ def pretty_print_variations(variations_dict, precision=4, show_zero=False):
 
 
 # === DEBUG ===
+#
+#
+#
 
+
+# === SHAPLEY VALUE ===
+
+
+def payoff_last(sim_data):
+    return sim_data.tail(1)
+
+
+def payoff_max(sim_data):
+    return sim_data.max(axis=0).to_frame().T
+    
+
+def payoff_min(sim_data):
+    return sim_data.min(axis=0).to_frame().T
 
 def save_shapley_values_to_csv_pivot(shapley_vals, file_path, cols=None, log_file=None):
     """
@@ -646,3 +672,6 @@ def frobenius_norm(matrix, ignore_nan=True):
     valid_values = matrix[valid_mask]
 
     return np.linalg.norm(valid_values)
+
+
+

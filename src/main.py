@@ -40,6 +40,13 @@ from src.utils import plot_utils as plt_ut
 from src.utils import sens_utils as sens_ut
 
 
+payoff_functions_map = {
+    "max":ut.payoff_max,
+    "min": ut.payoff_min,
+    "last": ut.payoff_last,
+}
+
+
 def main():
     # load_dotenv()
     # Use the parse_args function to get command-line arguments
@@ -119,6 +126,7 @@ def main():
 
             use_perturbations = args.use_perturbations
             use_fixed_perturbations = args.use_fixed_perturbations
+            payoff_function = args.payoff_function
 
             __import__("pprint").pprint(
                 (use_fixed_perturbations and args.fixed_perturbations is not None)
@@ -335,6 +343,7 @@ def main():
                 payoff_dict = sim_ut.get_payoff_vals(
                     original_data,  # pyright:ignore
                     knockout_data,
+                    payoff_function=payoff_functions_map[payoff_function],
                     log_file=log_file,  # pyright:ignore
                 )
 
@@ -360,9 +369,7 @@ def main():
                     sbml_model,
                     args.target_nodes[0],
                     log_file=log_file,
-                )
-
-                exit(1)
+                ) 
 
                 if args.generate_report is not None:
                     save_path = args.generate_report
