@@ -184,4 +184,5 @@ log
 
 reports/*
 dots/*
-./.DStore
+
+.DS_Store
