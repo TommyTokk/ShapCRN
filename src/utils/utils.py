@@ -122,13 +122,13 @@ def parse_args():
     #     default=None,
     #     help="Multiple species to Knockout in the same model",
     # )
-    
+
     simulate_samples_parser.add_argument(
         "-pf",
         "--payoff-function",
         choices=["max", "min", "last"],
         default="last",
-        help="Function to use to calculate the payoff in the Shapley value"
+        help="Function to use to calculate the payoff in the Shapley value",
     )
 
     simulate_samples_parser.add_argument(
@@ -403,78 +403,6 @@ def dict_pretty_print(dict_obj):
     print(json_formatted_str)
 
 
-def pretty_print_variations(variations_dict, precision=4, show_zero=False):
-    """
-    Pretty print the variations dictionary in a readable format.
-
-    Args:
-        variations_dict: Dict returned by get_simulations_variations
-        precision: Number of decimal places to show (default: 4)
-        show_zero: Whether to show variations that are zero (default: False)
-    """
-    if not variations_dict:
-        print("No variations to display.")
-        return
-
-    print("=" * 80)
-    print("SIMULATION VARIATIONS REPORT")
-    print("=" * 80)
-
-    for ko_species in sorted(variations_dict.keys()):
-        print(f"\n🧬 KNOCKED OUT SPECIES: {ko_species}")
-        print("-" * 60)
-
-        combinations = variations_dict[ko_species]
-        if not combinations:
-            print("  No combinations found.")
-            continue
-
-        for combination in sorted(combinations.keys()):
-            print(f"\n  📊 Combination: {combination}")
-            print("  " + "─" * 50)
-
-            species_variations = combinations[combination]
-            if not species_variations:
-                print("    No species variations found.")
-                continue
-
-            # Sort species by absolute variation value (largest first)
-            sorted_species = sorted(
-                species_variations.items(),
-                key=lambda x: abs(x[1]["variation"]),
-                reverse=True,
-            )
-
-            displayed_any = False
-            for species, data in sorted_species:
-                variation = data["variation"]
-
-                # Skip zero variations if show_zero is False
-                if not show_zero and abs(variation) < 1e-10:
-                    continue
-
-                # Format the variation with appropriate sign and color indicators
-                if variation > 0:
-                    sign_indicator = "↑"
-                    variation_str = f"+{variation:.{precision}f}"
-                elif variation < 0:
-                    sign_indicator = "↓"
-                    variation_str = f"{variation:.{precision}f}"
-                else:
-                    sign_indicator = "="
-                    variation_str = f"{variation:.{precision}f}"
-
-                print(f"    {sign_indicator} {species:<20} {variation_str:>12}")
-                displayed_any = True
-
-            if not displayed_any:
-                print("    (All variations are zero)")
-
-    print("\n" + "=" * 80)
-    print("Legend: ↑ = Increase, ↓ = Decrease, = = No change")
-    print("=" * 80)
-
-
 # === DEBUG ===
 #
 #
@@ -490,11 +418,13 @@ def payoff_last(sim_data):
 
 def payoff_max(sim_data):
     return sim_data.max(axis=0).to_frame().T
-    
+
 
 def payoff_min(sim_data):
     return sim_data.min(axis=0).to_frame().T
 
+
+# KEEP
 def save_shapley_values_to_csv_pivot(shapley_vals, file_path, cols=None, log_file=None):
     """
     Save Shapley values to a CSV file in pivot table format (knockout species as rows, species as columns).
@@ -519,6 +449,7 @@ def save_shapley_values_to_csv_pivot(shapley_vals, file_path, cols=None, log_fil
 # === ANALYSIS ===
 
 
+# KEEP
 def pearson_correlation(
     matrix_1, matrix_2, permutations=999, seed=None, alternative="two-sided"
 ):
@@ -585,12 +516,12 @@ def truncate_small_values(value, threshold=1e-20):
 
 
 def get_active_cells(matrix, log_file=None):
-
     res = np.where((matrix > 0) & np.isfinite(matrix), 1, 0)
 
     return res
 
 
+# KEEP
 def get_ko_species_importance(matrix, ko_species_list, log_file=None):
     ko_impact = np.nanmean(matrix, axis=1)
     ko_ranking = np.argsort(ko_impact)[::-1]
@@ -609,7 +540,6 @@ def get_ko_species_importance(matrix, ko_species_list, log_file=None):
 
 
 def minMax_normalize(df, epsilon=1e-20, log_file=None):
-
     try:
         global_min = df.min().min()
         global_max = df.max().max()
@@ -634,7 +564,6 @@ def minMax_normalize(df, epsilon=1e-20, log_file=None):
 
 
 def z_score_normalize(heatmap_data, log_file=None):
-
     means = np.mean(heatmap_data, axis=0)
     stds = np.std(heatmap_data, axis=0, ddof=0)
 
@@ -672,6 +601,3 @@ def frobenius_norm(matrix, ignore_nan=True):
     valid_values = matrix[valid_mask]
 
     return np.linalg.norm(valid_values)
-
-
-

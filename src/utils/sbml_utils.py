@@ -24,8 +24,8 @@ class Op(Enum):
     PROD = libsbml.AST_TIMES
 
 
+# KEEP
 def load_model(model_file_path):
-
     reader = libsbml.SBMLReader()
 
     document = reader.readSBMLFromFile(model_file_path)
@@ -33,19 +33,8 @@ def load_model(model_file_path):
     return document
 
 
-def dict_pretty_print(dict_obj):
-    """Pretty print a dictionary as formatted JSON.
-
-    Args:
-        dict_obj: Dictionary to be printed
-    """
-
-    json_formatted_str = json.dumps(dict_obj, indent=2)
-    print(json_formatted_str)
-
-
+# KEEP
 def create_ko_models(target_ids, sbml_model, sbml_str, log_file=None):
-
     model_dict = {}
     for ids in target_ids:
         doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
@@ -65,6 +54,7 @@ def create_ko_models(target_ids, sbml_model, sbml_str, log_file=None):
     return model_dict
 
 
+# KEEP
 def save_file(
     file_name,
     operation_name,
@@ -98,6 +88,7 @@ def save_file(
 # ============
 
 
+# KEEP
 def get_list_of_species(SBML_model):
     """
     Get a list of Species objects from the SBML model.
@@ -117,6 +108,7 @@ def get_list_of_species(SBML_model):
     return species_list
 
 
+# KEEP
 def get_species_dict(species_list):
     """
     Create a dictionary of Species objects indexed by ID.
@@ -148,6 +140,7 @@ def species_dict_list(species_list):
     return [s.to_dict() for s in species_list]
 
 
+# KEEP
 def knockout_species(sbml_model, target_species_id, log_file=None):
     """
     Knockout the target species with the following logic:
@@ -178,7 +171,6 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
     for event in sbml_model.getListOfEvents():
         eas = event.getListOfEventAssignments()
         for ea in eas:
-
             if ea.getVariable() == target_species_id:
                 print_log(log_file, f"Event assigment for {target_species_id} set to 0")
                 eas.setMath(zero_ast)
@@ -339,6 +331,7 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
 # ============
 
 
+# KEEP
 def get_list_of_reactions(SBML_model, species_dict):
     """
     Get a list of Reaction objects from the SBML model.
@@ -417,17 +410,7 @@ def reactions_to_dict(reaction_list):
     return reactions_dict
 
 
-def print_reactions_as_json(reactions_list):
-    """
-    Print a list of Reaction objects in JSON format.
-
-    Args:
-        reactions_list: List of Reaction objects to print
-    """
-    reactions_dict = reactions_to_dict(reactions_list)
-    dict_pretty_print(reactions_dict)
-
-
+# KEEP
 def split_all_reversible_reactions(model, log_file=None):
     """
     Split all reversible reactions in a model into forward and reverse reactions
@@ -679,6 +662,7 @@ def split_reversible_reaction(
     return (forward_reaction, reverse_reaction)
 
 
+# KEEP
 def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
     """
     Set the kinetic law of the reaction to 0 in the SBML model and return the updated model.
@@ -725,21 +709,6 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
     return sbml_model
 
 
-# def inhibit_reaction_rr(rr_model, target_reaction_id, log_file=None):
-#     # TODO: Ask which of the two methods is better
-#     """
-#     Set the kineticLaw of a reaction to 0, inhibiting it
-
-#     Args:
-#         rr_model: roadrunner model object
-#         target_reaction_id: ID of the reaction to remove
-
-#     Returns:
-#     """
-#     #Set the kineticLaw to 0
-#     rr_model.setKineticLaw(target_reaction_id, "0", True)
-
-
 # ============
 # FUNCTIONS
 # ============
@@ -760,17 +729,6 @@ def get_functions_list(SBML_model):
         functions_list.append(function)
 
     return functions_list
-
-
-def print_functions_as_json(functions_list):
-    """
-    Print a list of Function objects in JSON format.
-
-    Args:
-        functions_list: List of Function objects
-    """
-    functions_dict = {func.getId(): func.to_dict() for func in functions_list}
-    dict_pretty_print(functions_dict)
 
 
 # ============
@@ -849,8 +807,7 @@ def get_sbml_as_xml(model, log_file=None):
         return None
 
 
-# TODO: CHECK THIS PART
-# TODO: Change the logic of generating samples
+# KEEP
 def generate_species_random_combinations(
     sbml_model,
     target_species=[],
@@ -911,12 +868,14 @@ def generate_species_random_combinations(
     return res
 
 
+# KEEP
 def create_combinations(input_samples, log_file=None):
     # input_samples is a 2D array: e.g., [[1, 2], [3, 4], [5, 6]]
     for comb in itertools.product(*input_samples):
         yield comb
 
 
+# KEEP
 def get_fixed_combinations(sbml_model, input_species, fixed_variations, log_file=None):
     """
     Generate fixed combinations for specified species with given variation percentages.
@@ -1026,7 +985,6 @@ def check_for_duplicates(combinations, log_file=None):
 
 
 def get_selections(sbml_model, rr_model, target_ids, log_file=None):
-
     selections = rr_model.selections
 
     # Check if some target species are reaction
@@ -1050,8 +1008,6 @@ def check_presence(sbml_model, target_species_id, log_file):
     in_reactions = False
 
     for rule in sbml_model.getListOfRules():
-        # TODO: Ask if it's a correct approach to set the math to 0
-        # if rule.isAssignment():
         if rule.getVariable() == target_species_id:  # Found the updating rule
             in_rules = True
 

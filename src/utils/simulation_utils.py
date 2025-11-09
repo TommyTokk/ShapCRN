@@ -28,6 +28,7 @@ from utils.sbml_utils import create_combinations
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 
 
+# KEEP
 def load_roadrunner_model(
     sbml_model, rel_tol=1e-8, abs_tol=1e-12, integrator="cvode", log_file=None
 ):
@@ -71,6 +72,7 @@ def load_roadrunner_model(
     return rr_model
 
 
+# KEEP
 def simulate(
     rr_model,
     start_time=0,
@@ -330,6 +332,7 @@ def simulate_samples(
     return res
 
 
+# KEEP
 def process_species_samples(args):
     """
     Simulates, using perturbations, the specific modified model with the knockout of the knockedout_species
@@ -399,6 +402,7 @@ def process_species_samples(args):
         raise Exception(f"Error during processing species:\n Error: {e}")
 
 
+# KEEP
 def process_species_no_samples(args):
     try:
         (
@@ -448,6 +452,7 @@ def process_species_no_samples(args):
         raise Exception(f"Error during processing species :\n Error: {e}")
 
 
+# KEEP
 def process_species_multiprocessing(
     target_ids,
     modified_models_dict,
@@ -558,7 +563,6 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
         species_idxs[id] = colnames.index(cn)
 
     for i in range(len(ko_models)):
-
         # Getting the ko species with the result of the simulation
         ko_species, ko_spec_result = ko_models[i]
 
@@ -566,7 +570,6 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
         variations_dict[ko_species] = {}
 
         for species in species_idxs.keys():
-
             if species == ko_species:  # Skipping the species if compared with itself
                 variation = np.nan
                 relative_variation = np.nan
@@ -613,6 +616,7 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
     return variations_dict
 
 
+# KEEP
 def get_absolute_variations_samples(
     final_results_original_model,
     final_results_knocked_model,
@@ -668,14 +672,13 @@ def get_absolute_variations_samples(
     return res_df
 
 
+# KEEP
 def get_absolute_variations_no_samples(
     original_data, ko_data, epsilon=1e-20, log_file=None
 ):
-
     variations = []
 
     for ko_species, ko_info in ko_data:
-
         last_ko_values = ko_info.tail(1)
         last_original_values = original_data.tail(1)
 
@@ -703,6 +706,7 @@ def get_absolute_variations_no_samples(
     return res_df
 
 
+# KEEP
 def get_relative_variations_samples(
     final_results_original_model,
     final_results_knocked_model,
@@ -758,14 +762,13 @@ def get_relative_variations_samples(
     return res_df
 
 
+# KEEP
 def get_relative_variations_no_samples(
     original_data, ko_data, epsilon=1e-20, log_file=None
 ):
-
     variations = []
 
     for ko_species, ko_info in ko_data:
-
         last_ko_values = ko_info.tail(1)
         last_original_values = original_data.tail(1)
 
@@ -775,13 +778,8 @@ def get_relative_variations_no_samples(
             last_original_values <= epsilon, 0
         )
 
-        __import__("pprint").pprint(last_ko_values)
-        __import__("pprint").pprint(last_original_values)
-
         var = (last_ko_values - last_original_values) / last_original_values
-        __import__("pprint").pprint(var)
 
-        __import__("pprint").pprint("///////////")
         # rms_vars = np.sqrt(var**2)
         var_series = var.squeeze()
         var_series.name = ko_species
@@ -799,6 +797,7 @@ def get_relative_variations_no_samples(
     return res_df
 
 
+# KEEP
 def get_payoff_vals(
     final_results_original_model,
     final_results_knocked_model,
@@ -806,7 +805,6 @@ def get_payoff_vals(
     epsilon=1e-20,
     log_file=None,
 ):
-
     res = []
 
     ko_species_list = []
@@ -821,13 +819,10 @@ def get_payoff_vals(
             ko_sim_i = ko_data[c]
             original_sim_i = final_results_original_model[c]
 
-
             payoff_original = payoff_function(original_sim_i)
             payoff_ko = payoff_function(ko_sim_i)
 
             payoff_diff = payoff_original - payoff_ko
-
-            __import__('pprint').pprint(payoff_diff)
 
             payoffs.append(payoff_diff)
 
@@ -840,17 +835,16 @@ def get_payoff_vals(
     return res
 
 
+# KEEP
 def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
-
     shap_vals = []
     left_factor = (
         factorial(n_inputs) * factorial(n_combinations - n_inputs)
     ) / factorial(n_combinations)
 
-    #__import__("pprint").pprint(left_factor)
+    # __import__("pprint").pprint(left_factor)
 
     for ko_species, payoffs in payoff_values:
-
         factors = left_factor * payoffs
 
         sums = factors.sum()
@@ -864,6 +858,7 @@ def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
     return shap_df
 
 
+# KEEP
 def generate_values_distance_report(
     distance_matrix,
     correlation_coefficient,
@@ -919,7 +914,9 @@ def generate_values_distance_report(
     significance_level = (
         "highly significant"
         if p_value < 0.001
-        else "significant" if p_value < 0.01 else "marginally significant"
+        else "significant"
+        if p_value < 0.01
+        else "marginally significant"
     )
 
     # Hypothesis description
@@ -1019,9 +1016,9 @@ def generate_values_distance_report(
                     ko_name = ko_species_list[ko_idx]
                     impact_score = ko_impact[ko_idx]
                     if np.isnan(impact_score):
-                        f.write(f"  {i+1:2d}. {ko_name:<20} NaN (no valid data)\n")
+                        f.write(f"  {i + 1:2d}. {ko_name:<20} NaN (no valid data)\n")
                     else:
-                        f.write(f"  {i+1:2d}. {ko_name:<20} {impact_score:.20f}\n")
+                        f.write(f"  {i + 1:2d}. {ko_name:<20} {impact_score:.20f}\n")
             else:
                 f.write("KNOCKOUT SPECIES RANKING: Unable to calculate\n")
 
@@ -1091,7 +1088,9 @@ def generate_pattern_distance_report(
     significance_level = (
         "highly significant"
         if p_value < 0.001
-        else "significant" if p_value < 0.01 else "marginally significant"
+        else "significant"
+        if p_value < 0.01
+        else "marginally significant"
     )
 
     # Hypothesis description
@@ -1158,256 +1157,6 @@ def generate_pattern_distance_report(
         raise
 
     return report_path
-
-
-# DEPRECATED
-def analyze_simulation_variations(  # TODO: Check correctness
-    target_data, original_results, output_dir, log_file=None, target_type=0
-):
-    """
-    Analizza le variazioni delle simulazioni rispetto ai risultati originali.
-
-    Args:
-        target_data: Dizionario con i dati delle specie target
-        original_results: Risultati della simulazione originale
-        output_dir: Directory di output per i grafici
-        log_file: File di log
-        target_type: Tipo di target (0=specie, 1=reazione)
-    """
-    precision = int(os.getenv("SIMULATION_PREC", "20"))
-    mask_value = 1e-20
-
-    if target_type == 1:  # The target is a reaction
-        # In this case original results and target data are lists
-        pass
-    else:
-        for target_species, data in target_data.items():
-            original_data = data["original"]
-            simulations_data = data["simulations"]
-            time = original_results[:, 0]
-            print_log(log_file, f"time len: {len(time)}")
-            mask = np.abs(original_data) > mask_value
-
-            # Get data results
-            perturbed_data_list = [sim["results"] for sim in simulations_data]
-
-            # check if every simulation has the same length
-            lengths = [len(sim_data) for sim_data in perturbed_data_list]
-            min_length = min(lengths)
-
-            if not all(length == min_length for length in lengths):
-                print_log(
-                    log_file,
-                    f"Warning: Simulation results have different lengths. Truncating to minimum length: {min_length}",
-                )
-
-                perturbed_data_list = [
-                    sim_data[:min_length] for sim_data in perturbed_data_list
-                ]
-                original_data = original_data[:min_length]
-                time = time[:min_length]
-                mask = mask[:min_length]
-
-            # Using numpy array
-            perturbed_array = np.array(perturbed_data_list)
-
-            # End value analysis
-            last_original_value = original_data[-1]
-            last_simulations_values = perturbed_array[
-                :, -1
-            ]  # Get last values from all simulations
-
-            print_log(
-                log_file,
-                f"Analyzing {target_species} with {len(last_simulations_values)} simulations",
-            )
-
-            # Initialize variations array
-            if np.abs(last_original_value) > mask_value:
-                last_value_percents_variations = (
-                    (last_simulations_values - last_original_value)
-                    / last_original_value
-                ) * 100
-                variation_type = "percent"
-            else:
-                print_log(
-                    log_file,
-                    "  Last original value near zero - using absolute differences",
-                )
-                last_value_percents_variations = (
-                    last_simulations_values - last_original_value
-                )
-                variation_type = "absolute"
-
-            # Calculate statistics
-            # print_log(
-            #     log_file,
-            #     f"Last value percent variations: {last_value_percents_variations}",
-            # )
-
-            last_value_rms_variations = rms_average(
-                last_value_percents_variations, axis=0
-            )
-
-            last_value_std_variations = np.std(
-                last_value_percents_variations, mean=last_value_rms_variations
-            )
-
-            print_log(
-                log_file,
-                f"[{target_species}]Last value variations RMS: {last_value_rms_variations}",
-            )
-            print_log(
-                log_file,
-                f"[{target_species}]Last value variations std: {last_value_std_variations}",
-            )
-
-            # FULL TIME ANALYSIS
-            # FIX: Problem with nan values
-            # FIX: Problem with average
-            variations = np.full_like(perturbed_array, np.nan)
-            variations_percentage = np.full_like(perturbed_array, np.nan)
-
-            # Separate masks for percentage and absolute variations
-            valid_mask_percent = mask & (np.abs(original_data) > mask_value)
-            valid_mask_absolute = mask & (np.abs(original_data) <= mask_value)
-
-            # Calculate percentage variations where original data is significant
-            variations[:, valid_mask_percent] = (
-                perturbed_array[:, valid_mask_percent]
-                - original_data[valid_mask_percent]
-            ) / original_data[valid_mask_percent]
-
-            # For points where original data is near zero, use absolute differences
-            variations[:, valid_mask_absolute] = (
-                perturbed_array[:, valid_mask_absolute]
-                - original_data[valid_mask_absolute]
-            )
-
-            variations_percentage = variations * 100
-
-            # Only calculate RMS for valid percentage variations
-            variations_percentage_rms = np.full(variations_percentage.shape[1], np.nan)
-            if np.any(valid_mask_percent):
-                variations_percentage_rms[valid_mask_percent] = rms_average(
-                    variations_percentage[:, valid_mask_percent], axis=0
-                )
-
-            avg_variations_percentage_rms = np.mean(variations_percentage_rms)
-            std_variations_percentage_rms = np.std(
-                variations_percentage, mean=avg_variations_percentage_rms
-            )
-
-            print_log(
-                log_file,
-                f"[{target_species}]Std variation percentage RMS: {std_variations_percentage_rms:.{precision}f}%",
-            )
-            print_log(
-                log_file,
-                f"[{target_species}]Average variations percentage RMS:±{avg_variations_percentage_rms:.{precision}f}%",
-            )
-
-            # plotting
-            species_dir = os.path.join(output_dir, target_species)
-            os.makedirs(species_dir, exist_ok=True)
-
-            # plotting simulations comparison
-            plt_ut.plot_all_simulation_traces(
-                time, original_data, perturbed_array, target_species, species_dir
-            )
-
-            plt_ut.plot_statistical_comparison(
-                time,
-                original_data,
-                perturbed_array,
-                avg_variations_percentage_rms,
-                target_species,
-                species_dir,
-            )
-
-            plt_ut.plot_boxplot_distribution(
-                perturbed_array, time, target_species, species_dir
-            )
-
-            print_log(log_file, f"  Created plots in {species_dir}\n")
-
-
-def aggregate_by_combination(final_results, log_file=None):
-    """
-    Aggregates results by combination with detailed information for each target species.
-
-    Returns:
-        Dict: {2
-            'combination_key': {
-                'target_species_1': {
-                    'last_original_value': float,
-                    'last_perturbed_value': float,
-                    'variation': float,
-                    'variation_type': str,
-                    'original_series': array,
-                    'perturbed_series': array
-                },
-                'target_species_2': { ... },
-                ...
-            },
-            ...
-        }
-    """
-    aggregated_result = {}
-
-    # First collect all unique combinations
-    all_combinations = set()
-    for target_species, ts_data in final_results.items():
-        all_combinations.update(ts_data.keys())
-
-    # For each combination, collect data from all target species
-    for combination in all_combinations:
-        aggregated_result[combination] = {}
-
-        for target_species, ts_data in final_results.items():
-            if combination in ts_data:
-                value = ts_data[combination]
-                last_original_value = value["original"][-1]
-                last_perturbed_value = value["perturbed_result"][-1]
-
-                # Calculate variation
-                try:
-                    if abs(last_original_value) > 1e-30:  # Avoid division by zero
-                        variation = (
-                            last_perturbed_value - last_original_value
-                        ) / last_original_value
-                        variation_type = "relative"
-                    else:
-                        variation = last_perturbed_value - last_original_value
-                        variation_type = "absolute"
-                except:
-                    variation = last_perturbed_value - last_original_value
-                    variation_type = "absolute"
-
-                # Add information for this target species
-                aggregated_result[combination][target_species] = {
-                    "last_original_value": last_original_value,
-                    "last_perturbed_value": last_perturbed_value,
-                    "variation": variation,
-                    "variation_type": variation_type,
-                    "original_series": value["original"],
-                    "perturbed_series": value["perturbed_result"],
-                }
-
-    for combination, combination_data in aggregated_result.items():
-        print_log(log_file, f"combination: {combination}")
-        for target_species, ts_data in combination_data.items():
-            print_log(log_file, f"  target_species: {target_species}")
-            print_log(
-                log_file, f"      last_original_value:{ts_data['last_original_value']}"
-            )
-            print_log(
-                log_file,
-                f"      last_perturbed_value_value:{ts_data['last_perturbed_value']}",
-            )
-            print_log(log_file, f"      variation:{ts_data['variation']}")
-            print_log(log_file, f"      variation_type:{ts_data['variation_type']}")
-    return aggregated_result
 
 
 def get_simulations_informations(
@@ -1513,46 +1262,6 @@ def get_simulations_informations(
     )
 
     return table_results
-
-
-def collapse_informations(data, colnames, log_file=None):
-    target_indices = {}
-
-    exp = r"[\[\]]"  # Expression to filter the colnames
-
-    # Pre-compute column indices for all target species
-    for cn in colnames:
-
-        if cn == "time":
-            continue
-
-        s_id = re.sub(exp, "", cn)
-        target_indices[s_id] = colnames.index(cn)
-
-    res = {}
-    count = 0
-
-    for key in target_indices.keys():
-        res[key] = 0
-        count = 0
-        for combination, data_dict in data.items():
-            res[key] += data_dict[key]
-            count += 1
-        res[key] = res[key] / count
-
-    return res
-
-
-def get_convergence(
-    fixed_data,
-    original_model_results,
-    sbml_model,
-    input_species_ids,
-    samples_size,
-    rr_model,
-    log_file=None,
-):
-    exit(1)
 
 
 def get_simulations_informations_with_detailed_data(
@@ -1746,7 +1455,6 @@ def get_variations_hm_samples(
 
             # Looping through the combinations
             for combination, combination_data in combinations.items():
-
                 if species in combination_data:
                     if variation_type.lower() == "relative":
                         variations.append(
@@ -1816,6 +1524,7 @@ def get_variations_hm_no_samples(
     return heatmap_data
 
 
+# KEEP
 def simulate_combinations(
     rr,
     combinations,
@@ -1829,7 +1538,6 @@ def simulate_combinations(
     samples_simulations_results = []
     i = 1
     for comb in combinations:
-
         # rr.reset()
 
         # __import__("pprint").pprint(f"comb:{comb}")
@@ -1857,12 +1565,6 @@ def simulate_combinations(
         print_log(log_file, f"Min ss_time: {min_ss_time}")
 
     return samples_simulations_results, colnames
-
-
-def get_importance_informations(
-    target_data, original_results, output_dir, log_file=None
-):
-    pass
 
 
 def rms_average(array, axis=1, log_file=None):
@@ -1917,74 +1619,6 @@ def log_transform_average(simulations, epsilon=1e-10):
     mean_simulation = np.exp(mean_log)
 
     return mean_simulation
-
-
-def plot_variation_range(
-    time,
-    original_data,
-    perturbed_array,
-    target_species,
-    species_dir,
-):
-    """
-    Plot the range of variation using the actual simulations with smallest and largest values.
-
-    Args:
-        time: Time points array
-        original_data: Original simulation data for the target species
-        perturbed_array: Array of all simulation results (shape: n_simulations, n_timepoints)
-        target_species: Name of the species being analyzed
-        species_dir: Directory to save the plot
-    """
-    plt.figure(figsize=(12, 8))
-
-    # Identifica le simulazioni con valori più piccoli e più grandi
-    # Utilizziamo la media di ogni simulazione come criterio
-    simulation_means = np.mean(perturbed_array, axis=1)
-    min_sim_idx = np.argmin(simulation_means)
-    max_sim_idx = np.argmax(simulation_means)
-
-    # Estrai le simulazioni complete con valori minimi e massimi
-    min_simulation = perturbed_array[min_sim_idx]
-    max_simulation = perturbed_array[max_sim_idx]
-
-    # Plot del range come area riempita tra le due simulazioni
-    plt.fill_between(
-        time,
-        min_simulation,
-        max_simulation,
-        color="lightblue",
-        alpha=0.5,
-        label="Simulation Range",
-    )
-
-    # Plot delle simulazioni minima e massima come linee
-    plt.plot(time, min_simulation, "b-", linewidth=1, alpha=0.7, label="Min Simulation")
-    plt.plot(time, max_simulation, "b-", linewidth=1, alpha=0.7, label="Max Simulation")
-
-    # Plot dei dati originali
-    plt.plot(time, original_data, "r-", linewidth=2.5, label="Original")
-
-    # Aggiungi etichette e titoli
-    plt.xlabel("Time")
-    plt.ylabel("Concentration")
-    plt.title(f"{target_species} - Simulation Variation Range")
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-
-    # Aggiungi il numero di simulazioni come annotazione
-    n_simulations = perturbed_array.shape[0]
-    plt.figtext(
-        0.02,
-        0.02,
-        f"Based on {n_simulations} simulations\nShowing simulations with smallest and largest average values",
-        fontsize=10,
-        bbox=dict(facecolor="white", alpha=0.8, boxstyle="round"),
-    )
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(species_dir, f"{target_species}_variation_range.png"))
-    plt.close()
 
 
 def geometric_mean_variation(perturbed_array, original_data):
@@ -2042,24 +1676,6 @@ def keq_from_equilibrium_concentrations(
 
     keq = numerator / denominator
     return keq
-
-
-# def get_concentrations_at_equilibrium(rr_model, species=None, log_file=None):
-#
-#     floating_species = rr_model.model.getFloatingSpeciesIds()
-#     bounded_species = rr_model.model.getBoundarySpeciesIds()
-#     tot_species = [f"[{s}]" for s in (floating_species + bounded_species)]
-#
-#     rr_model.steadyStateSelections = tot_species
-#
-#     rr_model.conservedMoietyAnalysis = True
-#     steady_state = rr_model.steadyState()
-#
-#     steady_state_concentrations = rr_model.getSteadyStateValuesNamedArray()
-#
-#     print_log(log_file, f"{steady_state_concentrations.colnames}")
-#
-#     # TODO: Return an object <species_id, steady_state_concentrations>
 
 
 def analyze_directional_variations(variations_percentage):

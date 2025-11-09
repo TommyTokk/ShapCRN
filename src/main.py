@@ -6,12 +6,9 @@ from math import log, nan
 import os
 import re
 import sys
-from traceback import print_tb
 import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.algorithms.assortativity import correlation
-from numpy._typing import _UnknownType
-from pandas._libs import iNaT
 from pandas.core.generic import pprint_thing
 from classes.SBMLHandler import SBMLHandler
 import roadrunner
@@ -41,7 +38,7 @@ from src.utils import sens_utils as sens_ut
 
 
 payoff_functions_map = {
-    "max":ut.payoff_max,
+    "max": ut.payoff_max,
     "min": ut.payoff_min,
     "last": ut.payoff_last,
 }
@@ -63,7 +60,6 @@ def main():
 
     try:
         if args.command == "simulate":
-
             # Extracting the paramters
             simulation_time = args.time
             integrator = args.integrator
@@ -120,7 +116,6 @@ def main():
             # ut.print_log(log_file, f"n. reacts: {sbml_model.getNumReactions()}")
 
         elif args.command == "importance_assessment":
-
             # Getting the input species ids
             input_species_ids = args.input_species
 
@@ -128,9 +123,9 @@ def main():
             use_fixed_perturbations = args.use_fixed_perturbations
             payoff_function = args.payoff_function
 
-            __import__("pprint").pprint(
-                (use_fixed_perturbations and args.fixed_perturbations is not None)
-            )
+            # __import__("pprint").pprint(
+            #     (use_fixed_perturbations and args.fixed_perturbations is not None)
+            # )
 
             # Check for consistency
             if use_fixed_perturbations:
@@ -196,7 +191,7 @@ def main():
                     samples = sbml_ut.get_fixed_combinations(
                         sbml_model=sbml_model,
                         input_species=input_species_ids,
-                        fixed_variations=fixed_perturbations,
+                        fixed_variations=fixed_perturbations,  # TODO: Make it surely not unbound
                         log_file=log_file,
                     )
 
@@ -369,7 +364,7 @@ def main():
                     sbml_model,
                     args.target_nodes[0],
                     log_file=log_file,
-                ) 
+                )
 
                 if args.generate_report is not None:
                     save_path = args.generate_report
@@ -389,7 +384,6 @@ def main():
 
             # === IF NO SAMPLES ===
             if not use_perturbations:
-
                 ut.print_log(log_file, "Printing without samples")
 
                 relative_vars = sim_ut.get_relative_variations_no_samples(
@@ -408,7 +402,6 @@ def main():
                 # log_absolute = np.log10(absolute_vars + 1)
 
                 if args.generate_report is not None:
-
                     saving_path = (
                         args.generate_report
                     )  # Check if the destinations folder exists otherwise create it
@@ -425,7 +418,6 @@ def main():
                     absolute_vars.to_csv(f"{csv_paths}/absolute_variations.csv")
 
                 if args.save_images is not None:
-
                     saving_path = args.save_images
 
                     os.makedirs(saving_path, exist_ok=True)
@@ -457,7 +449,7 @@ def main():
                     ut.print_log(log_file, "Printing with samples")
                     ut.print_log(
                         log_file,
-                        f"Time to process species: {(end_time-start_time):.2f}s",
+                        f"Time to process species: {(end_time - start_time):.2f}s",
                     )
 
                     # Getting the variations with no samples
@@ -543,7 +535,6 @@ def main():
 
                     # SAVING THE VARAITIONS HEATMAPS
                     if args.generate_report:  # Saving the variation heatmaps
-
                         save_path = args.generate_report
 
                         os.makedirs(save_path, exist_ok=True)
@@ -685,8 +676,6 @@ def main():
                                 "[ERROR] You need to specify the variations to use setting the -fp parameter",
                             )
 
-                            exit(1)
-
                         # env_pert = os.getenv("FIXED_PERTURBATIONS").split(
                         #     ","
                         # )  # pyright:ignore
@@ -798,7 +787,6 @@ def main():
                         )
 
                         if args.generate_report is not None:
-
                             saving_path = args.generate_report
 
                             os.makedirs(saving_path, exist_ok=True)
@@ -862,7 +850,6 @@ def main():
                     )
 
         elif args.command == "sensitivity_analysis":
-
             saving_path = f"./report/{file_name}/"
 
             if not os.path.exists(saving_path):
@@ -889,7 +876,6 @@ def main():
                     continue
 
             if args.preserve_inputs:
-
                 internal_nodes = list(set(all_species_ids) - set(input_ids))
             else:
                 internal_nodes = list(set(all_species_ids))
@@ -994,8 +980,6 @@ def main():
             #
             base_samples = args.base_samples if c_sample_size is None else c_sample_size
 
-            __import__("pprint").pprint(base_samples)
-
             params = spec.sample(sobol_sample.sample, base_samples).samples
 
             # RES = np.zeros([params.shape[0], len(internal_nodes)])
@@ -1037,8 +1021,6 @@ def main():
                 log_file,
             )
 
-            __import__("pprint").pprint(len(fixed_samples_results))
-
             FIXED_RES = np.zeros(
                 [
                     len(fixed_samples_results),
@@ -1054,8 +1036,6 @@ def main():
                     s_idx = selection_to_idx[el]
                     FIXED_RES[i, j] = sim[-1, s_idx]
                     idx += 1
-
-            __import__("pprint").pprint(f"{RES.shape} | {FIXED_RES.shape}")
 
             fixed_mean = np.mean(FIXED_RES, axis=0)
             fixed_std = np.std(FIXED_RES, axis=0)
@@ -1088,7 +1068,6 @@ def main():
             )
 
             for j, node_id in enumerate(available_internal_nodes):
-
                 Si = sobol_analyze.analyze(problem, RES[:, j])
                 res_dict[node_id] = Si
 
@@ -1165,7 +1144,7 @@ def main():
 
             # Save
             xml_string, output_filename = sbml_ut.save_file(
-                file_name, operation_name, modified_model, True, log_file
+                file_name, operation_name, modified_model, True, log_file=log_file
             )
 
             # Simulate the modified model

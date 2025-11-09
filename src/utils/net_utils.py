@@ -16,6 +16,7 @@ from src.utils.utils import print_log
 # ============
 # NETWORK
 # ============
+# KEEP
 def get_network_from_sbml(sbml_model, log_file=None):
     # TODO: Add code to include modifiers in the graph
     """
@@ -40,7 +41,6 @@ def get_network_from_sbml(sbml_model, log_file=None):
     weight_list = []
     # Add reaction nodes and edges
     for reaction in sbml_model.getListOfReactions():
-
         for reagent in reaction.getListOfReactants():
             DG.add_edge(
                 reagent.getSpecies(),
@@ -159,6 +159,7 @@ def inhibit_species_from_network(network, target_species_id, sbml_model, log_fil
     return network, sbml_model
 
 
+# KEEP
 def plot_network(
     graph,
     img_dir_path="./imgs/PetriNets",
@@ -269,6 +270,7 @@ def plot_network(
 
 
 # TODO: Add the color scheme for the target node
+# KEEP
 def plot_interaction_graph(
     shap_values, input_nodes, sbml_model, target_node, log_file=None
 ):
@@ -317,7 +319,6 @@ def plot_interaction_graph(
 
     # Creating the colored graph
     for node in list(nodes_to_color):
-
         if node == target_node:
             continue
 

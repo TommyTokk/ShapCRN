@@ -15,6 +15,7 @@ from multiprocessing import Pool
 from scipy import stats
 
 
+# KEEP
 def get_problem_parameters(
     sbml_model, n_input_species, input_species_ids, range=20, log_file=None
 ):
@@ -38,10 +39,10 @@ def get_problem_parameters(
     return problem
 
 
+# KEEP
 def run_simulation_with_params(
     rr, params, valid_elements, valid_idxs, input_ids, log_file=None
 ):
-
     current_selections = rr.timeCourseSelections.copy()
 
     __import__("pprint").pprint(f"pre: {len(rr.timeCourseSelections)}")
@@ -82,6 +83,7 @@ def run_simulation_with_params(
     return RES
 
 
+# KEEP
 def check_convergence(
     results,
     internal_nodes,
@@ -193,7 +195,6 @@ def check_convergence(
                 if passed:
                     consecutive_count += 1
                     if consecutive_count >= min_consecutive and converged_at is None:
-
                         streak_start_idx = max(0, Ns.index(N) - consecutive_count + 1)
                         converged_at = Ns[streak_start_idx]
                         # print_log(
@@ -227,7 +228,7 @@ def assess_model_linearity(RES, sample_sizes):
     """
 
     print(f"\nMODEL LINEARITY ASSESSMENT:")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
 
     # Check if sensitivity indices are stable across different sample sizes
     # (indicating linear behavior)
@@ -263,15 +264,14 @@ def assess_model_linearity(RES, sample_sizes):
     return overall_linearity
 
 
+# KEEP
 def report_sensitivity(res_dict, parameters, report_file):
-
     with open(report_file, "w") as f:
         f.write("====== SENSITIVITY REPORT ANALYSIS ======\n")
         f.write(41 * "=")
         f.write("\n")
 
         for node, data in res_dict.items():
-
             f.write(f"=== Sensitivity Report for Node {node} ===\n")
             f.write("First-Order Sobol Indices (S1):\n")
             for i, s1 in enumerate(data["S1"]):
@@ -308,6 +308,7 @@ def report_sensitivity(res_dict, parameters, report_file):
             f.write("\n")
 
 
+# KEEP
 def convergence_report(convergence_informations, report_file):
     """
     {
@@ -339,7 +340,6 @@ def convergence_report(convergence_informations, report_file):
     not_conv = []
 
     with open(report_file, "w") as f:
-
         f.write("====== CONVERGENCE ANALYSIS ======\n")
         f.write(41 * "=")
         f.write("\n")
@@ -382,6 +382,7 @@ def convergence_report(convergence_informations, report_file):
         f.write(41 * "=")
 
 
+# KEEP
 def plot_convergence_single_plot(
     convergence_informations, tol_change=0.01, tol_ci=0.05, file_name=None
 ):
@@ -485,6 +486,7 @@ def convergence_analysis(random_samples, fixed_samples, n_inputs):
     plt.tight_layout()
 
 
+# KEEP
 def statistical_tests(random_samples, fixed_samples, num_nodes):
     """
     Perform statistical tests to compare distributions

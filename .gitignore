@@ -182,6 +182,6 @@ models/Test/*
 
 log
 
-report/*
+reports/*
 dots/*
 ./.DStore
