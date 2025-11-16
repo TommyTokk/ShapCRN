@@ -64,7 +64,11 @@ def save_file(
     log_file=None,
 ):
     # Generate output filename
+
     base_name, extension = os.path.splitext(file_name)
+    print(f"{file_name}")
+    print(f"{base_name}, {extension}")
+
     output_filename = f"{base_name}_{operation_name}{extension}"
     output_path = os.path.join(save_path, output_filename)
 

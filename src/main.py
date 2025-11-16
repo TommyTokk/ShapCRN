@@ -56,7 +56,7 @@ def main():
     if not file_path.exists():
         ut.print_log(log_file, f"[ERROR] The specified model doesn't exists")
 
-    file_name = os.path.splitext(os.path.basename(args.input_path))[0]
+    file_name, extension = os.path.splitext(os.path.basename(args.input_path))
 
     try:
         if args.command == "simulate":
@@ -1113,9 +1113,11 @@ def main():
                 f"Searching for updating operations on target species {args.species_id}",
             )
 
+            file = file_name + extension
+
             # Save
             xml_string, output_filename = sbml_ut.save_file(
-                file_name, operation_name, modified_model, True, log_file=log_file
+                file, operation_name, modified_model, True, log_file=log_file
             )
 
             # Simulate the modified model
@@ -1142,9 +1144,11 @@ def main():
             )
             operation_name = f"no_reaction_{args.reaction_id}"
 
+            file = file_name + extension
+
             # Save
             xml_string, output_filename = sbml_ut.save_file(
-                file_name, operation_name, modified_model, True, log_file=log_file
+                file, operation_name, modified_model, True, log_file=log_file
             )
 
             # Simulate the modified model
