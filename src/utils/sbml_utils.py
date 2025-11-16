@@ -519,9 +519,10 @@ def split_reversible_reaction(
     if not reaction.getReversible():
         raise ValueError(f"Reaction '{reaction_id}' is already irreversible.")
 
-    # Get reactants and products
+    # Get reactants, products, and modifiers
     reactants = reaction.getListOfReactants()
     products = reaction.getListOfProducts()
+    modifiers = reaction.getListOfModifiers()
 
     # Get kinetic law
     kinetic_law = reaction.getKineticLaw()
@@ -582,6 +583,11 @@ def split_reversible_reaction(
         sr.setStoichiometry(product.getStoichiometry())
         sr.setConstant(product.getConstant())
 
+    # Adding the modifiers
+    for modifier in modifiers:
+        sr = forward_reaction.createModifier()
+        sr.setSpecies(modifier.getSpecies())
+
     # Define forward kinetic law
     kl_forward = forward_reaction.createKineticLaw()
     # Create MathML for forward rate: k_forward * [A] * [B]
@@ -633,6 +639,10 @@ def split_reversible_reaction(
         sr.setSpecies(reactant.getSpecies())
         sr.setStoichiometry(reactant.getStoichiometry())
         sr.setConstant(reactant.getConstant())
+
+    for modifier in modifiers:
+        sr = reverse_reaction.createModifier()
+        sr.setSpecies(modifier.getSpecies())
 
     # Define reverse kinetic law
     kl_reverse = reverse_reaction.createKineticLaw()

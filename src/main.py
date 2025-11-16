@@ -1128,10 +1128,10 @@ def main():
         elif args.command == "knockout_reaction":
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
-            sbml_model = sbml_doc.getModel()
+            # sbml_model = sbml_doc.getModel()
             # file_name = os.path.basename(args.input_path)
 
-            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
 
             ut.print_log(
                 log_file,
