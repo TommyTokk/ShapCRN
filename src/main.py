@@ -1157,6 +1157,27 @@ def main():
             # rr_modified = sim_ut.load_roadrunner_model(xml_string, log_file)
             # res_modified = sim_ut.simulate(rr_modified)
             # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
+            #
+        elif args.command == "knockin_reaction":
+            sbml_model = sbml_ut.load_model(args.input_path).getModel()
+            dir_name = os.path.dirname(args.input_path)
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+
+            target_reaction = sbml_model.getReaction(args.reaction_id)
+            params = []
+            # Using fixed values (TEST ONLY)
+            for i in range(target_reaction.getNumReactants()):
+                species = sbml_model.getSpecies(
+                    target_reaction.getReactant(i).getSpecies()
+                )
+                params.append(species.getInitialConcentration() + 10)
+
+            ut.print_log(log_file, f"params: {params}")
+
+            sbml_model = sbml_ut.knockin_reaction(
+                sbml_model, target_reaction.getId(), params, log_file=log_file
+            )
+
         elif args.command == "create_network":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path).getModel()

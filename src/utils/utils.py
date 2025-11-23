@@ -318,6 +318,19 @@ def parse_args():
         help="Output directory for plots (default: ./imgs)",
     )
 
+    # === KNOCKIN REACTION command ===
+
+    knockin_reaction_parser = subparsers.add_parser(
+        "knockin_reaction", help="Knockin a reaction in the model"
+    )
+
+    knockin_reaction_parser.add_argument(
+        "input_path", help="Path to the SBML model file"
+    )
+    knockin_reaction_parser.add_argument(
+        "reaction_id", help="ID of the reaction to inhibit"
+    )
+
     # === CREATE PETRINET command ==
     create_network_parser = subparsers.add_parser(
         "create_network", help="Create the Network of the given model"

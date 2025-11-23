@@ -700,9 +700,50 @@ def knockin_reaction(sbml_model, reaction_id, param_vals, log_file=None):
     Apply the Knock-in of the specified reaction.
     It uses the parameters in param_vals to change the value of the reactant of the
     target reaction so that it applies the change.
+
+    IT IS ASSUMED THAT THE PARAMETERS ARE IN THE SAME ORDER OF THE REACTANTS.
     """
 
-    pass
+    reaction = sbml_model.getReaction(reaction_id)
+
+    if reaction is not None:
+        # Getting the reactants of the reaction
+        reactants = reaction.getListOfReactants()
+
+        for i, r in enumerate(reactants):
+            rs = sbml_model.getSpecies(r.getSpecies())
+
+            if rs.getHasOnlySubstanceUnits():
+                print_log(
+                    log_file, f"{i} | {rs.getId()} | pre: {rs.getInitialAmount()}"
+                )
+                # Change the Amount of the species
+                rs.setInitialAmount(param_vals[i])
+                print_log(
+                    log_file, f"{i} | {rs.getId()} | post:{rs.getInitialAmount()}"
+                )
+            else:
+                print_log(
+                    log_file, f"{i} | {rs.getId()} | pre:{rs.getInitialConcentration()}"
+                )
+
+                # Change the concentration of the species
+                rs.setInitialConcentration(param_vals[i])
+                print_log(
+                    log_file,
+                    f"{i} | {rs.getId()} | post: {rs.getInitialConcentration()}",
+                )
+
+            # Set the reactant constant
+            rs.setConstant(True)
+
+    else:
+        print_log(
+            log_file,
+            "[WARNING] Reaction not found in the model, no modification applied.",
+        )
+
+    return sbml_model
 
 
 # ============
