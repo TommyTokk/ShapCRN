@@ -16,6 +16,7 @@ from src.classes.function import Function
 from src.utils.utils import print_log
 
 from enum import Enum
+import re
 
 
 class Op(Enum):
@@ -461,36 +462,6 @@ def split_all_reversible_reactions(model, log_file=None):
     return model
 
 
-def parse_ast_tree(ast_node, log_file=None):
-    """
-    Recursively parses an ASTNode from libSBML and returns a dictionary representation.
-    """
-
-    if ast_node is None:
-        return None
-
-    # Base case: if node is a leaf (a number or a variable)
-    if ast_node.getNumChildren() == 0:
-        if ast_node.isName():
-            return {"type": "name", "value": ast_node.getName()}
-        elif ast_node.isNumber():
-            return {"type": "number", "value": ast_node.getValue()}
-        else:
-            return {"type": "unknown", "value": ast_node.toFormula()}
-
-    operator = ast_node.getName()
-    children = [
-        parse_ast_tree(ast_node.getChild(i)) for i in range(ast_node.getNumChildren())
-    ]
-
-    return {
-        "type": "operator",
-        "op": operator,
-        "op_type": ast_node.getType(),
-        "args": children,
-    }
-
-
 def split_reversible_reaction(
     sbml_model, reaction_id, model_compartments, model_parameters_dict, log_file=None
 ):
@@ -542,7 +513,7 @@ def split_reversible_reaction(
     for i in range(ast_nodes.getSize()):
         # Get the AST node
         node = ast_nodes.get(i)
-        # print_log(log_file, node.isName())
+
         if node.isName():
             # Check if the node is a parameter
             if node.getName() in model_parameters_dict.keys():
@@ -592,6 +563,7 @@ def split_reversible_reaction(
     kl_forward = forward_reaction.createKineticLaw()
     # Create MathML for forward rate: k_forward * [A] * [B]
     reactant_species = " * ".join([r.getSpecies() for r in reactants])
+
     k_forward_id = list(parameters.keys())[
         0
     ]  # Assuming the first parameter corresponds to the forward rate
@@ -721,6 +693,16 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
         )
 
     return sbml_model
+
+
+def knockin_reaction(sbml_model, reaction_id, param_vals, log_file=None):
+    """
+    Apply the Knock-in of the specified reaction.
+    It uses the parameters in param_vals to change the value of the reactant of the
+    target reaction so that it applies the change.
+    """
+
+    pass
 
 
 # ============

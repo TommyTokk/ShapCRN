@@ -123,6 +123,8 @@ def main():
             use_fixed_perturbations = args.use_fixed_perturbations
             payoff_function = args.payoff_function
 
+            fixed_perturbations = None
+
             # __import__("pprint").pprint(
             #     (use_fixed_perturbations and args.fixed_perturbations is not None)
             # )
@@ -191,7 +193,7 @@ def main():
                     samples = sbml_ut.get_fixed_combinations(
                         sbml_model=sbml_model,
                         input_species=input_species_ids,
-                        fixed_variations=fixed_perturbations,  # TODO: Make it surely not unbound
+                        fixed_variations=fixed_perturbations,
                         log_file=log_file,
                     )
 
@@ -254,6 +256,8 @@ def main():
                 else ss_min_time
             )
 
+            original_data = None
+
             if use_perturbations:
                 if use_fixed_perturbations:
                     ut.print_log(
@@ -309,8 +313,6 @@ def main():
             model_dict = sbml_ut.create_ko_models(
                 ids_to_ko, sbml_model, sbml_str, log_file
             )
-
-            # counter = 0
 
             start_time = time.perf_counter()
 
