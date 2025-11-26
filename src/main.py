@@ -1172,11 +1172,17 @@ def main():
                 )
                 params.append(species.getInitialConcentration() + 10)
 
-            ut.print_log(log_file, f"params: {params}")
-
             sbml_model = sbml_ut.knockin_reaction(
                 sbml_model, target_reaction.getId(), params, log_file=log_file
             )
+
+            rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
+
+            res, _, cols = sim_ut.simulate(rr, end_time=10, log_file=log_file)
+
+            __import__("pprint").pprint(res)
+
+            plt_ut.plot_results(res, cols)
 
         elif args.command == "create_network":
             # Load the model
@@ -1190,9 +1196,6 @@ def main():
             layout = args.layout
             orientation = args.orientation
             save_dot = args.save_dot
-
-            __import__("pprint").pprint(ranksep)
-            __import__("pprint").pprint(layout)
 
             species_list = sbml_ut.get_list_of_species(sbml_model)
             reactions_list = sbml_ut.get_list_of_reactions(

@@ -1,4 +1,5 @@
 import enum
+from math import prod
 import os
 
 from scipy.special import eval_sh_legendre
@@ -256,7 +257,7 @@ def knockout_species(sbml_model, target_species_id, log_file=None):
     for species in sbml_model.getListOfSpecies():
         if species.getId() == target_species_id:
             result = species.setInitialConcentration(0.0)
-            result = species.setConstant(True)
+            result = species.setBoundaryCondition(True)
             if result == libsbml.LIBSBML_OPERATION_FAILED:
                 print_log(
                     log_file, f"Error setting concentration for {species.getId()}"
@@ -307,6 +308,7 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
     react.setSpecies(species.getId())
     react.setStoichiometry(1)
     react.setConstant(species.getConstant())
+    react.setBoundaryCondition(species.getBoundaryCondition())
 
     # Create the product
     # prod = new_reaction.createProduct()
@@ -546,6 +548,7 @@ def split_reversible_reaction(
         sr.setSpecies(reactant.getSpecies())
         sr.setStoichiometry(reactant.getStoichiometry())
         sr.setConstant(reactant.getConstant())
+        sr.setBoundaryCondition(reactant.getBoundaryCondition())
 
     # Adding the products
     for product in products:
@@ -553,6 +556,7 @@ def split_reversible_reaction(
         sr.setSpecies(product.getSpecies())
         sr.setStoichiometry(product.getStoichiometry())
         sr.setConstant(product.getConstant())
+        sr.setBoundaryCondition(product.getBoundaryCondition())
 
     # Adding the modifiers
     for modifier in modifiers:
@@ -604,6 +608,7 @@ def split_reversible_reaction(
         sr.setSpecies(product.getSpecies())
         sr.setStoichiometry(product.getStoichiometry())
         sr.setConstant(product.getConstant())
+        sr.setBoundaryCondition(product.getBoundaryCondition())
 
     # Create the products for reverse reaction
     for reactant in reactants:
@@ -611,6 +616,7 @@ def split_reversible_reaction(
         sr.setSpecies(reactant.getSpecies())
         sr.setStoichiometry(reactant.getStoichiometry())
         sr.setConstant(reactant.getConstant())
+        sr.setBoundaryCondition(reactant.getBoundaryCondition())
 
     for modifier in modifiers:
         sr = reverse_reaction.createModifier()
@@ -714,28 +720,15 @@ def knockin_reaction(sbml_model, reaction_id, param_vals, log_file=None):
             rs = sbml_model.getSpecies(r.getSpecies())
 
             if rs.getHasOnlySubstanceUnits():
-                print_log(
-                    log_file, f"{i} | {rs.getId()} | pre: {rs.getInitialAmount()}"
-                )
                 # Change the Amount of the species
                 rs.setInitialAmount(param_vals[i])
-                print_log(
-                    log_file, f"{i} | {rs.getId()} | post:{rs.getInitialAmount()}"
-                )
-            else:
-                print_log(
-                    log_file, f"{i} | {rs.getId()} | pre:{rs.getInitialConcentration()}"
-                )
 
+            else:
                 # Change the concentration of the species
                 rs.setInitialConcentration(param_vals[i])
-                print_log(
-                    log_file,
-                    f"{i} | {rs.getId()} | post: {rs.getInitialConcentration()}",
-                )
 
             # Set the reactant constant
-            rs.setConstant(True)
+            rs.setBoundaryCondition(True)
 
     else:
         print_log(
