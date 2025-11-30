@@ -711,6 +711,7 @@ def knockin_reaction(sbml_model, reaction_id, param_vals, log_file=None):
     """
 
     reaction = sbml_model.getReaction(reaction_id)
+    print_log(log_file, reaction_id)
 
     if reaction is not None:
         # Getting the reactants of the reaction

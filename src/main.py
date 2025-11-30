@@ -1163,27 +1163,54 @@ def main():
             dir_name = os.path.dirname(args.input_path)
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
+            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+
             target_reaction = sbml_model.getReaction(args.reaction_id)
             params = []
-            # Using fixed values (TEST ONLY)
-            for i in range(target_reaction.getNumReactants()):
-                species = sbml_model.getSpecies(
-                    target_reaction.getReactant(i).getSpecies()
-                )
-                params.append(species.getInitialConcentration() + 10)
-
-            sbml_model = sbml_ut.knockin_reaction(
-                sbml_model, target_reaction.getId(), params, log_file=log_file
-            )
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
-            res, _, cols = sim_ut.simulate(rr, end_time=10, log_file=log_file)
+            # Setting the selections
+            selections = rr.timeCourseSelections
+            for s in species_list:
+                if f"[{s}]" not in selections:
+                    selections.append(f"[{s}]")
 
-            __import__("pprint").pprint(res)
+            rr.timeCourseSelections = selections
 
-            plt_ut.plot_results(res, cols)
+            # Simulate to take the maximum  value as auto value
 
+            res, _, colnames = sim_ut.simulate(rr, end_time=60, log_file=log_file)
+
+            print(colnames)
+
+            res_df = pd.DataFrame(res, columns=colnames)
+
+            for i in range(target_reaction.getNumReactants()):
+                r_id = target_reaction.getReactant(i).getSpecies()
+
+                reac_max = res_df[f"[{r_id}]"].max()
+                ut.print_log(log_file, f"Reactant: {r_id} | {reac_max}")
+                params.append(reac_max)
+
+            modified_model = sbml_ut.knockin_reaction(
+                sbml_model,
+                target_reaction.getId(),
+                param_vals=params,
+                log_file=log_file,
+            )
+
+            rr.reset()
+
+            rr = sim_ut.load_roadrunner_model(modified_model, log_file=log_file)
+
+            rr.timeCourseSelections = selections
+
+            final_res, _, colnames = sim_ut.simulate(rr, end_time=60, log_file=log_file)
+
+            __import__("pprint").pprint(final_res)
+
+            plt_ut.plot_results(final_res, colnames=colnames)
         elif args.command == "create_network":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
