@@ -1,4 +1,14 @@
 #!/usr/bin/env python
+
+"""
+                            - To Giuli
+
+Thank you for your constant support, encouragement, and guidance.
+This work wouldn’t be what it is without you.
+
+Non est ad astra mollis e terris via.
+"""
+
 import enum
 import itertools
 from logging import raiseExceptions
@@ -1126,6 +1136,48 @@ def main():
             # rr_modified = sim_ut.load_roadrunner_model(xml_string, log_file)
             # res_modified = sim_ut.simulate(rr_modified)
             # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
+            #
+        elif args.command == "knockin_species":
+            sbml_model = sbml_ut.load_model(args.input_path).getModel()
+            dir_name = os.path.dirname(args.input_path)
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            target_species = args.target_species_id
+
+            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+
+            params = []
+
+            rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
+
+            # Setting the selections
+            selections = rr.timeCourseSelections
+            for s in species_list:
+                if f"[{s}]" not in selections:
+                    selections.append(f"[{s}]")
+
+            rr.timeCourseSelections = selections
+
+            # Simulate to take the maximum  value as auto value
+            res, _, colnames = sim_ut.simulate(rr, end_time=60, log_file=log_file)
+
+            res_df = pd.DataFrame(res, columns=colnames)
+
+            # Retrieve the max value of the target species
+            new_species_val = res_df[f"[{target_species}]"].max()
+
+            modified_model = sbml_ut.knockin_species(
+                sbml_model, target_species, new_species_val, log_file=log_file
+            )
+
+            # Save the model
+            operation_name = f"ki_species_{target_species}"
+
+            file = file_name + extension
+
+            # Save
+            xml_string, output_filename = sbml_ut.save_file(
+                file, operation_name, modified_model, True, log_file=log_file
+            )
 
         elif args.command == "knockout_reaction":
             # Load the model
@@ -1159,15 +1211,24 @@ def main():
             # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
             #
         elif args.command == "knockin_reaction":
+            # Parse the args
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
             dir_name = os.path.dirname(args.input_path)
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+            target_reaction_id = args.target_reaction_id
 
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
-            target_reaction = sbml_model.getReaction(args.reaction_id)
-            params = []
+            model_reaction = sbml_model.getReaction(target_reaction_id)
 
+            reactants_ids = []
+
+            # Retrieve the reactants IDs of the reactions
+            for i, r in enumerate(model_reaction.getListOfReactants()):
+                reactant = model_reaction.getReactant(i).getSpecies()
+                reactants_ids.append(reactant)
+
+            # Simulate the original model to obtain the new values
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
 
             # Setting the selections
@@ -1178,39 +1239,30 @@ def main():
 
             rr.timeCourseSelections = selections
 
-            # Simulate to take the maximum  value as auto value
-
             res, _, colnames = sim_ut.simulate(rr, end_time=60, log_file=log_file)
 
-            print(colnames)
-
+            # Convert to DataFrame
             res_df = pd.DataFrame(res, columns=colnames)
 
-            for i in range(target_reaction.getNumReactants()):
-                r_id = target_reaction.getReactant(i).getSpecies()
+            # Retrieve the max values for the reactans
+            reactants_new_vals = [res_df[f"[{r}]"].max() for r in reactants_ids]
 
-                reac_max = res_df[f"[{r_id}]"].max()
-                ut.print_log(log_file, f"Reactant: {r_id} | {reac_max}")
-                params.append(reac_max)
+            # Modify the reaction
 
             modified_model = sbml_ut.knockin_reaction(
-                sbml_model,
-                target_reaction.getId(),
-                param_vals=params,
-                log_file=log_file,
+                sbml_model, model_reaction, reactants_new_vals, log_file=log_file
             )
 
-            rr.reset()
+            # Save the new model
+            operation_name = f"ki_reaction_{target_reaction_id}"
 
-            rr = sim_ut.load_roadrunner_model(modified_model, log_file=log_file)
+            file = file_name + extension
 
-            rr.timeCourseSelections = selections
+            # Save
+            xml_string, output_filename = sbml_ut.save_file(
+                file, operation_name, modified_model, True, log_file=log_file
+            )
 
-            final_res, _, colnames = sim_ut.simulate(rr, end_time=60, log_file=log_file)
-
-            __import__("pprint").pprint(final_res)
-
-            plt_ut.plot_results(final_res, colnames=colnames)
         elif args.command == "create_network":
             # Load the model
             sbml_model = sbml_ut.load_model(args.input_path).getModel()

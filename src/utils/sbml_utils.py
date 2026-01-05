@@ -333,6 +333,43 @@ def knockout_species_via_reaction(sbml_model, target_species_id, log_file=None):
     return (sbml_model, new_reaction)
 
 
+def knockin_species(sbml_model, species_id, new_val, log_file=None):
+    """
+    Apply the Knock-in of the specified species.
+    It uses the parameters in param_vals to change the value of the target species.
+    IT IS ASSUMED THAT THE PARAMETERS ARE IN THE SAME ORDER OF THE REACTANTS.
+    """
+
+    species = sbml_model.getSpecies(species_id)
+
+    if species is not None:
+        # Check if the species has concentration or amounts
+        if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
+            print_log(log_file, f"Using amounts for {species_id}")
+            # Setting the new amounts for the species
+            species.setInitialAmount(new_val)
+        elif species.isSetInitialConcentration():
+            print_log(log_file, f"Using concentration for {species_id}")
+            species.setInitialConcentration(new_val)
+        else:
+            print_log(
+                log_file, f"[ERROR] Cannot access species {species_id} intial values"
+            )
+            exit(1)
+
+        species.setId(species_id + "_KI")
+
+        # Make the species constant
+        species.setBoundaryCondition(True)
+        species.setConstant(True)
+
+    else:
+        print_log(log_file, f"[ERROR] Species {species_id} does not exists")
+        exit(1)
+
+    return sbml_model
+
+
 # ============
 # REACTIONS
 # ============
@@ -701,41 +738,72 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
     return sbml_model
 
 
-def knockin_reaction(sbml_model, reaction_id, param_vals, log_file=None):
-    """
-    Apply the Knock-in of the specified reaction.
-    It uses the parameters in param_vals to change the value of the reactant of the
-    target reaction so that it applies the change.
+def knockin_reaction(sbml_model, target_reaction, new_vals, log_file=None):
+    # Retrieve the reactants
+    reactants = [r.getSpecies() for r in target_reaction.getListOfReactants()]
+    stoichiometries = [
+        r.getStoichiometry() for r in target_reaction.getListOfReactants()
+    ]
 
-    IT IS ASSUMED THAT THE PARAMETERS ARE IN THE SAME ORDER OF THE REACTANTS.
-    """
+    # Create the new species
+    new_species_ids = []
 
-    reaction = sbml_model.getReaction(reaction_id)
-    print_log(log_file, reaction_id)
+    for i, r in enumerate(reactants):
+        original_species = sbml_model.getSpecies(r)  # Original species
 
-    if reaction is not None:
-        # Getting the reactants of the reaction
-        reactants = reaction.getListOfReactants()
+        # Create unique ID for new species
+        new_species_id = r + "_KI"
+        new_species = sbml_model.createSpecies()
+        new_species.setId(new_species_id)  # Use setId, not setID
 
-        for i, r in enumerate(reactants):
-            rs = sbml_model.getSpecies(r.getSpecies())
+        # Copy compartment (required for valid SBML)
+        new_species.setCompartment(original_species.getCompartment())
 
-            if rs.getHasOnlySubstanceUnits():
-                # Change the Amount of the species
-                rs.setInitialAmount(param_vals[i])
+        # Check if has Amounts or Concentrations
+        if (
+            original_species.isSetHasOnlySubstanceUnits()
+            or original_species.isSetInitialAmount()
+        ):
+            # The species has Amounts
+            new_species.setHasOnlySubstanceUnits(
+                original_species.getHasOnlySubstanceUnits()
+            )
+            new_species.setInitialAmount(new_vals[i])
+        elif original_species.isSetInitialConcentration():
+            # The species has concentration
+            new_species.setInitialConcentration(new_vals[i])
+        else:
+            print_log(log_file, "[ERROR] Something went wrong in creating new species")
+            exit(1)
 
-            else:
-                # Change the concentration of the species
-                rs.setInitialConcentration(param_vals[i])
+        # Make the new species constant
+        new_species.setBoundaryCondition(True)
+        new_species.setConstant(True)
 
-            # Set the reactant constant
-            rs.setBoundaryCondition(True)
+        new_species_ids.append(new_species_id)
 
-    else:
-        print_log(
-            log_file,
-            "[WARNING] Reaction not found in the model, no modification applied.",
-        )
+    # Creating the new reaction
+    new_reaction = target_reaction.clone()
+    new_reaction.setId(target_reaction.getId() + "_KI")
+
+    # Remove all old reactants FIRST (before adding new ones)
+    while new_reaction.getNumReactants() > 0:
+        new_reaction.removeReactant(0)  # Always remove at index 0
+
+    # Add new reactants with new species
+    for i, new_species_id in enumerate(new_species_ids):
+        new_reactant = new_reaction.createReactant()
+        new_reactant.setSpecies(new_species_id)
+        new_reactant.setStoichiometry(stoichiometries[i])
+        new_reactant.setConstant(True)
+
+    # TODO: Change the kinetic law formula
+
+    # Remove the old reaction
+    sbml_model.removeReaction(target_reaction.getId())
+
+    # Add the new reaction
+    sbml_model.addReaction(new_reaction)
 
     return sbml_model
 
