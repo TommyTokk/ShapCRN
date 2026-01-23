@@ -1,7 +1,8 @@
 import enum
-from math import prod
+from math import log, prod
 import os
 
+from networkx import reverse
 from scipy.special import eval_sh_legendre
 
 import libsbml
@@ -432,6 +433,61 @@ def get_products_dict(reaction_objects):
     return dict
 
 
+def get_nodes_iterator(node):
+    """
+    A generator that yields ASTNodes one by one traversing depth-first.
+    """
+    if node is None:
+        return
+
+    # Yield the current node immediately
+    yield node
+
+    # Yield from children
+    for i in range(node.getNumChildren()):
+        # 'yield from' seamlessly streams values from the recursive call
+        yield from get_nodes_iterator(node.getChild(i))
+
+
+def get_kinetic_type(sbml_model, kl_math, log_file=None):
+    """
+    Function that retrieve the kinetic type of the reaction.
+    It returns an integer indicating the type:
+        - (-1): No kinetic found
+        - (1): Explicit Mass Action Kinetic
+        - (2): Explicit Michaelis-Menten kinetic
+    """
+
+    if kl_math is None:
+        print_log(log_file, "[ERROR] Cannot get the type of the kinetic")
+        return (-1, None)
+
+    for node in get_nodes_iterator(kl_math):
+        # Get the node type
+        type = node.getType()
+
+        if type == libsbml.AST_FUNCTION:
+            # Kinetic defined by a function
+            fn = node.getName()
+
+            # Retrieve the function
+            react_func = sbml_model.getFunctionDefinition(fn)
+
+            # Retrieve the function math
+            fn_math = react_func.getMath()
+
+            fn_kt, _ = get_kinetic_type(sbml_model, fn_math)
+
+            return (fn_kt, fn)
+
+        if type == libsbml.AST_DIVIDE:
+            # Kinetic likely defined by Michaelis-Menten
+            return (2, None)
+
+    # Kientic likely defined by explicit Law of Mass Action
+    return (1, None)
+
+
 def reactions_to_dict(reaction_list):
     """
     Convert a list of Reaction objects to a JSON-serializable dictionary.
@@ -452,6 +508,34 @@ def reactions_to_dict(reaction_list):
         reactions_dict[reaction_id] = reaction.to_dict()
 
     return reactions_dict
+
+
+def is_reversible(sbml_model, reaction, log_file=None):
+    kl_math = reaction.getKineticLaw().getMath()
+
+    kl_type, fn = get_kinetic_type(sbml_model, kl_math, log_file)
+
+    if kl_type == -1:
+        print_log(
+            log_file, f"[ERROR] No kinetic law found for reaction {reaction.getId()}"
+        )
+        exit(1)
+
+    if kl_type == 2:  # Is Michaelis-Menten
+        return False
+
+    if kl_type == 1:  # Is Law of Mass Action
+        if fn is not None:
+            function = sbml_model.getFunctionDefinition(fn)
+
+            f_math = function.getMath()
+            for node in get_nodes_iterator(f_math):
+                if node.getType() == libsbml.AST_MINUS:
+                    return True
+        else:
+            for node in get_nodes_iterator(kl_math):
+                if node.getType() == libsbml.AST_MINUS:
+                    return True
 
 
 # KEEP
@@ -476,29 +560,346 @@ def split_all_reversible_reactions(model, log_file=None):
         model_params_dict[p.getId()] = p.getValue()
 
     # Get list of reversible reaction IDs (make a copy since we'll be modifying the model)
-    reversible_reaction_ids = []
+    reversible_reactions = []
     for i in range(model.getNumReactions()):
         reaction = model.getReaction(i)
-        if reaction.getReversible():
+        if is_reversible(model, reaction, log_file):
             print_log(
-                log_file, f"Found {reaction.getName()}, rev: {reaction.getReversible()}"
+                log_file, f"Found {reaction.getId()}, rev: {reaction.getReversible()}"
             )
-            reversible_reaction_ids.append(reaction.getId())
+            reversible_reactions.append(reaction)
 
     print_log(
-        log_file, f"Found {len(reversible_reaction_ids)} reversible reactions to split"
+        log_file, f"Found {len(reversible_reactions)} reversible reactions to split"
     )
 
     # Split each reversible reaction
-    for reaction_id in reversible_reaction_ids:
-        forward_reaction, reverse_reaction = split_reversible_reaction(
-            model, reaction_id, model_comps, model_params_dict
-        )
+    for reaction in reversible_reactions:
+        kl_math = reaction.getKineticLaw().getMath()
 
-        model.addReaction(forward_reaction)
-        model.addReaction(reverse_reaction)
+        klt, fn = get_kinetic_type(sbml_model=model, kl_math=kl_math, log_file=log_file)
+
+        if fn is None:  # Kinetic described by explicit LMA
+            forward_reaction, reverse_reaction = split_reversible_reaction(
+                model, reaction.getId(), model_comps, model_params_dict
+            )
+
+            model.addReaction(forward_reaction)
+            model.addReaction(reverse_reaction)
+
+        else:  # Kinetic described by function
+            forward_function, reverse_function, forward_reaction, reverse_reaction = (
+                split_reversible_reaction_function(
+                    model,
+                    reaction.getId(),
+                    fn,
+                    model_comps,
+                    model_params_dict,
+                    log_file,
+                )
+            )
+
+            exit(1)
 
     return model
+
+
+def create_sbml_function(
+    sbml_model, function_name, function_id, args, expression, log_file=None
+):
+    function = sbml_model.createFunctionDefinition()
+
+    if function_id:
+        function.setId(function_id)
+
+    if function_name:
+        function.setName(function_name)
+
+    # Creating the args string
+    args_string = ",".join(args)
+
+    full_formula = f"lambda({args_string}, {expression})"
+
+    print_log(log_file, f"[CSBMLF] Constructed formula: {full_formula}")
+
+    # Create the math
+    math_ast = libsbml.parseL3Formula(full_formula)
+
+    if math_ast is None:
+        print_log(log_file, "[ERROR] Could not parse the formula for the function")
+        return None
+
+    # Setting the math
+    check = function.setMath(math_ast)
+
+    if check != libsbml.LIBSBML_OPERATION_SUCCESS:
+        print_log(log_file, "[ERROR] Error setting the math for the function")
+        return None
+
+    return function
+
+
+def create_sbml_reaction_LMA(
+    sbml_model,
+    reaction_name,
+    reaction_id,
+    reactants,
+    products,
+    modifiers,
+    local_parameters,
+    reaction_kl_args,
+    function_id=None,
+    function_args=None,
+    log_file=None,
+):
+    reaction = sbml_model.createReaction()
+    reaction.setId(reaction_id)
+    reaction.setName(reaction_name)
+    reaction.setReversible(False)
+
+    # Creating the reactants
+    for r_id, stoichiometry in reactants:
+        reactant = reaction.createReactant()
+        reactant.setSpecies(r_id)
+        reactant.setStoichiometry(stoichiometry)
+
+    # Creating the products
+    for p_id, stoichiometry in products:
+        product = reaction.createProduct()
+        product.setSpecies(p_id)
+        product.setStoichiometry(stoichiometry)
+
+    # Creating the modifiers
+    for m_id in modifiers:
+        modifier = reaction.createModifier()
+        modifier.setSpecies(m_id)
+
+    # Creating the kinetic Law
+    kinetic_law = reaction.createKineticLaw()
+
+    # Creating the local parameters
+    for lp_id, lp_value in local_parameters:
+        local_parameter = kinetic_law.createLocalParameter()
+        local_parameter.setId(lp_id)
+        local_parameter.setValue(lp_value)
+
+    # Construct the string
+    if function_id is None or function_args is None:
+        print_log(log_file, "[CSBMLR] Creating reaction without function!")
+
+        # Assumes the order comps, parameters, reactants
+        reaction_kl_formula = "*".join(reaction_kl_args)
+
+        reaction_kl_ast = libsbml.parseL3Formula(reaction_kl_formula)
+
+        if reaction_kl_ast:
+            kinetic_law.setMath(reaction_kl_ast)
+        else:
+            print_log(
+                log_file,
+                f"[ERROR] Error during creating the AST for reaction {reaction_id}",
+            )
+
+    else:
+        # The reaction contains a functions
+        comps = reaction_kl_args  # Assumes in this case is passed just the compartments
+
+        # Creating the function string
+        function_args_string = ",".join(function_args)  # Assumed in order
+        function_string = f"{function_id}({function_args_string})"
+
+        __import__("pprint").pprint(function_string)
+
+        exit(1)
+
+
+def split_kinetic_function(sbml_model, kinetic_math, log_file=None):
+    pattern = r"^(\w+)\((.*)\)$"
+
+    kl_string = libsbml.formulaToL3String(kinetic_math).replace(" ", "")
+
+    print_log(log_file, f"[SK] formula: {kl_string}")
+
+    match = re.match(pattern, kl_string)  # Cover the pattern lambda(args)
+
+    fwd_args = []
+    rev_args = []
+
+    if match:
+        args_list = match.group(2).split(",")
+
+        args = args_list[:-1]
+        exp = args_list[-1]
+
+        forward_reaction, reverse_reaction = exp.split("-")
+
+        for a in args:
+            if a in forward_reaction:
+                fwd_args.append(a)
+            elif a in reverse_reaction:
+                rev_args.append(a)
+            else:
+                continue
+
+        print_log(
+            log_file,
+            f"fwd formula: {forward_reaction} | rev formula: {reverse_reaction} | fwd params: {fwd_args} | rev params: {rev_args}",
+        )
+
+        return forward_reaction, reverse_reaction, fwd_args, rev_args
+
+    else:
+        return None, None, None, None
+
+
+def split_reversible_reaction_function(
+    sbml_model,
+    reaction_id,
+    function_name,
+    model_compartments,
+    model_parameters_dict,
+    log_file=None,
+):
+    """
+    Split a reversible chemical reaction with kinetic described by function
+    It assumes two definition possible:
+      - function_name(params)
+      - comps * function_name(parmas)
+    """
+
+    reaction = sbml_model.getReaction(reaction_id)
+
+    kl = reaction.getKineticLaw()
+
+    reaction_parameteres = kl.getListOfLocalParameters()
+
+    kl_math = kl.getMath()
+
+    kl_string = libsbml.formulaToL3String(kl_math)
+
+    kl_string_clean = kl_string.replace(" ", "")
+
+    reactants = reaction.getListOfReactants()
+    products = reaction.getListOfProducts()
+    modifiers = reaction.getListOfModifiers()
+
+    pattern = r"^(\w+)\*(\w+)\((.*)\)$"  # Pattern = comp*func(parmas)
+
+    comps_match = re.match(pattern, kl_string_clean)
+
+    if comps_match:
+        # Kinetic Law is likely comp*function(parmas)
+
+        comp = comps_match.group(1)
+        function_kl_math = sbml_model.getFunctionDefinition(function_name).getMath()
+
+        kinetic_split_info = split_kinetic_function(
+            sbml_model, function_kl_math, log_file
+        )
+
+        if None in kinetic_split_info:
+            print_log(
+                log_file,
+                f"[ERROR] Not available info for the kinetic split for reaction {reaction_id}",
+            )
+
+            exit(1)
+
+        else:
+            forward_formula, reverse_formula, forward_args, reverse_args = (
+                kinetic_split_info
+            )
+
+            # TODO: Create the new functions
+            # Create the forward function
+            fwd_function = create_sbml_function(
+                sbml_model,
+                f"{function_name}_fwd",
+                f"{function_name}_fwd",
+                forward_args,
+                forward_formula,
+                log_file=log_file,
+            )
+
+            if fwd_function is None:
+                print_log(
+                    log_file,
+                    f"[ERROR] Error while creating the forward function {function_name}",
+                )
+
+            # Create the reverese function
+            rev_function = create_sbml_function(
+                sbml_model,
+                f"{function_name}_rev",
+                f"{function_name}_rev",
+                reverse_args,
+                reverse_formula,
+                log_file=log_file,
+            )
+
+            if rev_function is None:
+                print_log(
+                    log_file,
+                    f"[ERROR] Error while creating the reverse function for {function_name}",
+                )
+
+            # TODO: Create the new reactions
+            # Creating the forward reaction
+            rs = []
+            ps = []
+            ms = []
+            lps = []
+
+            for r in reactants:
+                r_tuple = (r.getSpecies(), r.getStoichiometry())
+                rs.append(r_tuple)
+
+            for p in products:
+                p_tuple = (p.getSpecies(), p.getStoichiometry())
+                ps.append(p_tuple)
+
+            for m in modifiers:
+                m_tuple = (m.getId(), m.getValue())
+                ms.append(m_tuple)
+
+            for lp in reaction_parameteres:
+                lps_tuple = (lp.getId(), lp.getValue())
+                lps.append(lps_tuple)
+
+            if forward_args:
+                function_full_args = forward_args + [forward_formula]
+            else:
+                function_full_args = None
+
+            fwd_reaction = create_sbml_reaction_LMA(
+                sbml_model,
+                f"{reaction.getName()}_fwd",
+                f"{reaction.getId()}_fwd",
+                rs,
+                ps,
+                ms,
+                lps,
+                [comp],
+                f"{function_name}_fwd",
+                function_full_args,
+                log_file=log_file,
+            )
+
+            # Creating the reverse reaction
+
+            # TODO: Remove the old reaction
+            # TODO: Remove the old function
+
+    else:
+        # Kinetic Law is just function(params)
+        function_kl_math = sbml_model.getFunctionDefinition(function_name).getMath()
+        forward_kinetic, reverse_kinetic, forward_parameters, reverse_parameteres = (
+            split_kinetic_function(sbml_model, function_kl_math, log_file)
+        )
+
+    exit(1)
+
+    return None, None, None, None
 
 
 def split_reversible_reaction(
@@ -585,7 +986,7 @@ def split_reversible_reaction(
         sr.setSpecies(reactant.getSpecies())
         sr.setStoichiometry(reactant.getStoichiometry())
         sr.setConstant(reactant.getConstant())
-        sr.setBoundaryCondition(reactant.getBoundaryCondition())
+        # sr.setBoundaryCondition(reactant.getBoundaryCondition())
 
     # Adding the products
     for product in products:
@@ -593,7 +994,7 @@ def split_reversible_reaction(
         sr.setSpecies(product.getSpecies())
         sr.setStoichiometry(product.getStoichiometry())
         sr.setConstant(product.getConstant())
-        sr.setBoundaryCondition(product.getBoundaryCondition())
+        # sr.setBoundaryCondition(product.getBoundaryCondition())
 
     # Adding the modifiers
     for modifier in modifiers:
@@ -645,7 +1046,7 @@ def split_reversible_reaction(
         sr.setSpecies(product.getSpecies())
         sr.setStoichiometry(product.getStoichiometry())
         sr.setConstant(product.getConstant())
-        sr.setBoundaryCondition(product.getBoundaryCondition())
+        # sr.setBoundaryCondition(product.getBoundaryCondition())
 
     # Create the products for reverse reaction
     for reactant in reactants:
@@ -653,7 +1054,7 @@ def split_reversible_reaction(
         sr.setSpecies(reactant.getSpecies())
         sr.setStoichiometry(reactant.getStoichiometry())
         sr.setConstant(reactant.getConstant())
-        sr.setBoundaryCondition(reactant.getBoundaryCondition())
+        # sr.setBoundaryCondition(reactant.getBoundaryCondition())
 
     for modifier in modifiers:
         sr = reverse_reaction.createModifier()

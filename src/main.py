@@ -1213,9 +1213,52 @@ def main():
         elif args.command == "knockin_reaction":
             # Parse the args
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
-            dir_name = os.path.dirname(args.input_path)
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+
+            dir_name = os.path.dirname(args.input_path)
+
             target_reaction_id = args.target_reaction_id
+
+            for r in sbml_model.getListOfReactions():
+                kl_math = r.getKineticLaw().getMath()
+
+                kin_type, function_name = sbml_ut.get_kinetic_type(
+                    sbml_model, kl_math, log_file
+                )
+
+                math_formula = libsbml.formulaToL3String(kl_math)
+
+                if kin_type == 1:
+                    if function_name is None:
+                        ut.print_log(
+                            log_file,
+                            f"Reaction {r.getId()}'s kinetic described by explicit LMA ({kin_type, math_formula})",
+                        )
+                    else:
+                        ut.print_log(
+                            log_file,
+                            f"Reaction {r.getId()}'s kinetic described by LMA using function {function_name}({kin_type, math_formula})",
+                        )
+                elif kin_type == 2:
+                    if function_name is None:
+                        ut.print_log(
+                            log_file,
+                            f"Reaction {r.getId()}'s kinetic described by explicit MM ({kin_type})",
+                        )
+                    else:
+                        ut.print_log(
+                            log_file,
+                            f"Reaction {r.getId()}'s kinetic described by MM using function {function_name}({kin_type, math_formula})",
+                        )
+
+                else:
+                    ut.print_log(
+                        log_file,
+                        f"Reaction {r.getId()}'s kinetic undefined ({kin_type})",
+                    )
+
+            exit(1)
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
 
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
