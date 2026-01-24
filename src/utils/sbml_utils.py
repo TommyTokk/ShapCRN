@@ -599,7 +599,13 @@ def split_all_reversible_reactions(model, log_file=None):
                 )
             )
 
-            exit(1)
+            # TODO: Add the new features
+
+            model.addFunctionDefinition(forward_function)
+            model.addFunctionDefinition(reverse_function)
+
+            model.addReaction(forward_reaction)
+            model.addReaction(reverse_reaction)
 
     return model
 
@@ -647,7 +653,7 @@ def create_sbml_reaction_LMA(
     products,
     modifiers,
     local_parameters,
-    reaction_kl_args,
+    reaction_comps,
     function_id=None,
     function_args=None,
     log_file=None,
@@ -688,7 +694,7 @@ def create_sbml_reaction_LMA(
         print_log(log_file, "[CSBMLR] Creating reaction without function!")
 
         # Assumes the order comps, parameters, reactants
-        reaction_kl_formula = "*".join(reaction_kl_args)
+        reaction_kl_formula = "*".join(reaction_comps)
 
         reaction_kl_ast = libsbml.parseL3Formula(reaction_kl_formula)
 
@@ -697,20 +703,32 @@ def create_sbml_reaction_LMA(
         else:
             print_log(
                 log_file,
-                f"[ERROR] Error during creating the AST for reaction {reaction_id}",
+                f"[ERROR] Error during creation of the AST for reaction {reaction_id}",
             )
 
     else:
         # The reaction contains a functions
-        comps = reaction_kl_args  # Assumes in this case is passed just the compartments
+        comps = reaction_comps  # Assumes in this case is passed just the compartments
+
+        comps_string = "*".join(comps)
 
         # Creating the function string
         function_args_string = ",".join(function_args)  # Assumed in order
         function_string = f"{function_id}({function_args_string})"
 
-        __import__("pprint").pprint(function_string)
+        full_string = f"{comps_string}*{function_string}"
 
-        exit(1)
+        function_formula = libsbml.parseL3Formula(full_string)
+
+        if function_formula:
+            kinetic_law.setMath(function_formula)
+        else:
+            print_log(
+                log_file,
+                f"[ERROR] Error during creation of the AST using function for reaction {reaction_id}",
+            )
+
+    return reaction
 
 
 def split_kinetic_function(sbml_model, kinetic_math, log_file=None):
@@ -729,7 +747,7 @@ def split_kinetic_function(sbml_model, kinetic_math, log_file=None):
         args_list = match.group(2).split(",")
 
         args = args_list[:-1]
-        exp = args_list[-1]
+        exp = args_list[-1].replace("(", "").replace(")", "")
 
         forward_reaction, reverse_reaction = exp.split("-")
 
@@ -771,11 +789,18 @@ def split_reversible_reaction_function(
 
     kl = reaction.getKineticLaw()
 
-    reaction_parameteres = kl.getListOfLocalParameters()
+    reaction_parameters = [
+        (lp.getId(), lp.getValue()) for lp in kl.getListOfLocalParameters()
+    ]
+    global_parameters = [
+        (gp.getId(), gp.getValue()) for gp in sbml_model.getListOfParameters()
+    ]
 
     kl_math = kl.getMath()
 
     kl_string = libsbml.formulaToL3String(kl_math)
+
+    __import__("pprint").pprint(kl_string)
 
     kl_string_clean = kl_string.replace(" ", "")
 
@@ -783,14 +808,49 @@ def split_reversible_reaction_function(
     products = reaction.getListOfProducts()
     modifiers = reaction.getListOfModifiers()
 
+    rs = []
+    ps = []
+    ms = []
+    lps = []
+
+    for r in reactants:
+        r_tuple = (r.getSpecies(), r.getStoichiometry())
+        rs.append(r_tuple)
+
+    for p in products:
+        p_tuple = (p.getSpecies(), p.getStoichiometry())
+        ps.append(p_tuple)
+
+    for m in modifiers:
+        m_tuple = (m.getId(), m.getValue())
+        ms.append(m_tuple)
+
     pattern = r"^(\w+)\*(\w+)\((.*)\)$"  # Pattern = comp*func(parmas)
 
     comps_match = re.match(pattern, kl_string_clean)
 
     if comps_match:
-        # Kinetic Law is likely comp*function(parmas)
+        # Kinetic Law is likely comp*function(params)
 
         comp = comps_match.group(1)
+        actual_function_params = comps_match.group(3).split(",")
+
+        __import__("pprint").pprint(actual_function_params)
+
+        actual_params = []
+
+        # Computing the intersection between parameters
+        for afp in actual_function_params:
+            for t in reaction_parameters:
+                if afp == t[0]:
+                    actual_params.append(t)
+
+            for t in global_parameters:
+                if afp == t[0]:
+                    actual_params.append(t)
+
+        lps = actual_params
+
         function_kl_math = sbml_model.getFunctionDefinition(function_name).getMath()
 
         kinetic_split_info = split_kinetic_function(
@@ -810,7 +870,6 @@ def split_reversible_reaction_function(
                 kinetic_split_info
             )
 
-            # TODO: Create the new functions
             # Create the forward function
             fwd_function = create_sbml_function(
                 sbml_model,
@@ -843,33 +902,14 @@ def split_reversible_reaction_function(
                     f"[ERROR] Error while creating the reverse function for {function_name}",
                 )
 
-            # TODO: Create the new reactions
             # Creating the forward reaction
-            rs = []
-            ps = []
-            ms = []
-            lps = []
 
-            for r in reactants:
-                r_tuple = (r.getSpecies(), r.getStoichiometry())
-                rs.append(r_tuple)
+            # Creating the actual parameters string
+            # Assumes the first parameter in actual_params is the forward constant
 
-            for p in products:
-                p_tuple = (p.getSpecies(), p.getStoichiometry())
-                ps.append(p_tuple)
-
-            for m in modifiers:
-                m_tuple = (m.getId(), m.getValue())
-                ms.append(m_tuple)
-
-            for lp in reaction_parameteres:
-                lps_tuple = (lp.getId(), lp.getValue())
-                lps.append(lps_tuple)
-
-            if forward_args:
-                function_full_args = forward_args + [forward_formula]
-            else:
-                function_full_args = None
+            fwd_actual_params = [actual_params[0][0]] + [
+                r.getSpecies() for r in reactants
+            ]
 
             fwd_reaction = create_sbml_reaction_LMA(
                 sbml_model,
@@ -881,25 +921,210 @@ def split_reversible_reaction_function(
                 lps,
                 [comp],
                 f"{function_name}_fwd",
-                function_full_args,
+                fwd_actual_params,
                 log_file=log_file,
             )
 
             # Creating the reverse reaction
+            # Assumes the second parameter in actual_params is the reverse constant
 
-            # TODO: Remove the old reaction
-            # TODO: Remove the old function
+            rev_actual_params = [actual_params[1][0]] + [
+                p.getSpecies() for p in products
+            ]
+
+            __import__("pprint").pprint(f"rev: {rev_actual_params}")
+
+            rev_reaction = create_sbml_reaction_LMA(
+                sbml_model,
+                f"{reaction.getName()}_rev",
+                f"{reaction.getId()}_rev",
+                ps,
+                rs,
+                ms,
+                lps,
+                [comp],
+                f"{function_name}_rev",
+                rev_actual_params,
+                log_file=log_file,
+            )
+
+            # Remove the old reaction
+
+            sbml_model.removeReaction(reaction_id)
+            # Remove the old function
+            sbml_model.removeFunctionDefinition(function_name)
+
+            return fwd_function, rev_function, fwd_reaction, rev_reaction
 
     else:
         # Kinetic Law is just function(params)
         function_kl_math = sbml_model.getFunctionDefinition(function_name).getMath()
-        forward_kinetic, reverse_kinetic, forward_parameters, reverse_parameteres = (
-            split_kinetic_function(sbml_model, function_kl_math, log_file)
+        kinetic_split_info = split_kinetic_function(
+            sbml_model, function_kl_math, log_file
         )
 
-    exit(1)
+        if None in kinetic_split_info:
+            print_log(
+                log_file,
+                f"[ERROR] Not available info for the kinetic split for reaction {reaction_id}",
+            )
 
-    return None, None, None, None
+            exit(1)
+
+        else:
+            forward_formula, reverse_formula, forward_args, reverse_args = (
+                kinetic_split_info
+            )
+
+            # Assumes that the arguments are ordered like comps, fwd_constant, reacts, rev_constant, prods
+
+            reaction_pattern = r"^(\w+)\((.*)\)$"
+
+            match = re.match(reaction_pattern, kl_string_clean)
+
+            if match:
+                fn = match.group(1)
+                actual_function_params = match.group(2).split(",")
+
+                actual_params = []
+
+                # Computing the intersection between parameters
+                for afp in actual_function_params:
+                    for t in reaction_parameters:
+                        if afp == t[0]:
+                            actual_params.append(t)
+
+                    for t in global_parameters:
+                        if afp == t[0]:
+                            actual_params.append(t)
+
+                lps = actual_params
+
+                if all([el is not None for el in kinetic_split_info]):
+                    actual_comps = []
+
+                    for c in model_compartments:
+                        if c in actual_function_params:
+                            actual_comps.append(c)
+
+                    forward_formula, reverse_formula, forward_args, reverse_args = (
+                        kinetic_split_info
+                    )
+
+                    # Remove the compartments from the formula and from the args
+                    if forward_formula:
+                        fwd_formula_array = forward_formula.split("*")
+                        for i in range(len(actual_comps)):
+                            fwd_formula_array.remove(fwd_formula_array[i])
+
+                        # Rebuild the formula
+                        forward_formula = "*".join(fwd_formula_array)
+
+                    if forward_args:
+                        for i in range(len(actual_comps)):
+                            forward_args.remove(forward_args[i])
+
+                    print_log(
+                        log_file,
+                        f"fwd formula: {forward_formula} | rev formula: {reverse_formula} | fwd args: {forward_args} | rev args: {reverse_args}",
+                    )
+
+                    # Creating the forward function
+                    fwd_function = create_sbml_function(
+                        sbml_model,
+                        f"{function_name}_fwd",
+                        f"{function_name}_fwd",
+                        forward_args,
+                        forward_formula,
+                        log_file,
+                    )
+
+                    if fwd_function is None:
+                        print_log(
+                            log_file,
+                            f"[ERROR] Error while creating the forward function in reaction {reaction_id}",
+                        )
+
+                    # Creating the reverse reaction
+                    rev_function = create_sbml_function(
+                        sbml_model,
+                        f"{function_name}_rev",
+                        f"{function_name}_rev",
+                        reverse_args,
+                        reverse_formula,
+                        log_file,
+                    )
+
+                    if rev_function is None:
+                        print_log(
+                            log_file,
+                            f"[ERROR] Error while creating the reverse function in reaction {reaction_id}",
+                        )
+
+                        exit(1)
+
+                    # CREATION OF THE REACTIONS
+                    # Creating the forward reaction
+
+                    fwd_actual_params = [actual_params[0][0]] + [
+                        r.getSpecies() for r in reactants
+                    ]
+
+                    fwd_reaction = create_sbml_reaction_LMA(
+                        sbml_model,
+                        f"{reaction.getName()}_fwd",
+                        f"{reaction.getId()}_fwd",
+                        rs,
+                        ps,
+                        ms,
+                        lps,
+                        actual_comps,
+                        f"{function_name}_fwd",
+                        fwd_actual_params,
+                        log_file=log_file,
+                    )
+
+                    if fwd_reaction is None:
+                        print_log(
+                            log_file,
+                            f"[ERROR] Error while creating the forward reaction of reaction {reaction_id}",
+                        )
+                        exit(1)
+
+                    # Creating the reverse reaction
+
+                    rev_actual_params = [actual_params[1][0]] + [
+                        p.getSpecies() for p in products
+                    ]
+
+                    rev_reaction = create_sbml_reaction_LMA(
+                        sbml_model,
+                        f"{reaction.getName()}_rev",
+                        f"{reaction.getId()}_rev",
+                        ps,
+                        rs,
+                        ms,
+                        lps,
+                        actual_comps,
+                        f"{function_name}_rev",
+                        rev_actual_params,
+                        log_file=log_file,
+                    )
+
+                    if rev_reaction is None:
+                        print_log(
+                            log_file,
+                            f"[ERROR] Error while creating the reverse reaction of reaction {reaction_id}",
+                        )
+                        exit(1)
+
+                    # Remove the old reaction
+
+                    sbml_model.removeReaction(reaction_id)
+                    # Remove the old function
+                    sbml_model.removeFunctionDefinition(function_name)
+
+                    return fwd_function, rev_function, fwd_reaction, rev_reaction
 
 
 def split_reversible_reaction(
@@ -927,7 +1152,7 @@ def split_reversible_reaction(
 
     print_log(log_file, f"is reversible: {reaction.getReversible()}")
 
-    if not reaction.getReversible():
+    if not is_reversible(sbml_model, reaction, log_file=log_file):
         raise ValueError(f"Reaction '{reaction_id}' is already irreversible.")
 
     # Get reactants, products, and modifiers

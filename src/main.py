@@ -83,8 +83,8 @@ def main():
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
 
-            # sbml_model = sbml_doc.getModel()
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
+            sbml_model = sbml_doc.getModel()
+            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
 
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
@@ -1214,6 +1214,10 @@ def main():
             # Parse the args
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+
+            sbml_ut.save_sbml_model(sbml_model, "models/test.xml", log_file=log_file)
+
+            exit(1)
 
             dir_name = os.path.dirname(args.input_path)
 
