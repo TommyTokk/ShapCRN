@@ -580,6 +580,7 @@ def split_all_reversible_reactions(model, log_file=None):
         klt, fn = get_kinetic_type(sbml_model=model, kl_math=kl_math, log_file=log_file)
 
         if fn is None:  # Kinetic described by explicit LMA
+            # TODO: Modify this part with the new functions
             forward_reaction, reverse_reaction = split_reversible_reaction(
                 model, reaction.getId(), model_comps, model_params_dict
             )
@@ -588,6 +589,7 @@ def split_all_reversible_reactions(model, log_file=None):
             model.addReaction(reverse_reaction)
 
         else:  # Kinetic described by function
+            # TODO: Check the correctness of the returns
             forward_function, reverse_function, forward_reaction, reverse_reaction = (
                 split_reversible_reaction_function(
                     model,
@@ -599,13 +601,22 @@ def split_all_reversible_reactions(model, log_file=None):
                 )
             )
 
-            # TODO: Add the new features
+            if (
+                forward_function
+                and reverse_function
+                and forward_reaction
+                and reverse_reaction
+            ):
+                model.addFunctionDefinition(forward_function)
+                model.addFunctionDefinition(reverse_function)
 
-            model.addFunctionDefinition(forward_function)
-            model.addFunctionDefinition(reverse_function)
-
-            model.addReaction(forward_reaction)
-            model.addReaction(reverse_reaction)
+                model.addReaction(forward_reaction)
+                model.addReaction(reverse_reaction)
+            else:
+                print_log(
+                    log_file,
+                    f"[ERROR] Error during the splitting of the reaction {reaction.getId()}",
+                )
 
     return model
 
@@ -971,13 +982,7 @@ def split_reversible_reaction_function(
 
             exit(1)
 
-        else:
-            forward_formula, reverse_formula, forward_args, reverse_args = (
-                kinetic_split_info
-            )
-
-            # Assumes that the arguments are ordered like comps, fwd_constant, reacts, rev_constant, prods
-
+        else:  # Assumes that the arguments are ordered like comps, fwd_constant, reacts, rev_constant, prods
             reaction_pattern = r"^(\w+)\((.*)\)$"
 
             match = re.match(reaction_pattern, kl_string_clean)
@@ -1125,6 +1130,13 @@ def split_reversible_reaction_function(
                     sbml_model.removeFunctionDefinition(function_name)
 
                     return fwd_function, rev_function, fwd_reaction, rev_reaction
+            else:
+                print_log(
+                    log_file,
+                    f"[ERROR] The kinetic law of the reaction {reaction_id} is not supported",
+                )
+                return None, None, None, None
+        return None, None, None, None
 
 
 def split_reversible_reaction(
