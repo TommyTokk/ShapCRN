@@ -107,6 +107,9 @@
 
       <species id="S5" compartment="cell" initialConcentration="10" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"/>
       <species id="P5" compartment="cell" initialConcentration="0" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"/>
+      
+      <species id="S6" compartment="cell" initialConcentration="10" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"/>
+      <species id="P6" compartment="cell" initialConcentration="0" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"/>
     </listOfSpecies>
 
     <listOfReactions>
@@ -122,7 +125,8 @@
           <math xmlns="http://www.w3.org/1998/Math/MathML">
             <apply>
               <times/>
-              <ci> cell </ci>  <ci> k1 </ci>
+              <ci> cell </ci>
+              <ci> k1 </ci>
               <ci> S1 </ci>
             </apply>
           </math>
@@ -171,7 +175,8 @@
           <math xmlns="http://www.w3.org/1998/Math/MathML">
             <apply>
               <times/>
-              <ci> cell </ci> <apply>
+              <ci> cell </ci>
+              <apply>
                 <divide/>
                 <apply>
                   <times/>
@@ -207,7 +212,8 @@
               <ci> Vmax_local </ci>
               <ci> Km_local </ci>
               <ci> S4 </ci>
-              <ci> cell </ci> </apply>
+              <ci> cell </ci>
+            </apply>
           </math>
           <listOfLocalParameters>
             <localParameter id="Vmax_local" value="1.5"/>
@@ -237,6 +243,40 @@
           <listOfLocalParameters>
             <localParameter id="kf_new" value="0.2"/>
             <localParameter id="kr_new" value="0.1"/>
+          </listOfLocalParameters>
+        </kineticLaw>
+      </reaction>
+
+      <reaction id="R6_MassAction_Reversible_Explicit" reversible="true" fast="false">
+        <listOfReactants>
+          <speciesReference species="S6" stoichiometry="1" constant="true"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="P6" stoichiometry="1" constant="true"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> cell </ci>
+              <apply>
+                <minus/>
+                <apply>
+                  <times/>
+                  <ci> k_forward </ci>
+                  <ci> S6 </ci>
+                </apply>
+                <apply>
+                  <times/>
+                  <ci> k_reverse </ci>
+                  <ci> P6 </ci>
+                </apply>
+              </apply>
+            </apply>
+          </math>
+          <listOfLocalParameters>
+            <localParameter id="k_forward" value="0.15"/>
+            <localParameter id="k_reverse" value="0.08"/>
           </listOfLocalParameters>
         </kineticLaw>
       </reaction>

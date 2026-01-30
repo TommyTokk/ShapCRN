@@ -581,8 +581,8 @@ def split_all_reversible_reactions(model, log_file=None):
 
         if fn is None:  # Kinetic described by explicit LMA
             # TODO: Modify this part with the new functions
-            forward_reaction, reverse_reaction = split_reversible_reaction(
-                model, reaction.getId(), model_comps, model_params_dict
+            forward_reaction, reverse_reaction = split_reversible_reaction_explicit(
+                model, reaction.getId(), model_comps, model_params_dict, log_file
             )
 
             model.addReaction(forward_reaction)
@@ -664,7 +664,8 @@ def create_sbml_reaction_LMA(
     products,
     modifiers,
     local_parameters,
-    reaction_comps,
+    reaction_comps,  # TODO: Change this parameter
+    kl_expr=None,
     function_id=None,
     function_args=None,
     log_file=None,
@@ -705,7 +706,11 @@ def create_sbml_reaction_LMA(
         print_log(log_file, "[CSBMLR] Creating reaction without function!")
 
         # Assumes the order comps, parameters, reactants
-        reaction_kl_formula = "*".join(reaction_comps)
+        comps_str = ("*").join(reaction_comps)
+
+        reaction_kl_formula = f"{comps_str}*{kl_expr}"
+
+        __import__("pprint").pprint(f"[CSBMLR] {reaction_kl_formula}")
 
         reaction_kl_ast = libsbml.parseL3Formula(reaction_kl_formula)
 
@@ -781,6 +786,204 @@ def split_kinetic_function(sbml_model, kinetic_math, log_file=None):
         return None, None, None, None
 
 
+def split_reversible_reaction_explicit(
+    sbml_model,
+    reaction_id,
+    model_compartments,
+    model_parameters_dict,
+    log_file=None,
+):
+    reaction = sbml_model.getReaction(reaction_id)
+
+    kl = reaction.getKineticLaw()
+
+    reaction_parameters = [
+        (lp.getId(), lp.getValue()) for lp in kl.getListOfLocalParameters()
+    ]
+    global_parameters = [
+        (gp.getId(), gp.getValue()) for gp in sbml_model.getListOfParameters()
+    ]
+
+    kl_math = kl.getMath()
+
+    kl_string = libsbml.formulaToL3String(kl_math)
+
+    kl_string_clean = kl_string.replace(" ", "")
+
+    __import__("pprint").pprint(f"[SRRE] {kl_string_clean}")
+
+    reactants = reaction.getListOfReactants()
+    products = reaction.getListOfProducts()
+    modifiers = reaction.getListOfModifiers()
+    local_parameters = kl.getListOfLocalParameters()
+
+    rs = []
+    ps = []
+    ms = []
+    lps = []  # TODO: Load the local parameters
+
+    for r in reactants:
+        r_tuple = (r.getSpecies(), r.getStoichiometry())
+        rs.append(r_tuple)
+
+    for p in products:
+        p_tuple = (p.getSpecies(), p.getStoichiometry())
+        ps.append(p_tuple)
+
+    for m in modifiers:
+        m_tuple = (m.getId(), m.getValue())
+        ms.append(m_tuple)
+
+    for lp in local_parameters:
+        lp_tuple = (lp.getId(), lp.getValue())
+        lps.append(lp_tuple)
+
+    pattern1 = r"^(.*)\*\((.*)\)$"  # match: comp*(kf*r1-kr*p1)
+    pattern2 = r"^(\w+)\*(.*)$"  # match comp*kf*r1-kr*p1
+
+    match1 = re.match(pattern1, kl_string_clean)
+    match2 = re.match(pattern2, kl_string_clean)
+
+    comps = []
+    fwd_exp = ""
+    rev_exp = ""
+
+    fwd_reaction = None
+    rev_reaction = None
+
+    if match1:  # match: comp*(kf*r1-kr*p1)
+        comps = match1.group(1).split("*")
+        exp = match1.group(2)
+
+        fwd_exp = exp.split("-")[0]
+        rev_exp = exp.split("-")[1]
+
+        # Create the new forward reaction
+        fwd_reaction = create_sbml_reaction_LMA(
+            sbml_model,
+            f"{reaction.getId()}_fwd",
+            f"{reaction.getId()}_fwd",
+            rs,
+            ps,
+            ms,
+            lps,
+            comps,
+            fwd_exp,
+            None,
+            None,
+            log_file,
+        )
+
+        if fwd_reaction is None:
+            print_log(
+                log_file,
+                f"[ERROR] Error during the creation of the forward reaction for {reaction.getId()}",
+            )
+            exit(1)
+
+        # Create the new reverse reaction
+        rev_reaction = create_sbml_reaction_LMA(
+            sbml_model,
+            f"{reaction.getId()}_rev",
+            f"{reaction.getId()}_rev",
+            ps,
+            rs,
+            ms,
+            lps,
+            comps,
+            rev_exp,
+            None,
+            None,
+            log_file,
+        )
+
+        if rev_reaction is None:
+            print_log(
+                log_file,
+                f"[ERROR] Error during the creation of the reverse reaction for {reaction.getId()}",
+            )
+            exit(1)
+
+    else:
+        if match2:
+            # TODO: Need to check intersection with comps
+            comps = match2.group(1).split("*")
+            exp = match2.group(2)
+
+            fwd_exp = exp.split("-")[0]
+            rev_exp = exp.split("-")[1]
+
+            # Check the intersection with the compartments
+            fwd_exp_list = fwd_exp.split("*")
+
+            for el in fwd_exp_list:
+                if el in model_compartments:
+                    comps.append(el)
+                    fwd_exp_list.remove(el)
+
+            # Unify the list again
+            fwd_exp = ("*").join(fwd_exp_list)
+
+            # Create the forward reaction
+            fwd_reaction = create_sbml_reaction_LMA(
+                sbml_model,
+                reaction.getId(),
+                reaction.getId(),
+                rs,
+                ps,
+                ms,
+                lps,
+                comps,
+                fwd_exp,
+                None,
+                None,
+                log_file,
+            )
+
+            if fwd_reaction is None:
+                print_log(
+                    log_file,
+                    f"[ERROR] Error creating the forward reaction for {reaction.getId()}",
+                )
+                exit(1)
+
+            # Creating the reverse reaction
+            rev_reaction = create_sbml_reaction_LMA(
+                sbml_model,
+                reaction.getId(),
+                reaction.getId(),
+                ps,
+                rs,
+                ms,
+                lps,
+                comps,
+                rev_exp,
+                None,
+                None,
+                log_file,
+            )
+
+            if rev_reaction is None:
+                print_log(
+                    log_file,
+                    f"[ERROR] Error while creating the reverse reaction for {reaction.getId()}",
+                )
+                exit(1)
+
+        else:
+            print_log(
+                log_file,
+                f"[ERROR] Kinetic law not described using explicit Law of Mass Action!\n {kl_string_clean}",
+            )
+            exit(1)
+
+    if fwd_reaction is not None and rev_reaction is not None:
+        # Delete the old reaction
+        sbml_model.removeReaction(reaction.getId())
+
+    return fwd_reaction, rev_reaction
+
+
 def split_reversible_reaction_function(
     sbml_model,
     reaction_id,
@@ -845,8 +1048,6 @@ def split_reversible_reaction_function(
 
         comp = comps_match.group(1)
         actual_function_params = comps_match.group(3).split(",")
-
-        __import__("pprint").pprint(actual_function_params)
 
         actual_params = []
 
@@ -931,6 +1132,7 @@ def split_reversible_reaction_function(
                 ms,
                 lps,
                 [comp],
+                None,
                 f"{function_name}_fwd",
                 fwd_actual_params,
                 log_file=log_file,
@@ -943,8 +1145,6 @@ def split_reversible_reaction_function(
                 p.getSpecies() for p in products
             ]
 
-            __import__("pprint").pprint(f"rev: {rev_actual_params}")
-
             rev_reaction = create_sbml_reaction_LMA(
                 sbml_model,
                 f"{reaction.getName()}_rev",
@@ -954,14 +1154,15 @@ def split_reversible_reaction_function(
                 ms,
                 lps,
                 [comp],
+                None,
                 f"{function_name}_rev",
                 rev_actual_params,
                 log_file=log_file,
             )
 
             # Remove the old reaction
-
             sbml_model.removeReaction(reaction_id)
+
             # Remove the old function
             sbml_model.removeFunctionDefinition(function_name)
 
@@ -1031,7 +1232,7 @@ def split_reversible_reaction_function(
 
                     print_log(
                         log_file,
-                        f"fwd formula: {forward_formula} | rev formula: {reverse_formula} | fwd args: {forward_args} | rev args: {reverse_args}",
+                        f"fn: {function_name} | fwd formula: {forward_formula} | rev formula: {reverse_formula} | fwd args: {forward_args} | rev args: {reverse_args}",
                     )
 
                     # Creating the forward function
@@ -1075,6 +1276,7 @@ def split_reversible_reaction_function(
                         r.getSpecies() for r in reactants
                     ]
 
+                    (f"Function: {fn}, actual_params: {fwd_actual_params}")
                     fwd_reaction = create_sbml_reaction_LMA(
                         sbml_model,
                         f"{reaction.getName()}_fwd",
@@ -1084,6 +1286,7 @@ def split_reversible_reaction_function(
                         ms,
                         lps,
                         actual_comps,
+                        None,
                         f"{function_name}_fwd",
                         fwd_actual_params,
                         log_file=log_file,
@@ -1102,6 +1305,10 @@ def split_reversible_reaction_function(
                         p.getSpecies() for p in products
                     ]
 
+                    __import__("pprint").pprint(
+                        f"Function: {fn}, rev actual_params: {rev_actual_params}"
+                    )
+
                     rev_reaction = create_sbml_reaction_LMA(
                         sbml_model,
                         f"{reaction.getName()}_rev",
@@ -1111,6 +1318,7 @@ def split_reversible_reaction_function(
                         ms,
                         lps,
                         actual_comps,
+                        None,
                         f"{function_name}_rev",
                         rev_actual_params,
                         log_file=log_file,
