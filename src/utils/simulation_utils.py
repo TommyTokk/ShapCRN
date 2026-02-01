@@ -30,22 +30,65 @@ from utils.sbml_utils import create_combinations
 
 # KEEP
 def load_roadrunner_model(
-    sbml_model, rel_tol=1e-8, abs_tol=1e-12, integrator="cvode", log_file=None
-):
+    sbml_model: libsbml.Model, rel_tol: float = 1e-8, abs_tol:float = 1e-12, integrator:str ="cvode", log_file=None
+) -> rr.RoadRunner:
     """
-    Loads a SBML model into a RoadRunner instance and configures the integrator settings.
-
-    Args:
-        sbml_model: The SBML model (libsbml.Model or string)
-        rel_tol: Relative tolerance for the integrator (default: 1e-6)
-        abs_tol: Absolute tolerance for the integrator (default: 1e-8)
-        integrator: Integrator to use to run the simulation
-            - cvode: Use of ODEs to run simulations
-            - rk4: Use of the Runge-Kutta method
-            - gillespie: Use the gillespie's stochastic approach
-
-    Returns:
-        roadrunner.RoadRunner: Configured RoadRunner instance
+        Load an SBML model into a RoadRunner instance and configure integrator settings.
+        
+        This function creates a RoadRunner instance from an SBML model and configures the
+        numerical integrator with specified tolerance values. It supports multiple integrator
+        types for different simulation approaches (deterministic ODE, Runge-Kutta, or stochastic).
+        
+        Parameters
+        ----------
+        sbml_model : libsbml.Model or str
+            The SBML model to load. Can be either:
+            - libsbml.Model: A model object (will be converted to SBML string)
+            - str: SBML XML string or file path
+        rel_tol : float, optional
+            Relative tolerance for the integrator, by default 1e-8
+        abs_tol : float, optional
+            Absolute tolerance for the integrator, by default 1e-12
+        integrator : str, optional
+            Integrator type to use for simulations, by default "cvode"
+            Supported values:
+            - "cvode": CVODE integrator for ODEs (deterministic)
+            - "rk4": Fourth-order Runge-Kutta method
+            - "gillespie": Gillespie stochastic simulation algorithm
+        log_file : file, optional
+            File object for logging operations, by default None
+        
+        Returns
+        -------
+        roadrunner.RoadRunner
+            Configured RoadRunner instance ready for simulation
+        
+        Raises
+        ------
+        SystemExit
+            If model loading fails due to invalid SBML or file path errors
+        
+        Notes
+        -----
+        The function automatically handles conversion between libsbml.Model objects and
+        SBML string representations required by RoadRunner.
+        
+        Integrator tolerances affect simulation accuracy and performance:
+        - Lower tolerances increase accuracy but slow down simulations
+        - Higher tolerances speed up simulations but may reduce accuracy
+        
+        Examples
+        --------
+        Load model from libsbml.Model object:
+        >>> rr_model = load_roadrunner_model(sbml_model, rel_tol=1e-6, abs_tol=1e-10)
+        
+        Load model with stochastic integrator:
+        >>> rr_model = load_roadrunner_model(
+        ...     sbml_model, integrator="gillespie", log_file=log
+        ... )
+        
+        Load from SBML file path:
+        >>> rr_model = load_roadrunner_model("model.xml", integrator="rk4")
     """
 
     try:
@@ -74,32 +117,80 @@ def load_roadrunner_model(
 
 # KEEP
 def simulate(
-    rr_model,
-    start_time=0,
-    end_time=1000,
-    output_rows=100,
-    steady_state=False,
-    max_end_time=1000,
-    sim_step=5,
-    threshold=1e-6,
+    rr_model: rr.RoadRunner,
+    start_time: float=0,
+    end_time:float=1000,
+    output_rows:int=100,
+    steady_state:bool=False,
+    max_end_time:float=1000,
+    sim_step:int=5,
+    threshold:float=1e-6,
     log_file=None,
-):
+) -> tuple:
     """
-    Simulate the model with optional steady state detection.
-
-    args:
-        - rr_model: RoadRunner for the simulations
-        - start_time: Start time of the simulation
-        - end_time: End time of the simulation
-        - output_rows: Number of rows for the simulations results
-        - steady_state: Flag for the steady state
-        - max_end_time: Maximum time for steady state simulations
-        - sim_step: Simulation step for steady state simulations
-        - threshold: Cut off value for noticing steady state
-        - log_file: File for log printing
-
-    returns:
-        Triple containing the simulation results, the steady state time (None if not present), and the colnames
+        Simulate a RoadRunner model with optional steady state detection.
+        
+        This function runs either a standard time-course simulation or an adaptive simulation
+        that continues until steady state is reached. Steady state detection uses a block-by-block
+        approach to monitor concentration changes.
+        
+        Parameters
+        ----------
+        rr_model : roadrunner.RoadRunner
+            Configured RoadRunner model instance to simulate
+        start_time : float, optional
+            Simulation start time, by default 0
+        end_time : float, optional
+            Simulation end time (used when steady_state=False), by default 1000
+        output_rows : int, optional
+            Number of output time points in the results, by default 100
+        steady_state : bool, optional
+            If True, run adaptive simulation until steady state is reached, by default False
+        max_end_time : float, optional
+            Maximum simulation time when detecting steady state, by default 1000
+        sim_step : int, optional
+            Time step size for each simulation block during steady state detection, by default 5
+        threshold : float, optional
+            Convergence threshold for steady state detection (max relative change), by default 1e-6
+        log_file : file, optional
+            File object for logging simulation progress, by default None
+        
+        Returns
+        -------
+        tuple of (numpy.ndarray, float or None, list)
+            A tuple containing:
+            - simulation_results : Structured array with time-course data (columns: time, species)
+            - steady_state_time : Time when steady state was reached, or None if not reached/not requested
+            - colnames : List of column names from the simulation results
+        
+        Notes
+        -----
+        The function automatically sets `nonnegative = True` on the integrator to prevent
+        negative concentration values during stochastic simulations.
+        
+        When `steady_state=True`:
+        - Uses `simulate_with_steady_state()` for adaptive block-by-block simulation
+        - Points per block is calculated as max(20, output_rows // (max_end_time / sim_step))
+        - Simulation continues until convergence or max_end_time is reached
+        - Steady state is detected when all monitored species change by less than threshold
+        
+        When `steady_state=False`:
+        - Runs standard RoadRunner time-course simulation from start_time to end_time
+        - Returns exactly output_rows time points
+        
+        Examples
+        --------
+        Standard time-course simulation:
+        >>> results, ss_time, cols = simulate(rr_model, end_time=500, output_rows=200)
+        >>> print(f"Simulation completed with {len(cols)} species")
+        
+        Steady state simulation:
+        >>> results, ss_time, cols = simulate(
+        ...     rr_model, steady_state=True, max_end_time=2000, 
+        ...     threshold=1e-8, log_file=log
+        ... )
+        >>> if ss_time is not None:
+        ...     print(f"Steady state reached at time {ss_time}")
     """
     # Setting nonnegative for stochastic simulations
     rr_model.getIntegrator().nonnegative = True

@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
 """
-                            - To Giuli
+                            - To Auri -
 
 Thank you for your constant support, encouragement, and guidance.
 This work wouldn’t be what it is without you.
 
-Non est ad astra mollis e terris via.
+                
+                Non est ad astra mollis e terris via.
 """
 
 import enum
