@@ -580,7 +580,6 @@ def split_all_reversible_reactions(model, log_file=None):
         klt, fn = get_kinetic_type(sbml_model=model, kl_math=kl_math, log_file=log_file)
 
         if fn is None:  # Kinetic described by explicit LMA
-            # TODO: Modify this part with the new functions
             forward_reaction, reverse_reaction = split_reversible_reaction_explicit(
                 model, reaction.getId(), model_comps, model_params_dict, log_file
             )
@@ -589,7 +588,6 @@ def split_all_reversible_reactions(model, log_file=None):
             model.addReaction(reverse_reaction)
 
         else:  # Kinetic described by function
-            # TODO: Check the correctness of the returns
             forward_function, reverse_function, forward_reaction, reverse_reaction = (
                 split_reversible_reaction_function(
                     model,
@@ -664,7 +662,7 @@ def create_sbml_reaction_LMA(
     products,
     modifiers,
     local_parameters,
-    reaction_comps,  # TODO: Change this parameter
+    reaction_comps,
     kl_expr=None,
     function_id=None,
     function_args=None,
@@ -793,6 +791,19 @@ def split_reversible_reaction_explicit(
     model_parameters_dict,
     log_file=None,
 ):
+    """
+    Split a reversible reaction with kinetic described by explicit Law of Mass Action
+    The split is purely based on the assumption that the Kinetic Law is in the form:
+        comps*(kforward*[reactants] - krev*[products])
+    args:
+        - sbml_model: SBML model instance
+        - reaction_id: ID of the reaction to modify
+        - model_compartments: Compartments of the model
+        - model_parameters_dict: Dictionary with the parameters of the model
+
+    return:
+        The forward and reverse reaction obtained from the original one. None if error occurs
+    """
     reaction = sbml_model.getReaction(reaction_id)
 
     kl = reaction.getKineticLaw()
@@ -906,7 +917,6 @@ def split_reversible_reaction_explicit(
 
     else:
         if match2:
-            # TODO: Need to check intersection with comps
             comps = match2.group(1).split("*")
             exp = match2.group(2)
 
@@ -1305,10 +1315,6 @@ def split_reversible_reaction_function(
                         p.getSpecies() for p in products
                     ]
 
-                    __import__("pprint").pprint(
-                        f"Function: {fn}, rev actual_params: {rev_actual_params}"
-                    )
-
                     rev_reaction = create_sbml_reaction_LMA(
                         sbml_model,
                         f"{reaction.getName()}_rev",
@@ -1332,10 +1338,11 @@ def split_reversible_reaction_function(
                         exit(1)
 
                     # Remove the old reaction
-
-                    sbml_model.removeReaction(reaction_id)
+                    if fwd_reaction is not None and rev_reaction is not None:
+                        sbml_model.removeReaction(reaction_id)
                     # Remove the old function
-                    sbml_model.removeFunctionDefinition(function_name)
+                    if fwd_function is not None and rev_function is not None:
+                        sbml_model.removeFunctionDefinition(function_name)
 
                     return fwd_function, rev_function, fwd_reaction, rev_reaction
             else:
@@ -1585,22 +1592,30 @@ def knockout_reaction(sbml_model, target_reaction_id, log_file=None):
 
 
 def knockin_reaction(sbml_model, target_reaction, new_vals, log_file=None):
-    # Retrieve the reactants
-    reactants = [r.getSpecies() for r in target_reaction.getListOfReactants()]
-    stoichiometries = [
-        r.getStoichiometry() for r in target_reaction.getListOfReactants()
-    ]
+    # Retrieve the reactants, products, modifiers and local parameters
+    rs = []
+    ps = []
+    ms = []
+    lps = []
+
+    for r in target_reaction.getListOfReactants():
+        r_id = r.getSpecies()
+        r_s = r.getStoichiometry()
+
+        r_tuple = (r_id, r_s)
+        rs.append(r_tuple)
 
     # Create the new species
     new_species_ids = []
 
-    for i, r in enumerate(reactants):
+    for i, t in enumerate(rs):
+        r, _ = t
         original_species = sbml_model.getSpecies(r)  # Original species
 
         # Create unique ID for new species
         new_species_id = r + "_KI"
         new_species = sbml_model.createSpecies()
-        new_species.setId(new_species_id)  # Use setId, not setID
+        new_species.setId(new_species_id)
 
         # Copy compartment (required for valid SBML)
         new_species.setCompartment(original_species.getCompartment())
@@ -1629,27 +1644,81 @@ def knockin_reaction(sbml_model, target_reaction, new_vals, log_file=None):
         new_species_ids.append(new_species_id)
 
     # Creating the new reaction
-    new_reaction = target_reaction.clone()
-    new_reaction.setId(target_reaction.getId() + "_KI")
 
-    # Remove all old reactants FIRST (before adding new ones)
-    while new_reaction.getNumReactants() > 0:
-        new_reaction.removeReactant(0)  # Always remove at index 0
+    # Get the kinetic type
+    kl = target_reaction.getKineticLaw()
 
-    # Add new reactants with new species
-    for i, new_species_id in enumerate(new_species_ids):
-        new_reactant = new_reaction.createReactant()
-        new_reactant.setSpecies(new_species_id)
-        new_reactant.setStoichiometry(stoichiometries[i])
-        new_reactant.setConstant(True)
+    if kl is None:
+        print_log(log_file, f"[ERROR] No Kinetikc Law for reaction {target_reaction}")
+        exit(1)
 
-    # TODO: Change the kinetic law formula
+    kl_math = kl.getMath()
+    kl_string = libsbml.formulaToL3String(kl_math).replace(" ", "")
+    kin_type, fn = get_kinetic_type(sbml_model, kl_math, log_file)
+
+    new_kl = ""
+    tokens = []
+
+    if fn is None:  # KL described by explicit Law
+        if kin_type == 1 or kin_type == 2:  # KL is described using MM or LMA
+            tokens = re.findall(r"\w+|[^\w\s]", kl_string)
+        else:
+            print_log(
+                log_file,
+                f"[ERROR] Error while detecting kinetic type of reaction {target_reaction}",
+            )
+            exit(1)
+    else:  # KL described by function
+        fun_pattern = r"\d+(?:\.\d+)?|\w+|[^\w\s]"
+
+        tokens = re.findall(fun_pattern, kl_string)
+
+    for i, t in enumerate(rs):
+        r_id, _ = t
+        if r_id in tokens:
+            # Get the index
+            r_idx = tokens.index(r_id)
+
+            # Remove the old reactant
+            del tokens[r_idx]
+
+            # Add the new reactant
+            tokens.insert(r_idx, new_species_ids[i])
+
+            # Build the new kinetic Law
+            new_kl = ("").join(tokens)
+
+    reaction_clone = target_reaction.clone()
+
+    # Changing the name
+    if reaction_clone.isSetId():
+        reaction_clone.setId(f"{target_reaction.getId()}_KI")
+
+    # Removing the original reactants
+    for i in range(target_reaction.getNumReactants()):
+        reaction_clone.removeReactant(0)
+
+    # Adding the new reactants
+    for i, t in enumerate(rs):
+        r_id, r_stoc = t
+        new_r = reaction_clone.createReactant()
+
+        new_r.setId(new_species_ids[i])
+        new_r.setStoichiometry(r_stoc)
+        new_r.setConstant(True)
+
+        reaction_clone.addReactant(new_r)
+
+    # Change the kinetic law
+    new_kl_math = libsbml.parseL3Formula(new_kl)
+
+    reaction_clone.getKineticLaw().setMath(new_kl_math)
 
     # Remove the old reaction
     sbml_model.removeReaction(target_reaction.getId())
 
     # Add the new reaction
-    sbml_model.addReaction(new_reaction)
+    sbml_model.addReaction(reaction_clone)
 
     return sbml_model
 

@@ -1213,56 +1213,19 @@ def main():
         elif args.command == "knockin_reaction":
             # Parse the args
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
-
-            sbml_ut.save_sbml_model(sbml_model, "models/test.xml", log_file=log_file)
-
-            exit(1)
 
             dir_name = os.path.dirname(args.input_path)
 
             target_reaction_id = args.target_reaction_id
 
-            for r in sbml_model.getListOfReactions():
-                kl_math = r.getKineticLaw().getMath()
+            model_reaction = sbml_model.getReaction(target_reaction_id)
 
-                kin_type, function_name = sbml_ut.get_kinetic_type(
-                    sbml_model, kl_math, log_file
+            if model_reaction is None:
+                ut.print_log(
+                    log_file,
+                    f"[WARNING] Reaction {target_reaction_id} not present in the model!\n No edit applied.",
                 )
-
-                math_formula = libsbml.formulaToL3String(kl_math)
-
-                if kin_type == 1:
-                    if function_name is None:
-                        ut.print_log(
-                            log_file,
-                            f"Reaction {r.getId()}'s kinetic described by explicit LMA ({kin_type, math_formula})",
-                        )
-                    else:
-                        ut.print_log(
-                            log_file,
-                            f"Reaction {r.getId()}'s kinetic described by LMA using function {function_name}({kin_type, math_formula})",
-                        )
-                elif kin_type == 2:
-                    if function_name is None:
-                        ut.print_log(
-                            log_file,
-                            f"Reaction {r.getId()}'s kinetic described by explicit MM ({kin_type})",
-                        )
-                    else:
-                        ut.print_log(
-                            log_file,
-                            f"Reaction {r.getId()}'s kinetic described by MM using function {function_name}({kin_type, math_formula})",
-                        )
-
-                else:
-                    ut.print_log(
-                        log_file,
-                        f"Reaction {r.getId()}'s kinetic undefined ({kin_type})",
-                    )
-
-            exit(1)
-            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
+                return sbml_model
 
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
@@ -1295,7 +1258,6 @@ def main():
             reactants_new_vals = [res_df[f"[{r}]"].max() for r in reactants_ids]
 
             # Modify the reaction
-
             modified_model = sbml_ut.knockin_reaction(
                 sbml_model, model_reaction, reactants_new_vals, log_file=log_file
             )
