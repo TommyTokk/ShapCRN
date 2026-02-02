@@ -230,31 +230,55 @@ def simulate(
 
 
 def simulate_with_steady_state(
-    rr_model,
-    start_time=0,
-    max_end_time=1000,
-    block_size=10,
-    points_per_block=100,
-    threshold=1e-12,
-    consecutive_checks=3,
-    monitor_species=None,
+    rr_model: rr.RoadRunner,
+    start_time: float=0,
+    max_end_time: float=1000,
+    block_size: int=10,
+    points_per_block: int=100,
+    threshold:float=1e-12,
+    consecutive_checks:int=3,
+    monitor_species:list=None,
     log_file=None,
-):
+) -> tuple:
     """
-    Simulates a model until steady state is reached using a block-by-block approach.
+        Simulates a model until steady state is reached using a block-by-block approach.
 
-    Args:
-        rr_model: RoadRunner model instance
-        start_time: Start time for simulation
-        max_end_time: Maximum end time if steady state is not reached
-        block_size: Size of each simulation block
-        points_per_block: Number of points to calculate in each block
-        threshold: Threshold for steady state detection
-        monitor_species: Species to monitor for steady state detection
-        log_file: Optional log file for debugging output
+        Parameters
+        ----------
+        rr_model : roadrunner.RoadRunner
+            RoadRunner model instance to simulate
+        start_time : float, optional
+            Start time for simulation, by default 0
+        max_end_time : float, optional
+            Maximum end time if steady state is not reached, by default 1000
+        block_size : float, optional
+            Size of each simulation block, by default 10
+        points_per_block : int, optional
+            Number of points to calculate in each block, by default 100
+        threshold : float, optional
+            Threshold for steady state detection, by default 1e-12
+        consecutive_checks : int, optional
+            Number of consecutive blocks that must meet threshold for steady state, by default 3
+        monitor_species : list of str, optional
+            Species to monitor for steady state detection. If None, all floating species are monitored, by default None
+        log_file : file, optional
+            Optional log file for debugging output, by default None
 
-    Returns:
-        Tuple of (simulation_results, steady_state_time, column_names)
+        Returns
+        -------
+        tuple of (numpy.ndarray, float or None, list)
+            A tuple containing:
+            - simulation_results : Structured array with time-course data
+            - steady_state_time : Time when steady state was reached, or None if not reached
+            - column_names : List of column names from the simulation results
+        
+        Notes
+        -----
+        The function uses adaptive block sizing:
+        - When approaching steady state, block size increases up to max_block_size (50) for efficiency
+        - When not in steady state, block size decreases down to min_block_size (1.0) for better resolution
+        - Steady state is detected when all monitored species show variations below threshold 
+        for consecutive_checks consecutive blocks
     """
     rr_model.setIntegrator("cvode")
     rr_model.reset()
@@ -369,28 +393,55 @@ def simulate_with_steady_state(
 
 
 def simulate_samples(
-    rr_model,
-    combination,
-    input_species_id,
-    max_end_time,
-    start_time=0,
-    end_time=1000,
-    output_rows=100,
-    steady_state=False,
-):
+    rr_model: rr.RoadRunner,
+    combination: list,
+    input_species_id: str,
+    max_end_time: float=1000,
+    start_time: float=0,
+    end_time: float=1000,
+    output_rows: int=100,
+    steady_state: bool=False,
+) -> tuple:
     """
-    Simulate the specified model, using the specified input combination
-
-    Args:
-        - rr_model: Roadrunner mmodel to simulate
-        - combination: Single combination of input species concentrations
-        - input_species_id: IDs of species considered as input
-        - start_time: Start time of the simulation
-        - end_time: End time of the simulation
-        - output_rows: Output rows of the simulation
-
-    Returns:
-        - Simulation results of the specified combination
+        Simulate a model with a specific input species concentration combination.
+        
+        This function applies a given combination of input species concentrations to a 
+        RoadRunner model and runs a simulation, supporting both standard time-course 
+        and steady-state simulations.
+        
+        Parameters
+        ----------
+        rr_model : roadrunner.RoadRunner
+            RoadRunner model to simulate
+        combination : list of float
+            Single combination of input species concentrations to apply
+        input_species_id : list of str
+            IDs of species considered as inputs (must match length of combination)
+        max_end_time : float, optional
+            Maximum end time for steady state detection, by default 1000
+        start_time : float, optional
+            Start time of the simulation, by default 0
+        end_time : float, optional
+            End time of the simulation (for non-steady-state mode), by default 1000
+        output_rows : int, optional
+            Number of output rows in the simulation results, by default 100
+        steady_state : bool, optional
+            If True, simulate until steady state is reached, by default False
+        
+        Returns
+        -------
+        tuple of (numpy.ndarray, float or None, list)
+            A tuple containing:
+            - simulation_results : Structured array with time-course data
+            - steady_state_time : Time when steady state was reached, or None
+            - colnames : List of column names from the simulation results
+        
+        Notes
+        -----
+        - The function preserves the original timeCourseSelections of the model
+        - For Gillespie integrator, nonnegative is automatically set to True
+        - Initial concentrations are set via `setInitConcentration()` before simulation
+        - The model is reset before applying new concentrations
     """
     # rr_model.reset()
     #
@@ -424,9 +475,70 @@ def simulate_samples(
 
 
 # KEEP
-def process_species_samples(args):
+def process_species_samples(args: tuple) -> tuple:
     """
-    Simulates, using perturbations, the specific modified model with the knockout of the knockedout_species
+    Simulate knockout model with perturbations across multiple input combinations.
+    
+    This worker function processes a single knockout species by simulating the modified
+    (knockout) model both with and without perturbations. It's designed to be called 
+    within a multiprocessing context.
+    
+    Parameters
+    ----------
+    args : tuple
+        A tuple containing the following elements (in order):
+        - knockedout_species : str
+            ID of the species that has been knocked out
+        - modified_model : libsbml.Model or str
+            SBML model with the knockout applied
+        - samples : array-like
+            Sample values for input species perturbations
+        - input_species_ids : list of str
+            IDs of input species to perturb
+        - selections : list of str
+            Time course selections for the simulation
+        - integrator : str
+            Name of the integrator to use (e.g., 'cvode', 'gillespie')
+        - start_time : float
+            Start time for simulations
+        - end_time : float
+            End time for simulations
+        - steady_state : bool
+            Whether to simulate until steady state
+        - max_end_time : float
+            Maximum simulation time for steady state detection
+        - min_ss_time : float
+            Minimum steady state time observed so far
+        - log_file : file
+            File object for logging
+    
+    Returns
+    -------
+    tuple of (str, list of pandas.DataFrame)
+        A tuple containing:
+        - knockedout_species : str
+            ID of the knocked out species
+        - ko_data : list of pandas.DataFrame
+            List of DataFrames where:
+            - First element: baseline knockout simulation (no perturbations)
+            - Subsequent elements: knockout simulations with each perturbation combination
+    
+    Raises
+    ------
+    Exception
+        If any error occurs during model loading, simulation, or data processing
+    
+    Notes
+    -----
+    - This function is intended to be used with multiprocessing.Pool.map()
+    - The modified model is loaded fresh for each call to ensure thread safety
+    - All DataFrames exclude the time column (columns start from index 1)
+    - The function updates min_ss_time based on steady state detection
+    
+    See Also
+    --------
+    process_species_no_samples : Similar function without perturbations
+    process_species_multiprocessing : Orchestrates parallel execution
     """
     try:
         (
@@ -494,7 +606,69 @@ def process_species_samples(args):
 
 
 # KEEP
-def process_species_no_samples(args):
+def process_species_no_samples(args: tuple) -> tuple:
+    """
+    Simulate knockout model without perturbations.
+    
+    This worker function processes a single knockout species by simulating the modified
+    (knockout) model without input perturbations. It's designed to be called within a 
+    multiprocessing context.
+    
+    Parameters
+    ----------
+    args : tuple
+        A tuple containing the following elements (in order):
+        - knockedout_species : str
+            ID of the species that has been knocked out
+        - modified_model : libsbml.Model or str
+            SBML model with the knockout applied
+        - combinations : array-like
+            Not used in this function (for compatibility with parallel processing)
+        - input_species_ids : list of str
+            Not used in this function (for compatibility)
+        - selections : list of str
+            Time course selections for the simulation
+        - integrator : str
+            Name of the integrator to use (e.g., 'cvode', 'gillespie')
+        - start_time : float
+            Start time for simulation
+        - end_time : float
+            End time for simulation
+        - steady_state : bool
+            Whether to simulate until steady state
+        - max_end_time : float
+            Maximum simulation time for steady state detection
+        - min_ss_time : float
+            Minimum steady state time observed so far (updated but not returned)
+        - log_file : file
+            File object for logging
+    
+    Returns
+    -------
+    tuple of (str, pandas.DataFrame)
+        A tuple containing:
+        - knockedout_species : str
+            ID of the knocked out species
+        - knockout_data : pandas.DataFrame
+            Simulation results excluding the time column
+    
+    Raises
+    ------
+    Exception
+        If any error occurs during model loading, simulation, or data processing
+    
+    Notes
+    -----
+    - This function is intended to be used with multiprocessing.Pool.map()
+    - The modified model is loaded fresh for each call to ensure thread safety
+    - The DataFrame excludes the time column (columns start from index 1)
+    - Unlike process_species_samples, this only runs a single baseline simulation
+    
+    See Also
+    --------
+    process_species_samples : Similar function with perturbations
+    process_species_multiprocessing : Orchestrates parallel execution
+    """
     try:
         (
             knockedout_species,
@@ -545,28 +719,119 @@ def process_species_no_samples(args):
 
 # KEEP
 def process_species_multiprocessing(
-    target_ids,
-    modified_models_dict,
-    samples,
-    input_species_ids,
-    selections,
-    integrator,
-    start_time,
-    end_time,
-    steady_state,
-    max_end_time,
-    min_ss_time,
+    target_ids: list,
+    modified_models_dict: dict,
+    samples: list,
+    input_species_ids: list,
+    selections: list,
+    integrator: str,
+    start_time: float = 0,
+    end_time: float = 1000,
+    steady_state: bool = False,
+    max_end_time: float = 1000,
+    min_ss_time: float = 1000,
     log_file=None,
-    max_workers=None,
-    use_perturbations=False,
-    preserve_input=False,
-):
+    max_workers: int=None,
+    use_perturbations: bool=False,
+    preserve_input: bool=False,
+) -> list:
+    
     """
-    Use multiprocessing to simulates all the knockouts
+    Orchestrate parallel simulation of multiple knockout models using multiprocessing.
+    
+    This function distributes the simulation of knockout models across multiple CPU cores,
+    automatically determining the optimal number of workers and preparing arguments for
+    parallel execution. It supports both perturbation-based and standard knockout analyses.
+    
+    Parameters
+    ----------
+    target_ids : list of str
+        List of species IDs to be knocked out and analyzed
+    modified_models_dict : dict
+        Dictionary mapping species IDs to their corresponding knockout models
+        Keys are species IDs, values are libsbml.Model or SBML strings
+    samples : list or array-like
+        Sample values for input species perturbations (used only if use_perturbations=True)
+    input_species_ids : list of str
+        IDs of input species to perturb
+    selections : list of str
+        Time course selections for simulations
+    integrator : str
+        Name of the integrator to use (e.g., 'cvode', 'gillespie')
+    start_time : float, optional
+        Start time for simulations, by default 0
+    end_time : float, optional
+        End time for simulations, by default 1000
+    steady_state : bool, optional
+        Whether to simulate until steady state is reached, by default False
+    max_end_time : float, optional
+        Maximum simulation time for steady state detection, by default 1000
+    min_ss_time : float, optional
+        Minimum steady state time threshold, by default 1000
+    log_file : file, optional
+        File object for logging, by default None
+    max_workers : int, optional
+        Maximum number of worker processes. If None, uses 40% of available CPU cores
+        (capped at 8), by default None
+    use_perturbations : bool, optional
+        If True, use process_species_samples (with perturbations); 
+        if False, use process_species_no_samples, by default False
+    preserve_input : bool, optional
+        Currently unused parameter (reserved for future functionality), by default False
+    
+    Returns
+    -------
+    list of tuple
+        List of tuples where each tuple contains:
+        - If use_perturbations=True: (species_id, list of pandas.DataFrame)
+        - If use_perturbations=False: (species_id, pandas.DataFrame)
+    
+    Raises
+    ------
+    SystemExit
+        If a critical error occurs during multiprocessing pool execution
+    
+    Notes
+    -----
+    - Worker allocation: Uses 40% of available CPU cores by default, capped at 8 workers
+    - Missing models: Species in target_ids without corresponding entries in 
+      modified_models_dict are skipped with a warning
+    - Thread safety: Each worker loads models independently to avoid shared state issues
+    - The function uses multiprocessing.Pool.map() for parallel execution
+    
+    Examples
+    --------
+    Without perturbations:
+    >>> results = process_species_multiprocessing(
+    ...     target_ids=['S1', 'S2', 'S3'],
+    ...     modified_models_dict=ko_models,
+    ...     samples=[],
+    ...     input_species_ids=[],
+    ...     selections=['time', '[S1]', '[S2]'],
+    ...     integrator='cvode',
+    ...     use_perturbations=False
+    ... )
+    
+    With perturbations:
+    >>> results = process_species_multiprocessing(
+    ...     target_ids=['S1', 'S2'],
+    ...     modified_models_dict=ko_models,
+    ...     samples=perturbation_samples,
+    ...     input_species_ids=['Input1', 'Input2'],
+    ...     selections=['time', '[S1]', '[S2]'],
+    ...     integrator='cvode',
+    ...     use_perturbations=True,
+    ...     max_workers=4
+    ... )
+    
+    See Also
+    --------
+    process_species_samples : Worker function for simulations with perturbations
+    process_species_no_samples : Worker function for simulations without perturbations
     """
     # Determine number of workers
     # Use 75% of the available cores
-    n_core = int((mp.cpu_count() * 40) / 100)
+    n_core = int((mp.cpu_count() * 75) / 100)
     print_log(log_file, f" N core: {n_core}")
     if max_workers is None:
         max_workers = min(len(target_ids), n_core, 8)  # Don't use all CPUs
@@ -602,13 +867,12 @@ def process_species_multiprocessing(
             print_log(log_file, f"Warning: No knockout model found for species {ts}")
         i += 1
 
-    # print_log(log_file, f"[DEBUG]{len(process_args)}")
 
     # Create and run the pool
     try:
         # Implement the logic using Pool and imap
         print_log(log_file, f" Starting pool")
-        with Pool() as pool:
+        with Pool(max_workers) as pool:
             if use_perturbations:
                 # If perturbations required
                 operation = process_species_samples
@@ -626,19 +890,67 @@ def process_species_multiprocessing(
     return result
 
 
-def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
+def get_knockout_variation(original_model, ko_models: list, colnames: list, log_file=None) -> dict:
     """
-    Calculate the variation and relative variation of species in respect to an internal species knockout
-    This is the version used in case perturbations are not required.
-    args:
-        - original_model: Results of the simulation without the kncokout
-        - ko_models: Array of tuples containing the knocked-out species and the simulation results after the species' knockout
-        - colnames: Array containing the name of the columns from the simulation output
-        - log_file: File used to print log informations
-
-    returns:
-        A dictionary having as key the knocked-out species, and as value, for each species in the model, a dictionary containing the variation and
-        relative variation
+    Calculate variation and relative variation of species with respect to internal species knockout.
+    
+    This version is used when perturbations are not required. It compares the final steady-state
+    concentrations between the original model and knockout models to quantify the impact of
+    removing each species from the system.
+    
+    Parameters
+    ----------
+    original_model : numpy.ndarray
+        Structured array containing simulation results without knockout.
+        Expected shape: (n_timepoints, n_species+1) where first column is time.
+    ko_models : list of tuple
+        List of tuples where each tuple contains:
+        - knockedout_species : str
+            ID of the species that was knocked out
+        - simulation_results : numpy.ndarray
+            Simulation results after the species knockout
+    colnames : list of str
+        Column names from the simulation output, typically in format ['time', '[species1]', '[species2]', ...]
+    log_file : file, optional
+        File object for logging operations, by default None
+    
+    Returns
+    -------
+    dict
+        Nested dictionary with structure:
+        {
+            'knocked_out_species_id': {
+                'affected_species_id': {
+                    'variation': float,
+                    'relative-variation': float
+                }
+            }
+        }
+        - variation: Absolute difference (ko_value - original_value)
+        - relative-variation: Relative difference ((ko_value - original_value) / original_value)
+        
+        Self-comparisons (knockout species vs itself) have NaN values.
+    
+    Notes
+    -----
+    - Uses epsilon = 1e-20 as threshold for numerical stability
+    - Values below epsilon are treated as zero to avoid division errors
+    - When original value < epsilon, relative variation is set to inf
+    - Only the final time point concentrations are compared
+    - Column names are cleaned by removing brackets using regex pattern r"[\[\]]"
+    
+    Examples
+    --------
+    >>> original_sim = simulate(model)
+    >>> ko_sims = [(species_id, simulate(ko_model)) for species_id, ko_model in knockouts]
+    >>> variations = get_knockout_variation(original_sim, ko_sims, original_sim.colnames)
+    >>> print(variations['S1']['S2']['relative-variation'])
+    0.25  # S2 increased by 25% when S1 was knocked out
+    
+    See Also
+    --------
+    get_absolute_variations_no_samples : Calculate absolute variations without perturbations
+    get_relative_variations_no_samples : Calculate relative variations without perturbations
     """
     variations_dict = {}
     species_idxs = {}
@@ -709,21 +1021,72 @@ def get_knockout_variation(original_model, ko_models, colnames, log_file=None):
 
 # KEEP
 def get_absolute_variations_samples(
-    final_results_original_model,
-    final_results_knocked_model,
-    epsilon=1e-20,
+    final_results_original_model: pd.DataFrame,
+    final_results_knocked_model: pd.DataFrame,
+    epsilon: float=1e-20,
     log_file=None,
-):
+) -> pd.DataFrame:
     """
-    Calculate variations and relative variation between original and knocked model results.
-
-    Args:
-        final_results_original_model: DataFrame with original model results
-        final_results_knocked_model: List of tuples (species, ko_dfs)
-        log_file: Optional logging file (unused in current implementation)
-
-    Returns:
-        Dict: Nested dictionary with variations per species and combination
+    Calculate absolute variations between original and knockout model results with perturbations.
+    
+    This function computes the root mean square (RMS) of absolute concentration differences
+    across multiple perturbation combinations. It compares the final steady-state values
+    between original and knockout models for each species across all input perturbations.
+    
+    Parameters
+    ----------
+    final_results_original_model : list of pandas.DataFrame
+        List of DataFrames containing original model simulation results for each perturbation.
+        Each DataFrame should have species concentrations as columns.
+        Length must match the number of perturbation combinations.
+    final_results_knocked_model : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked out species
+        - ko_data : list of pandas.DataFrame
+            List of DataFrames with knockout simulation results for each perturbation
+    epsilon : float, optional
+        Threshold below which values are considered zero to avoid numerical issues,
+        by default 1e-20
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None
+    
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with shape (n_knockout_species, n_species) where:
+        - Rows: Knockout species IDs
+        - Columns: All species IDs (with brackets removed)
+        - Values: RMS of absolute variations across all perturbations
+        
+        NaN values appear where:
+        - Knockout species is compared to itself (diagonal)
+        - Infinite values are encountered
+    
+    Notes
+    -----
+    The function calculates variations as:
+    1. For each perturbation: var = knockout_value - original_value
+    2. Aggregate using RMS: RMS = sqrt(mean(var²))
+    
+    Values ≤ epsilon are masked to zero before calculating differences.
+    Self-comparisons (knockout species vs itself) are set to NaN to avoid meaningless data.
+    
+    The RMS aggregation emphasizes larger variations and provides a single metric
+    that summarizes the impact across all perturbations.
+    
+    Examples
+    --------
+    >>> original_results = [df1, df2, df3]  # 3 perturbations
+    >>> ko_results = [('S1', [ko_df1, ko_df2, ko_df3]), ('S2', [...])]
+    >>> variations = get_absolute_variations_samples(original_results, ko_results)
+    >>> print(variations.loc['S1', 'S2'])  # RMS variation of S2 when S1 is knocked out
+    0.145
+    
+    See Also
+    --------
+    get_relative_variations_samples : Calculate relative variations with perturbations
+    get_absolute_variations_no_samples : Calculate absolute variations without perturbations
     """
     rms = []
     for ko_species, ko_data in final_results_knocked_model:
@@ -765,8 +1128,75 @@ def get_absolute_variations_samples(
 
 # KEEP
 def get_absolute_variations_no_samples(
-    original_data, ko_data, epsilon=1e-20, log_file=None
-):
+    original_data: pd.DataFrame, ko_data: pd.DataFrame, epsilon:float=1e-20, log_file=None
+) -> pd.DataFrame:
+    
+    """
+    Calculate absolute variations between original and knockout model results without perturbations.
+    
+    This function computes the absolute concentration differences at steady state
+    between the original model and each knockout model. Unlike the samples version,
+    this operates on single simulation runs without input perturbations.
+    
+    Parameters
+    ----------
+    original_data : pandas.DataFrame
+        DataFrame containing the original model simulation results.
+        Expected to have species concentrations as columns.
+        Typically excludes the time column.
+    ko_data : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked out species
+        - ko_info : pandas.DataFrame
+            DataFrame with knockout simulation results for that species
+    epsilon : float, optional
+        Threshold below which values are considered zero to avoid numerical issues,
+        by default 1e-20
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None
+    
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with shape (n_knockout_species, n_species) where:
+        - Rows: Knockout species IDs
+        - Columns: All species IDs (with brackets removed)
+        - Values: Absolute variation (knockout_value - original_value) at final time point
+        
+        NaN values appear where:
+        - Knockout species is compared to itself (diagonal)
+        - Infinite values are encountered
+    
+    Notes
+    -----
+    The function calculates variations as:
+    - var = knockout_final_value - original_final_value
+    
+    Processing steps:
+    1. Extract final time point values using .tail(1)
+    2. Mask values ≤ epsilon to zero
+    3. Calculate absolute difference
+    4. Set diagonal (self-comparisons) to NaN
+    
+    This is the non-perturbation counterpart to get_absolute_variations_samples.
+    
+    Examples
+    --------
+    >>> original_df = pd.DataFrame({'S1': [1.0], 'S2': [2.0], 'S3': [0.5]})
+    >>> ko_data = [
+    ...     ('S1', pd.DataFrame({'S1': [0.0], 'S2': [2.3], 'S3': [0.6]})),
+    ...     ('S2', pd.DataFrame({'S1': [1.1], 'S2': [0.0], 'S3': [0.4]}))
+    ... ]
+    >>> variations = get_absolute_variations_no_samples(original_df, ko_data)
+    >>> print(variations.loc['S1', 'S2'])  # Change in S2 when S1 is knocked out
+    0.3
+    
+    See Also
+    --------
+    get_absolute_variations_samples : Calculate absolute variations with perturbations
+    get_relative_variations_no_samples : Calculate relative variations without perturbations
+    """
     variations = []
 
     for ko_species, ko_info in ko_data:
@@ -799,21 +1229,77 @@ def get_absolute_variations_no_samples(
 
 # KEEP
 def get_relative_variations_samples(
-    final_results_original_model,
-    final_results_knocked_model,
-    epsilon=1e-20,
+    final_results_original_model: pd.DataFrame,
+    final_results_knocked_model: pd.DataFrame,
+    epsilon:float=1e-20,
     log_file=None,
-):
+) -> pd.DataFrame:
     """
-    Calculate variations and relative variation between original and knocked model results.
-
-    Args:
-        final_results_original_model: DataFrame with original model results
-        final_results_knocked_model: List of tuples (species, ko_dfs)
-        log_file: Optional logging file (unused in current implementation)
-
-    Returns:
-        Dict: Nested dictionary with variations per species and combination
+    Calculate relative variations between original and knockout model results with perturbations.
+    
+    This function computes the root mean square (RMS) of relative concentration changes
+    across multiple perturbation combinations. It compares the final steady-state values
+    between original and knockout models for each species across all input perturbations,
+    normalized by the original values.
+    
+    Parameters
+    ----------
+    final_results_original_model : list of pandas.DataFrame
+        List of DataFrames containing original model simulation results for each perturbation.
+        Each DataFrame should have species concentrations as columns.
+        Length must match the number of perturbation combinations.
+    final_results_knocked_model : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked out species
+        - ko_data : list of pandas.DataFrame
+            List of DataFrames with knockout simulation results for each perturbation
+    epsilon : float, optional
+        Threshold below which values are considered zero to avoid numerical issues,
+        by default 1e-20
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None
+    
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with shape (n_knockout_species, n_species) where:
+        - Rows: Knockout species IDs
+        - Columns: All species IDs (with brackets removed)
+        - Values: RMS of relative variations across all perturbations
+        
+        NaN values appear where:
+        - Knockout species is compared to itself (diagonal)
+        - Infinite values are encountered (e.g., division by zero)
+    
+    Notes
+    -----
+    The function calculates relative variations as:
+    1. For each perturbation: rel_var = (knockout_value - original_value) / original_value
+    2. Aggregate using RMS: RMS = sqrt(mean(rel_var²))
+    
+    Processing steps:
+    - Values ≤ epsilon are masked to zero before calculations
+    - Relative changes are computed for each perturbation
+    - RMS aggregation provides a single metric across all perturbations
+    - Self-comparisons (knockout species vs itself) are set to NaN
+    - Infinite values (from division by zero) are masked to NaN
+    
+    The RMS aggregation emphasizes larger relative variations and provides a robust
+    measure that is less sensitive to outliers than simple averaging.
+    
+    Examples
+    --------
+    >>> original_results = [df1, df2, df3]  # 3 perturbations
+    >>> ko_results = [('S1', [ko_df1, ko_df2, ko_df3]), ('S2', [...])]
+    >>> rel_variations = get_relative_variations_samples(original_results, ko_results)
+    >>> print(rel_variations.loc['S1', 'S2'])  # RMS relative change in S2 when S1 is knocked out
+    0.125  # S2 changed by ~12.5% on average (RMS) across perturbations
+    
+    See Also
+    --------
+    get_absolute_variations_samples : Calculate absolute variations with perturbations
+    get_relative_variations_no_samples : Calculate relative variations without perturbations
     """
     rms = []
     for ko_species, ko_data in final_results_knocked_model:
@@ -855,8 +1341,81 @@ def get_relative_variations_samples(
 
 # KEEP
 def get_relative_variations_no_samples(
-    original_data, ko_data, epsilon=1e-20, log_file=None
-):
+    original_data:pd.DataFrame, ko_data:pd.DataFrame, epsilon:float=1e-20, log_file=None
+) -> pd.DataFrame:
+    
+    """
+    Calculate relative variations between original and knockout model results without perturbations.
+    
+    This function computes the relative concentration changes at steady state between the
+    original model and each knockout model. Unlike the samples version, this operates on
+    single simulation runs without input perturbations, normalizing changes by the original
+    concentrations.
+    
+    Parameters
+    ----------
+    original_data : pandas.DataFrame
+        DataFrame containing the original model simulation results.
+        Expected to have species concentrations as columns.
+        Typically excludes the time column.
+    ko_data : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked out species
+        - ko_info : pandas.DataFrame
+            DataFrame with knockout simulation results for that species
+    epsilon : float, optional
+        Threshold below which values are considered zero to avoid numerical issues,
+        by default 1e-20
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None
+    
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with shape (n_knockout_species, n_species) where:
+        - Rows: Knockout species IDs
+        - Columns: All species IDs (with brackets removed)
+        - Values: Relative variation ((knockout_value - original_value) / original_value) at final time point
+        
+        NaN values appear where:
+        - Knockout species is compared to itself (diagonal)
+        - Infinite values are encountered (e.g., division by zero)
+    
+    Notes
+    -----
+    The function calculates relative variations as:
+    - rel_var = (knockout_final_value - original_final_value) / original_final_value
+    
+    Processing steps:
+    1. Extract final time point values using .tail(1)
+    2. Mask values ≤ epsilon to zero
+    3. Calculate relative difference (normalized by original value)
+    4. Set diagonal (self-comparisons) to NaN
+    5. Mask infinite values (from division by zero) to NaN
+    
+    Relative variations provide scale-independent measures of knockout impact,
+    making them suitable for comparing effects across species with different
+    concentration magnitudes.
+    
+    This is the non-perturbation counterpart to get_relative_variations_samples.
+    
+    Examples
+    --------
+    >>> original_df = pd.DataFrame({'S1': [1.0], 'S2': [2.0], 'S3': [0.5]})
+    >>> ko_data = [
+    ...     ('S1', pd.DataFrame({'S1': [0.0], 'S2': [2.4], 'S3': [0.6]})),
+    ...     ('S2', pd.DataFrame({'S1': [1.1], 'S2': [0.0], 'S3': [0.4]}))
+    ... ]
+    >>> rel_variations = get_relative_variations_no_samples(original_df, ko_data)
+    >>> print(rel_variations.loc['S1', 'S2'])  # Relative change in S2 when S1 is knocked out
+    0.2  # S2 increased by 20%
+    
+    See Also
+    --------
+    get_relative_variations_samples : Calculate relative variations with perturbations
+    get_absolute_variations_no_samples : Calculate absolute variations without perturbations
+    """
     variations = []
 
     for ko_species, ko_info in ko_data:
@@ -890,12 +1449,85 @@ def get_relative_variations_no_samples(
 
 # KEEP
 def get_payoff_vals(
-    final_results_original_model,
-    final_results_knocked_model,
-    payoff_function,
-    epsilon=1e-20,
+    final_results_original_model: pd.DataFrame,
+    final_results_knocked_model: pd.DataFrame,
+    payoff_function: callable,
+    epsilon:float=1e-20,
     log_file=None,
-):
+) -> list:
+    
+    """
+    Calculate payoff differences between original and knockout model results using a custom payoff function.
+    
+    This function applies a user-defined payoff function to both original and knockout simulation
+    results across multiple perturbation combinations, then computes the difference. This is
+    typically used for Shapley value calculations or game-theoretic analyses of knockout impacts.
+    
+    Parameters
+    ----------
+    final_results_original_model : list of pandas.DataFrame
+        List of DataFrames containing original model simulation results for each perturbation.
+        Each DataFrame should have species concentrations as columns and time points as rows.
+        Length must match the number of perturbation combinations.
+    final_results_knocked_model : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked out species
+        - ko_data : list of pandas.DataFrame
+            List of DataFrames with knockout simulation results for each perturbation
+    payoff_function : callable
+        Function that computes a payoff value from a simulation DataFrame.
+        Should accept a pandas.DataFrame and return a numeric value or Series.
+        Example: lambda df: df.iloc[-1].sum() for final total concentration
+    epsilon : float, optional
+        Threshold for numerical stability (currently unused in this function),
+        by default 1e-20
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None
+    
+    Returns
+    -------
+    list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked out species
+        - payoffs_df : pandas.DataFrame
+            DataFrame of payoff differences (original - knockout) for all perturbations
+            Shape: (n_perturbations, n_output_values) depending on payoff_function
+    
+    Notes
+    -----
+    The payoff difference is calculated as:
+    - payoff_diff = payoff_function(original_simulation) - payoff_function(knockout_simulation)
+    
+    Positive values indicate that the original model had higher payoff (knockout decreased performance).
+    Negative values indicate that the knockout model had higher payoff (knockout improved performance).
+    
+    This function is commonly used as input to Shapley value calculations, where the payoff
+    represents a measure of system performance or output.
+    
+    Examples
+    --------
+    Using sum of final concentrations as payoff:
+    >>> def total_concentration(df):
+    ...     return df.iloc[-1].sum()
+    >>> 
+    >>> original_results = [df1, df2, df3]
+    >>> ko_results = [('S1', [ko_df1, ko_df2, ko_df3]), ('S2', [...])]
+    >>> payoffs = get_payoff_vals(original_results, ko_results, total_concentration)
+    >>> for ko_species, payoff_df in payoffs:
+    ...     print(f"{ko_species}: mean payoff difference = {payoff_df.mean()}")
+    
+    Using specific species as payoff:
+    >>> def species_S3_payoff(df):
+    ...     return df['S3'].iloc[-1]
+    >>> 
+    >>> payoffs = get_payoff_vals(original_results, ko_results, species_S3_payoff)
+    
+    See Also
+    --------
+    get_shapley_values : Compute Shapley values from payoff differences
+    """
     res = []
 
     ko_species_list = []
@@ -927,7 +1559,81 @@ def get_payoff_vals(
 
 
 # KEEP
-def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
+def get_shapley_values(payoff_values:list, n_combinations: int, n_inputs:int, log_file=None) -> pd.DataFrame:
+    """
+    Calculate Shapley values from payoff differences across knockout species.
+
+    This function computes Shapley values for each species and output metric by aggregating
+    payoff differences across all input perturbation combinations. Shapley values quantify
+    the marginal contribution of each knocked-out species to the overall system behavior.
+
+    Parameters
+    ----------
+    payoff_values : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked out species
+        - payoffs_df : pandas.DataFrame
+            DataFrame of payoff differences for all perturbations
+            Shape: (n_combinations, n_output_metrics)
+    n_combinations : int
+        Total number of input perturbation combinations used in the analysis
+    n_inputs : int
+        Number of input species that were perturbed
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with shape (n_knockout_species, n_output_metrics) where:
+        - Rows: Knockout species IDs
+        - Columns: Output metric names (depends on payoff_function used)
+        - Values: Shapley values representing the contribution of each knockout
+
+    Notes
+    -----
+    The Shapley value formula used is:
+        
+    $$\phi_i = \sum_{S \subseteq N \setminus \{i\}} \frac{|S|! (n - |S| - 1)!}{n!} [v(S \cup \{i\}) - v(S)]$$
+
+    Simplified for this implementation:
+        
+    $$\text{Shapley}_{\text{ko}} = \frac{n_{\text{inputs}}! \cdot (n_{\text{combinations}} - n_{\text{inputs}})!}{n_{\text{combinations}}!} \sum_{\text{all combinations}} \text{payoff}_{\text{ko}}$$
+
+    Where:
+    - The left factor normalizes the contribution across all possible coalitions
+    - The sum aggregates payoff differences across all perturbation combinations
+    - Higher positive Shapley values indicate species whose knockout has larger impact
+
+    The Shapley value provides a fair allocation of the total payoff change to each
+    knocked-out species, accounting for synergistic and antagonistic interactions.
+
+    Examples
+    --------
+    Calculate Shapley values after computing payoffs:
+    >>> payoffs = get_payoff_vals(original_results, ko_results, payoff_func)
+    >>> shapley_df = get_shapley_values(
+    ...     payoff_values=payoffs,
+    ...     n_combinations=100,
+    ...     n_inputs=3
+    ... )
+    >>> print(shapley_df.loc['S1'])  # Shapley values for knocking out S1
+    S2    0.034
+    S3    0.021
+    S4   -0.012
+    Name: S1, dtype: float64
+
+    Interpreting results:
+    >>> # Positive Shapley: knockout decreased system performance
+    >>> # Negative Shapley: knockout improved system performance
+    >>> top_impact = shapley_df.abs().max(axis=1).sort_values(ascending=False)
+    >>> print(f"Most impactful knockout: {top_impact.index[0]}")
+
+    See Also
+    --------
+    get_payoff_vals : Calculate payoff differences for Shapley analysis
+    """
     shap_vals = []
     left_factor = (
         factorial(n_inputs) * factorial(n_combinations - n_inputs)
@@ -951,28 +1657,115 @@ def get_shapley_values(payoff_values, n_combinations, n_inputs, log_file=None):
 
 # KEEP
 def generate_values_distance_report(
-    distance_matrix,
-    correlation_coefficient,
-    p_value,
-    alternative,
-    ko_species_list,
-    model_name,
-    saving_path,
-    threshold=0.2,
-    alpha=0.05,
-    report_title="VALUES DISTANCE REPORT",
+    distance_matrix: pd.DataFrame,
+    correlation_coefficient: float,
+    p_value: float,
+    alternative: str,
+    ko_species_list: list,
+    model_name: str,
+    saving_path: str,
+    threshold:float=0.2,
+    alpha:float=0.05,
+    report_title:str="VALUES DISTANCE REPORT",
     log_file=None,
-):
+ ) -> None:
     """
-    Generate a comprehensive distance report.
+    Generate a comprehensive distance analysis report with Pearson correlation and knockout rankings.
 
-    Args:
-        distance_matrix: 2D numpy array with distance values
-        ko_species_list: List of knockout species names
-        model_name: Name of the model (for the report filename)
-        saving_path: Directory where to save the report
-        threshold: Threshold for significant differences
-        log_file: Optional log file
+    This function creates a detailed text report analyzing distance matrices between knockout
+    species behaviors, including statistical correlation analysis and species importance rankings.
+    It combines Pearson correlation results with knockout impact assessments to provide insights
+    into parameter uncertainty and species sensitivity.
+
+    Parameters
+    ----------
+    distance_matrix : numpy.ndarray or pandas.DataFrame
+        2D array containing distance values between knockout species.
+        Shape: (n_knockout_species, n_knockout_species) or similar metric matrix.
+    correlation_coefficient : float
+        Pearson correlation coefficient (r) between compared datasets.
+        Range: [-1, 1] where values closer to ±1 indicate stronger correlation.
+    p_value : float
+        P-value from the Pearson correlation test.
+        Indicates statistical significance of the correlation.
+    alternative : str
+        Type of hypothesis test performed. Must be one of:
+        - 'two-sided' : Test for any linear relationship (r ≠ 0)
+        - 'greater' : Test for positive relationship (r > 0)
+        - 'less' : Test for negative relationship (r < 0)
+    ko_species_list : list of str
+        List of knockout species IDs corresponding to distance matrix rows/columns.
+    model_name : str
+        Name of the model being analyzed (used in report header and filename).
+    saving_path : str
+        Directory path where the report file will be saved.
+        Will be created if it doesn't exist.
+    threshold : float, optional
+        Threshold value for identifying significant differences in the distance matrix,
+        by default 0.2
+    alpha : float, optional
+        Significance level for statistical tests, by default 0.05
+    report_title : str, optional
+        Title to display at the top of the report, by default "VALUES DISTANCE REPORT"
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    str
+        Absolute path to the generated report file.
+
+    Raises
+    ------
+    Exception
+        If the alternative parameter is not one of 'two-sided', 'greater', or 'less'.
+        If there are errors writing the report file.
+
+    Notes
+    -----
+    The report includes the following sections:
+    1. Pearson Correlation Analysis
+    - Correlation coefficient and p-value
+    - Strength interpretation (very weak to very strong)
+    - Direction (positive/negative)
+    - Statistical significance assessment
+    
+    2. Distance Matrix Statistics
+    - Maximum, minimum, mean, and standard deviation of distances
+    
+    3. Knockout Species Ranking
+    - Top 10 species most sensitive to parameter uncertainty
+    - Based on knockout impact scores
+
+    Correlation strength categories:
+    - Very strong: |r| ≥ 0.9
+    - Strong: 0.7 ≤ |r| < 0.9
+    - Moderate: 0.5 ≤ |r| < 0.7
+    - Weak: 0.3 ≤ |r| < 0.5
+    - Very weak: |r| < 0.3
+
+    Examples
+    --------
+    Generate report after distance matrix analysis:
+    >>> from scipy.stats import pearsonr
+    >>> r, p = pearsonr(distances1.flatten(), distances2.flatten())
+    >>> report_path = generate_values_distance_report(
+    ...     distance_matrix=dist_matrix,
+    ...     correlation_coefficient=r,
+    ...     p_value=p,
+    ...     alternative='two-sided',
+    ...     ko_species_list=['S1', 'S2', 'S3'],
+    ...     model_name='BIOMD0000000623',
+    ...     saving_path='reports/model_623/',
+    ...     threshold=0.2,
+    ...     alpha=0.05
+    ... )
+    >>> print(f"Report saved to: {report_path}")
+
+    See Also
+    --------
+    generate_pattern_distance_report : Generate pattern distance report (simpler version)
+    get_ko_species_importance : Calculate knockout species importance scores
     """
     # Check if the destinations folder exists otherwise create it
     if not os.path.exists(saving_path):
@@ -1125,28 +1918,110 @@ def generate_values_distance_report(
 
 
 def generate_pattern_distance_report(
-    distance_matrix,
-    correlation_coefficient,
-    p_value,
-    alternative,
-    ko_species_list,
-    model_name,
-    saving_path,
-    threshold=0.2,
-    alpha=0.05,
-    report_title="PATTERN DISTANCE REPORT",
+    distance_matrix: pd.DataFrame,
+    correlation_coefficient: float,
+    p_value: float,
+    alternative: str,
+    ko_species_list: list,
+    model_name: str,
+    saving_path: str,
+    threshold:float=0.2,
+    alpha: float=0.05,
+    report_title:str="PATTERN DISTANCE REPORT",
     log_file=None,
-):
+) -> None:
     """
-    Generate a comprehensive distance report.
+    Generate a simplified pattern distance analysis report with Pearson correlation.
 
-    Args:
-        distance_matrix: 2D numpy array with distance values
-        ko_species_list: List of knockout species names
-        model_name: Name of the model (for the report filename)
-        saving_path: Directory where to save the report
-        threshold: Threshold for significant differences
-        log_file: Optional log file
+    This function creates a text report focused on Pearson correlation analysis for pattern
+    distance comparisons between knockout species. Unlike generate_values_distance_report,
+    this version does not include detailed matrix statistics or knockout rankings, making it
+    suitable for temporal pattern or similarity analyses.
+
+    Parameters
+    ----------
+    distance_matrix : numpy.ndarray or pandas.DataFrame
+        2D array containing distance values between knockout species patterns.
+        Typically measures similarity/dissimilarity in temporal dynamics or behavioral patterns.
+    correlation_coefficient : float
+        Pearson correlation coefficient (r) between compared datasets.
+        Range: [-1, 1] where values closer to ±1 indicate stronger correlation.
+    p_value : float
+        P-value from the Pearson correlation test.
+        Indicates statistical significance of the correlation.
+    alternative : str
+        Type of hypothesis test performed. Must be one of:
+        - 'two-sided' : Test for any linear relationship (r ≠ 0)
+        - 'greater' : Test for positive relationship (r > 0)
+        - 'less' : Test for negative relationship (r < 0)
+    ko_species_list : list of str
+        List of knockout species IDs corresponding to distance matrix rows/columns.
+    model_name : str
+        Name of the model being analyzed (used in report header and filename).
+    saving_path : str
+        Directory path where the report file will be saved.
+        Will be created if it doesn't exist.
+    threshold : float, optional
+        Threshold value for identifying significant differences (currently unused in report),
+        by default 0.2
+    alpha : float, optional
+        Significance level for statistical tests, by default 0.05
+    report_title : str, optional
+        Title to display at the top of the report, by default "PATTERN DISTANCE REPORT"
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    str
+        Absolute path to the generated report file.
+        Filename format: "{model_name}_pattern_distance_report.txt"
+
+    Raises
+    ------
+    Exception
+        If the alternative parameter is not one of 'two-sided', 'greater', or 'less'.
+        If there are errors writing the report file.
+
+    Notes
+    -----
+    The report includes only Pearson Correlation Analysis:
+    - Correlation coefficient and p-value
+    - Strength interpretation (very weak to very strong)
+    - Direction (positive/negative)
+    - Statistical significance assessment
+    - Null and alternative hypotheses
+
+    Correlation strength categories:
+    - Very strong: |r| ≥ 0.9
+    - Strong: 0.7 ≤ |r| < 0.9
+    - Moderate: 0.5 ≤ |r| < 0.7
+    - Weak: 0.3 ≤ |r| < 0.5
+    - Very weak: |r| < 0.3
+
+    This function is designed for comparing temporal patterns, dynamic behaviors, or
+    trajectory similarities rather than absolute value differences.
+
+    Examples
+    --------
+    Generate pattern distance report:
+    >>> from scipy.stats import pearsonr
+    >>> r, p = pearsonr(pattern_distances1.flatten(), pattern_distances2.flatten())
+    >>> report_path = generate_pattern_distance_report(
+    ...     distance_matrix=pattern_dist_matrix,
+    ...     correlation_coefficient=r,
+    ...     p_value=p,
+    ...     alternative='two-sided',
+    ...     ko_species_list=['S1', 'S2', 'S3'],
+    ...     model_name='BIOMD0000000623',
+    ...     saving_path='reports/model_623/patterns/',
+    ...     alpha=0.05
+    ... )
+    >>> print(f"Pattern report saved to: {report_path}")
+
+    See Also
+    --------
+    generate_values_distance_report : Generate comprehensive distance report with statistics and rankings
     """
     # Check if the destinations folder exists otherwise create it
     if not os.path.exists(saving_path):
@@ -1617,15 +2492,103 @@ def get_variations_hm_no_samples(
 
 # KEEP
 def simulate_combinations(
-    rr,
-    combinations,
-    input_species_ids,
-    min_ss_time,
-    end_time,
-    max_end_time,
-    steady_state=False,
+    rr: rr.RoadRunner,
+    combinations: list,
+    input_species_ids: list,
+    min_ss_time: float,
+    end_time: float = 1000,
+    max_end_time: float = 1000,
+    steady_state: bool=False,
     log_file=None,
-):
+) -> tuple:
+    
+    """
+    Simulate a RoadRunner model across multiple input perturbation combinations.
+
+    This function runs simulations for each combination of input species concentrations,
+    collecting results for perturbation analysis. It supports both standard time-course
+    and steady-state simulations, tracking the minimum steady-state time across all runs.
+
+    Parameters
+    ----------
+    rr : roadrunner.RoadRunner
+        Configured RoadRunner model instance to simulate across all combinations.
+        The model is not reset between combinations to preserve configuration.
+    combinations : list of list
+        List of input concentration combinations to simulate.
+        Each element is a list of concentration values matching input_species_ids.
+        Example: [[1.0, 2.0], [1.5, 2.5], [2.0, 3.0]] for 2 input species
+    input_species_ids : list of str
+        IDs of input species whose concentrations will be perturbed.
+        Must match the length of each combination in combinations.
+    min_ss_time : float
+        Initial minimum steady-state time threshold.
+        Updated during execution to track the earliest steady state reached.
+    end_time : float, optional
+        End time for standard simulations (when steady_state=False), by default 1000
+    max_end_time : float, optional
+        Maximum simulation time for steady-state detection, by default 1000
+    steady_state : bool, optional
+        If True, simulate until steady state is reached for each combination,
+        by default False
+    log_file : file, optional
+        File object for logging progress and steady-state times, by default None
+
+    Returns
+    -------
+    tuple of (list of numpy.ndarray, list of str)
+        A tuple containing:
+        - samples_simulations_results : list of numpy.ndarray
+            List of simulation results, one per combination.
+            Each array has shape (n_timepoints, n_species+1) with time as first column
+        - colnames : list of str
+            Column names from the last simulation (consistent across all runs)
+
+    Notes
+    -----
+    - The function uses simulate_samples() for each individual combination
+    - min_ss_time is tracked but not returned; it's logged if steady_state=True
+    - The model state is preserved between combinations (no reset called)
+    - Progress is logged after each combination when log_file is provided
+
+    This function is typically used internally by process_species_samples and
+    process_species_no_samples for perturbation-based knockout analysis.
+
+    Examples
+    --------
+    Standard time-course simulations across perturbations:
+    >>> rr_model = roadrunner.RoadRunner('model.xml')
+    >>> combinations = [[1.0, 2.0], [1.5, 2.5], [2.0, 3.0]]
+    >>> input_ids = ['Input1', 'Input2']
+    >>> results, colnames = simulate_combinations(
+    ...     rr=rr_model,
+    ...     combinations=combinations,
+    ...     input_species_ids=input_ids,
+    ...     min_ss_time=1000,
+    ...     end_time=500,
+    ...     steady_state=False
+    ... )
+    >>> print(f"Simulated {len(results)} combinations")
+
+    Steady-state simulations with logging:
+    >>> with open('sim.log', 'w') as log:
+    ...     results, colnames = simulate_combinations(
+    ...         rr=rr_model,
+    ...         combinations=combinations,
+    ...         input_species_ids=input_ids,
+    ...         min_ss_time=1000,
+    ...         max_end_time=2000,
+    ...         steady_state=True,
+    ...         log_file=log
+    ...     )
+
+    See Also
+    --------
+    simulate_samples : Simulate a single input combination
+    simulate : Core simulation function
+    process_species_samples : Uses this function for knockout analysis with perturbations
+    """
+    
     samples_simulations_results = []
     i = 1
     for comb in combinations:
