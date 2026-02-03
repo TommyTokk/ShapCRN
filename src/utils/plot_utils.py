@@ -22,20 +22,75 @@ from utils.utils import print_log
 
 # KEEP
 def plot_results(
-    simulation_data,
-    colnames,
-    img_dir_path="./imgs",
-    img_name="simulation",
+    simulation_data: np.ndarray,
+    colnames: list,
+    img_dir_path: str="./imgs",
+    img_name: str="simulation",
     log_file=None,
-    ss_time=None,
-):
+    ss_time: float =None,
+) -> None:
     """
-    Visualize the simulation results and save the plot to a file.
+    Visualize simulation results and save as a static PNG image.
 
-    Args:
-        simulation_data: NumPy array with simulation results
-        img_dir_path: Directory where to save the image (default: "./imgs")
-        img_name: Name of the image file without extension (default: "simulation")
+    This function creates a matplotlib plot of time-series simulation data with automatic
+    legend layout optimization based on the number of species. The plot is saved to disk
+    and the figure is closed to free memory.
+
+    Parameters
+    ----------
+    simulation_data : numpy.ndarray
+        Structured array containing simulation results.
+        Expected shape: (n_timepoints, n_species+1) where first column is time.
+    colnames : list of str
+        Column names from the simulation. First element should be 'time',
+        remaining elements are species names that will be plotted.
+    img_dir_path : str, optional
+        Directory path where the image will be saved, by default "./imgs"
+        Will be created if it doesn't exist.
+    img_name : str, optional
+        Filename for the saved image, by default "simulation"
+        Extension .png will be added automatically if not present.
+    log_file : file, optional
+        File object for logging the save location, by default None
+    ss_time : float, optional
+        Steady-state time marker (currently unused but reserved for future use),
+        by default None
+
+    Returns
+    -------
+    None
+        Plot is saved to disk and matplotlib figure is closed.
+
+    Notes
+    -----
+    Legend layout is automatically optimized based on number of species:
+    - ≤3 species: 1 column
+    - 4-8 species: 2 columns
+    - 9-15 species: 3 columns
+    - 16-24 species: 4 columns
+    - >24 species: ceil(n_species/10) columns
+
+    The legend is positioned below the plot with dynamic spacing adjustment
+    to prevent overlap with the graph.
+
+    Examples
+    --------
+    Plot simulation results with default settings:
+    >>> results, _, colnames = simulate(rr_model)
+    >>> plot_results(results, colnames)
+
+    Save to custom directory with specific name:
+    >>> plot_results(
+    ...     simulation_data=results,
+    ...     colnames=colnames,
+    ...     img_dir_path='output/plots',
+    ...     img_name='model_timecourse',
+    ...     log_file=log
+    ... )
+
+    See Also
+    --------
+    plot_results_interactive : Create interactive Plotly visualization
     """
     species_names = colnames[1:]
     # print(species_names)
@@ -106,33 +161,107 @@ def plot_results(
 
 # KEEP
 def plot_results_interactive(
-    simulation_data,
-    colnames,
-    model_name,
-    html_dir_path="./imgs",
-    html_name="interactive_model_simulation",
+    simulation_data: np.ndarray,
+    colnames: list,
+    model_name: str,
+    html_dir_path:str="./imgs",
+    html_name:str="interactive_model_simulation",
     log_file=None,
-    ss_time=None,
-    show_plot=False,
-    height=600,
-    width=1000,
+    ss_time:float=None,
+    show_plot:bool=False,
+    height:int=600,
+    width:int=1000,
 ):
     """
-    Create interactive visualization of simulation results using Plotly and save to HTML file.
+    Create interactive Plotly visualization of simulation results and save as HTML.
 
-    Args:
-        simulation_data: NumPy array with simulation results
-        colnames: List of column names (first should be time, rest are species)
-        html_dir_path: Directory where to save the HTML file (default: "./imgs")
-        html_name: Name of the HTML file without extension (default: "interactive_model_simulation")
-        log_file: Log file for messages (optional)
-        ss_time: Steady state time marker (optional, adds vertical line)
-        show_plot: Whether to display the plot in browser (default: False)
-        height: Plot height in pixels (default: 600)
-        width: Plot width in pixels (default: 1000)
+    This function generates an interactive time-series plot with hover tooltips, automatic
+    legend layout optimization, and optional steady-state markers. The plot is saved as an
+    HTML file and can optionally be displayed in a browser.
 
-    Returns:
-        plotly.graph_objects.Figure: The created figure object
+    Parameters
+    ----------
+    simulation_data : numpy.ndarray
+        Structured array containing simulation results.
+        Expected shape: (n_timepoints, n_species+1) where first column is time.
+    colnames : list of str
+        Column names from the simulation. First element should be 'time',
+        remaining elements are species names that will be plotted.
+    model_name : str
+        Name of the model being visualized. Used to create a subdirectory
+        within html_dir_path for organizing output files.
+    html_dir_path : str, optional
+        Base directory path where the HTML file will be saved, by default "./imgs"
+        Final save location: {html_dir_path}/{model_name}/{html_name}
+    html_name : str, optional
+        Filename for the HTML output, by default "interactive_model_simulation"
+        Extension .html will be added automatically if not present.
+    log_file : file, optional
+        File object for logging messages and errors, by default None
+    ss_time : float, optional
+        Steady-state time value. If provided, adds a vertical dashed red line
+        with "Steady State" annotation, by default None
+    show_plot : bool, optional
+        If True, opens the plot in the default web browser after saving,
+        by default False
+    height : int, optional
+        Plot height in pixels, by default 600
+        May be automatically adjusted for horizontal legends.
+    width : int, optional
+        Plot width in pixels, by default 1000
+        May be automatically adjusted for vertical legends.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        The created Plotly figure object, which can be further customized or displayed.
+
+    Notes
+    -----
+    Legend layout is automatically optimized based on number of species:
+    - ≤10 species: Vertical legend on the right (width increased by 150px)
+    - >10 species: Horizontal legend below plot (height increased by 80-200px)
+
+    The function handles errors gracefully:
+    - Logs save/display failures without raising exceptions
+    - Returns the figure object even if save/display fails
+
+    Interactive features:
+    - Hover tooltips show time and concentration for each species
+    - Unified hover mode (vertical line across all traces)
+    - Gridlines for easier value reading
+    - Zoomable and pannable plot area
+
+    Examples
+    --------
+    Create basic interactive plot:
+    >>> results, _, colnames = simulate(rr_model)
+    >>> fig = plot_results_interactive(results, colnames, 'MyModel')
+
+    Include steady-state marker and display in browser:
+    >>> fig = plot_results_interactive(
+    ...     simulation_data=results,
+    ...     colnames=colnames,
+    ...     model_name='BIOMD0000000623',
+    ...     html_dir_path='output/interactive',
+    ...     html_name='ko_analysis',
+    ...     ss_time=125.5,
+    ...     show_plot=True,
+    ...     log_file=log
+    ... )
+
+    Customize dimensions for large models:
+    >>> fig = plot_results_interactive(
+    ...     simulation_data=results,
+    ...     colnames=colnames,
+    ...     model_name='LargeModel',
+    ...     height=800,
+    ...     width=1400
+    ... )
+
+    See Also
+    --------
+    plot_results : Create static matplotlib PNG visualization
     """
     species_names = colnames[1:]
 
@@ -276,27 +405,98 @@ def plot_results_interactive(
 
 
 # KEEP
-def plot_heatmap(data, y_labels, x_labels, colnames_to_index, **kwargs):
+def plot_heatmap(data: pd.DataFrame, y_labels:list, x_labels:list, colnames_to_index:dict, **kwargs) -> tuple:
     """
-    Simple heatmap plotting with customizable color mapping.
+    Create a customizable seaborn heatmap and optionally save to disk.
 
-    Args:
-        data: Pandas DataFrame
-        y_labels (list): Labels for y-axis (rows)
-        x_labels (list): Labels for x-axis (columns)
-        **kwargs: Optional customization parameters
+    This function generates a heatmap visualization using seaborn with support for custom
+    colormaps, annotations, and automatic handling of NaN values (displayed as black).
+    The plot can be saved as a high-resolution PNG file.
 
-    Optional kwargs:
-        title (str): Title for the heatmap. Default: "Heatmap"
-        cmap (str): Colormap name. Default: "viridis"
-        colors (list): Custom colors for colormap. Overrides cmap if provided
-        figsize (tuple): Figure size. Default: (10, 6)
-        save_path (str): Directory path to save figure. Default: None (don't save)
-        img_name (str): Filename for saved image. Default: "heatmap.png"
-        annot (bool): Show values in cells. Default: False
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        2D data to visualize as a heatmap.
+        Typically contains variation or distance metrics between species.
+    y_labels : list of str
+        Labels for the y-axis (rows), typically knockout species IDs.
+    x_labels : list of str
+        Labels for the x-axis (columns), typically affected species IDs.
+    colnames_to_index : dict
+        Mapping from column names to their indices.
+        Currently unused but reserved for future functionality.
+    **kwargs : dict
+        Optional keyword arguments for customization.
 
-    Returns:
-        fig, ax: matplotlib figure and axes objects
+    Other Parameters
+    ----------------
+    title : str, optional
+        Title for the heatmap, by default "Heatmap"
+    cmap : str, optional
+        Matplotlib colormap name, by default "viridis"
+        Ignored if 'colors' is provided.
+    colors : list of str, optional
+        Custom color list for creating a LinearSegmentedColormap.
+        Overrides 'cmap' if provided.
+    figsize : tuple of (float, float), optional
+        Figure size in inches (width, height), by default (12, 8)
+    save_path : str, optional
+        Directory path where the image will be saved, by default "./imgs"
+        If None or empty, the plot will not be saved.
+    img_name : str, optional
+        Filename for the saved image, by default "heatmap.png"
+        Should include file extension (.png recommended).
+    annot : bool, optional
+        If True, display data values in each cell, by default False
+
+    Returns
+    -------
+    tuple of (matplotlib.figure.Figure, matplotlib.axes.Axes)
+        The created matplotlib figure and axes objects, which can be further customized.
+
+    Notes
+    -----
+    - NaN values are automatically displayed as black in the heatmap
+    - The plot uses tight_layout() for optimal spacing
+    - X-axis labels are rotated 45° for better readability
+    - Saved images use 300 DPI for high quality
+    - Debug information is printed to console during save operations
+
+    Examples
+    --------
+    Create basic heatmap with default settings:
+    >>> df = pd.DataFrame(np.random.rand(5, 10))
+    >>> fig, ax = plot_heatmap(df, ['S1', 'S2', 'S3', 'S4', 'S5'], 
+    ...                        [f'T{i}' for i in range(10)], {})
+
+    Create custom heatmap with annotations and custom colormap:
+    >>> fig, ax = plot_heatmap(
+    ...     data=variations_df,
+    ...     y_labels=ko_species_list,
+    ...     x_labels=all_species,
+    ...     colnames_to_index={},
+    ...     title='Knockout Impact Analysis',
+    ...     colors=['blue', 'white', 'red'],
+    ...     figsize=(15, 10),
+    ...     annot=True,
+    ...     save_path='output/figures',
+    ...     img_name='ko_heatmap.png'
+    ... )
+
+    Use diverging colormap for signed data:
+    >>> fig, ax = plot_heatmap(
+    ...     data=relative_changes,
+    ...     y_labels=ko_ids,
+    ...     x_labels=species_ids,
+    ...     colnames_to_index={},
+    ...     cmap='RdBu_r',
+    ...     title='Relative Concentration Changes'
+    ... )
+
+    See Also
+    --------
+    seaborn.heatmap : Underlying visualization function
+    matplotlib.colors.LinearSegmentedColormap : Custom colormap creation
     """
 
     # Setting the NaN values
@@ -371,3 +571,5 @@ def plot_heatmap(data, y_labels, x_labels, colnames_to_index, **kwargs):
         print(f"Heatmap saved successfully to: {full_file_path}")
 
     return fig, ax
+
+
