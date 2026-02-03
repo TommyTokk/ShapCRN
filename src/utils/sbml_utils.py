@@ -1,15 +1,14 @@
-import enum
-from math import log, prod
 import os
+from threading import local
+from typing import Generator
 
-from networkx import reverse
-from scipy.special import eval_sh_legendre
 
 import libsbml
-import json
+
 import numpy as np
 import itertools
 
+from src import exceptions
 from src.classes.species import Species
 from src.classes.reaction import Reaction
 from src.classes.function import Function
@@ -48,11 +47,12 @@ def load_model(model_file_path: str) -> libsbml.SBMLDocument:
     return document
 
 
-
-def create_ko_models(target_ids: list, sbml_model, sbml_str: str, log_file=None) -> dict:
+def create_ko_models(
+    target_ids: list, sbml_model, sbml_str: str, log_file=None
+) -> dict:
     """
     Create the knockout models for the specified target IDs.
-    
+
     Parameters
     ----------
     target_ids : list
@@ -67,7 +67,7 @@ def create_ko_models(target_ids: list, sbml_model, sbml_str: str, log_file=None)
     Returns
     -------
     dict
-        A dictionary with target IDs as keys and their corresponding knockout SBML models as values. 
+        A dictionary with target IDs as keys and their corresponding knockout SBML models as values.
     """
     model_dict = {}
     for ids in target_ids:
@@ -148,6 +148,7 @@ def save_file(
 # SPECIES
 # ============
 
+
 def get_list_of_species(SBML_model: libsbml.Model) -> list:
     """
     Get a list of Species objects from the SBML model.
@@ -212,7 +213,9 @@ def species_dict_list(species_list: list) -> list:
 
 
 # KEEP
-def knockout_species(sbml_model: libsbml.Model, target_species_id: str, log_file=None) -> libsbml.Model:
+def knockout_species(
+    sbml_model: libsbml.Model, target_species_id: str, log_file=None
+) -> libsbml.Model:
     """
     Knockout the target species with the following logic:
         - If the target species is a reactant then remove the reaction
@@ -339,7 +342,9 @@ def knockout_species(sbml_model: libsbml.Model, target_species_id: str, log_file
     return sbml_model
 
 
-def knockout_species_via_reaction(sbml_model: libsbml.Model, target_species_id: str, log_file=None) -> tuple:
+def knockout_species_via_reaction(
+    sbml_model: libsbml.Model, target_species_id: str, log_file=None
+) -> tuple:
     """
     Knockout the target species creating a new, fast reaction that consume the species.
 
@@ -414,43 +419,45 @@ def knockout_species_via_reaction(sbml_model: libsbml.Model, target_species_id: 
     return (sbml_model, new_reaction)
 
 
-def knockin_species(sbml_model: libsbml.Model, species_id: str, new_val: float, log_file=None) -> libsbml.Model:
+def knockin_species(
+    sbml_model: libsbml.Model, species_id: str, new_val: float, log_file=None
+) -> libsbml.Model:
     """
-        Perform a knock-in operation on a species by setting it to a fixed concentration/amount.
-        
-        This function modifies the target species by:
-        1. Setting its initial concentration or amount to the specified value
-        2. Renaming it by appending '_KI' suffix to the original ID
-        3. Making it constant (boundary condition = True, constant = True)
-        
-        The function automatically detects whether the species uses substance units (amounts)
-        or concentration values and applies the new value accordingly.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the target species
-        species_id : str
-            The identifier of the species to knock-in
-        new_val : float
-            The new initial concentration or amount value to set
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        libsbml.Model
-            The modified SBML model with the knocked-in species
-        
-        Raises
-        ------
-        SystemExit
-            If the species doesn't exist in the model or if initial values cannot be accessed
-        
-        Notes
-        -----
-        The modified species becomes a constant boundary condition, meaning its value
-        will remain fixed throughout simulations.
+    Perform a knock-in operation on a species by setting it to a fixed concentration/amount.
+
+    This function modifies the target species by:
+    1. Setting its initial concentration or amount to the specified value
+    2. Renaming it by appending '_KI' suffix to the original ID
+    3. Making it constant (boundary condition = True, constant = True)
+
+    The function automatically detects whether the species uses substance units (amounts)
+    or concentration values and applies the new value accordingly.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the target species
+    species_id : str
+        The identifier of the species to knock-in
+    new_val : float
+        The new initial concentration or amount value to set
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    libsbml.Model
+        The modified SBML model with the knocked-in species
+
+    Raises
+    ------
+    SystemExit
+        If the species doesn't exist in the model or if initial values cannot be accessed
+
+    Notes
+    -----
+    The modified species becomes a constant boundary condition, meaning its value
+    will remain fixed throughout simulations.
     """
 
     species = sbml_model.getSpecies(species_id)
@@ -465,10 +472,9 @@ def knockin_species(sbml_model: libsbml.Model, species_id: str, new_val: float, 
             print_log(log_file, f"Using concentration for {species_id}")
             species.setInitialConcentration(new_val)
         else:
-            print_log(
-                log_file, f"[ERROR] Cannot access species {species_id} intial values"
+            raise exceptions.InvalidSpeciesError(
+                species_id, sbml_model.getId(), "Cannot access species initial value"
             )
-            exit(1)
 
         species.setId(species_id + "_KI")
 
@@ -477,8 +483,9 @@ def knockin_species(sbml_model: libsbml.Model, species_id: str, new_val: float, 
         species.setConstant(True)
 
     else:
-        print_log(log_file, f"[ERROR] Species {species_id} does not exists")
-        exit(1)
+        raise exceptions.InvalidSpeciesError(
+            species_id, sbml_model.getId(), "Species not presente in the model"
+        )
 
     return sbml_model
 
@@ -499,7 +506,7 @@ def get_list_of_reactions(sbml_model: libsbml.Model, species_dict: dict) -> list
         SBML model object
     species_dict : dict
         Dictionary of Species objects indexed by ID
-    
+
     Returns
     -------
     list
@@ -521,7 +528,7 @@ def get_reactants_dict(reaction_objects: list) -> dict:
     ----------
     reaction_objects : list
         A list of Reaction objects
-    
+
     Returns
     -------
     dict
@@ -558,10 +565,10 @@ def get_products_dict(reaction_objects: list) -> dict:
     return dict
 
 
-def get_nodes_iterator(node: libsbml.ASTNode) -> libsbml.ASTNode:
+def get_nodes_iterator(node: libsbml.ASTNode) -> Generator[libsbml.ASTNode]:
     """
     Generator function to recursively yield all nodes in an AST.
-    
+
     Parameters
     ----------
     node : libsbml.ASTNode
@@ -583,39 +590,41 @@ def get_nodes_iterator(node: libsbml.ASTNode) -> libsbml.ASTNode:
         yield from get_nodes_iterator(node.getChild(i))
 
 
-def get_kinetic_type(sbml_model: libsbml.Model, kl_math: libsbml.ASTNode, log_file=None) -> tuple:
+def get_kinetic_type(
+    sbml_model: libsbml.Model, kl_math: libsbml.ASTNode, log_file=None
+) -> tuple:
     """
-        Determine the kinetic rate law type of a reaction by analyzing its mathematical expression.
-        
-        This function recursively traverses the Abstract Syntax Tree (AST) of the kinetic law
-        to identify the reaction kinetics type based on the presence of specific mathematical
-        operations or function definitions.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing function definitions
-        kl_math : libsbml.ASTNode
-            The AST node representing the kinetic law mathematical expression
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        tuple of (int, str or None)
-            A tuple containing:
-            - Kinetic type code:
-                * -1: No kinetic law found or error
-                * 1: Explicit Mass Action kinetic
-                * 2: Explicit Michaelis-Menten kinetic
-            - Function name (str) if kinetics defined by a function, None otherwise
-        
-        Notes
-        -----
-        Detection logic:
-        - If AST contains a FUNCTION node, recursively analyzes the function definition
-        - If AST contains a DIVIDE node, assumes Michaelis-Menten kinetics
-        - Otherwise, assumes Mass Action kinetics
+    Determine the kinetic rate law type of a reaction by analyzing its mathematical expression.
+
+    This function recursively traverses the Abstract Syntax Tree (AST) of the kinetic law
+    to identify the reaction kinetics type based on the presence of specific mathematical
+    operations or function definitions.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing function definitions
+    kl_math : libsbml.ASTNode
+        The AST node representing the kinetic law mathematical expression
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    tuple of (int, str or None)
+        A tuple containing:
+        - Kinetic type code:
+            * -1: No kinetic law found or error
+            * 1: Explicit Mass Action kinetic
+            * 2: Explicit Michaelis-Menten kinetic
+        - Function name (str) if kinetics defined by a function, None otherwise
+
+    Notes
+    -----
+    Detection logic:
+    - If AST contains a FUNCTION node, recursively analyzes the function definition
+    - If AST contains a DIVIDE node, assumes Michaelis-Menten kinetics
+    - Otherwise, assumes Mass Action kinetics
     """
 
     if kl_math is None:
@@ -673,25 +682,30 @@ def reactions_to_dict(reaction_list: list) -> dict:
     return reactions_dict
 
 
-def is_reversible(sbml_model: libsbml.Model, reaction: libsbml.Reaction, log_file=None) -> bool:
+def is_reversible(sbml_model: libsbml.Model, reaction: libsbml.Reaction, log_file=None):
     """
-        Determine if a reaction is reversible based on its kinetic law.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the reaction.
-        reaction : libsbml.Reaction
-            The reaction to analyze.
-        log_file : file, optional
-            File object for logging operations, by default None.
-        Returns
-        -------
-        bool
-            True if the reaction is reversible, False otherwise.
+    Determine if a reaction is reversible based on its kinetic law.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the reaction.
+    reaction : libsbml.Reaction
+        The reaction to analyze.
+    log_file : file, optional
+        File object for logging operations, by default None.
+    Returns
+    -------
+    bool
+        True if the reaction is reversible, False otherwise.
     """
 
-    kl_math = reaction.getKineticLaw().getMath()
+    kl = reaction.getKineticLaw()
+
+    if kl is None:
+        raise exceptions.InvalidKineticLawError(reaction.getId())
+
+    kl_math = kl.getMath()
 
     kl_type, fn = get_kinetic_type(sbml_model, kl_math, log_file)
 
@@ -717,38 +731,43 @@ def is_reversible(sbml_model: libsbml.Model, reaction: libsbml.Reaction, log_fil
                 if node.getType() == libsbml.AST_MINUS:
                     return True
 
+    else:
+        return False
+
 
 # KEEP
-def split_all_reversible_reactions(model: libsbml.Model, log_file=None) -> libsbml.Model:
+def split_all_reversible_reactions(
+    model: libsbml.Model, log_file=None
+) -> libsbml.Model:
     """
-        Split all reversible reactions in an SBML model into separate forward and reverse reactions.
-        
-        This function identifies all reversible reactions in the model and converts each into 
-        two irreversible reactions (forward and reverse). The function handles reactions with 
-        kinetics defined either explicitly (Mass Action) or via function definitions.
-        
-        Parameters
-        ----------
-        model : libsbml.Model
-            The SBML model containing reactions to split
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        libsbml.Model
-            The modified SBML model with all reversible reactions split into forward and 
-            reverse irreversible reactions
-        
-        Notes
-        -----
-        The function processes reactions based on their kinetic law type:
-        - Explicit kinetics: Uses `split_reversible_reaction_explicit()`
-        - Function-based kinetics: Uses `split_reversible_reaction_function()`
-        
-        Original reversible reactions are removed from the model after successful splitting.
-        New reactions are named with '_fwd' and '_rev' suffixes.
-        Function definitions are also split when reactions use function-based kinetics.
+    Split all reversible reactions in an SBML model into separate forward and reverse reactions.
+
+    This function identifies all reversible reactions in the model and converts each into
+    two irreversible reactions (forward and reverse). The function handles reactions with
+    kinetics defined either explicitly (Mass Action) or via function definitions.
+
+    Parameters
+    ----------
+    model : libsbml.Model
+        The SBML model containing reactions to split
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    libsbml.Model
+        The modified SBML model with all reversible reactions split into forward and
+        reverse irreversible reactions
+
+    Notes
+    -----
+    The function processes reactions based on their kinetic law type:
+    - Explicit kinetics: Uses `split_reversible_reaction_explicit()`
+    - Function-based kinetics: Uses `split_reversible_reaction_function()`
+
+    Original reversible reactions are removed from the model after successful splitting.
+    New reactions are named with '_fwd' and '_rev' suffixes.
+    Function definitions are also split when reactions use function-based kinetics.
     """
 
     # Get the model compartments
@@ -776,7 +795,12 @@ def split_all_reversible_reactions(model: libsbml.Model, log_file=None) -> libsb
 
     # Split each reversible reaction
     for reaction in reversible_reactions:
-        kl_math = reaction.getKineticLaw().getMath()
+        kl = reaction.getKineticLaw()
+
+        if kl is None:
+            raise exceptions.InvalidKineticLawError(reaction.getId())
+
+        kl_math = kl.getMath()
 
         klt, fn = get_kinetic_type(sbml_model=model, kl_math=kl_math, log_file=log_file)
 
@@ -821,47 +845,50 @@ def split_all_reversible_reactions(model: libsbml.Model, log_file=None) -> libsb
 
 
 def create_sbml_function(
-    sbml_model: libsbml.Model , function_name: str, function_id: str, args: list, expression: str, log_file=None
+    sbml_model: libsbml.Model,
+    function_name: str,
+    function_id: str,
+    args: list,
+    expression: str,
+    log_file=None,
 ) -> libsbml.FunctionDefinition:
-    
     """
-        Create an SBML function definition using lambda notation.
-        
-        This function creates a new SBML function definition with the specified parameters
-        and mathematical expression. The function is defined using SBML's lambda notation:
-        lambda(arg1, arg2, ..., expression).
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model to which the function definition will be added
-        function_name : str
-            Human-readable name for the function
-        function_id : str
-            Unique identifier for the function in the SBML model
-        args : list of str
-            List of argument names for the function parameters
-        expression : str
-            Mathematical expression defining the function body in SBML formula syntax
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        libsbml.FunctionDefinition or None
-            The created SBML function definition object, or None if creation failed
-        
-        Notes
-        -----
-        The function constructs a lambda expression in the form:
-        lambda(arg1, arg2, ..., argN, expression)
-        
-        Returns None if:
-        - The formula cannot be parsed
-        - Setting the mathematical expression fails
+    Create an SBML function definition using lambda notation.
+
+    This function creates a new SBML function definition with the specified parameters
+    and mathematical expression. The function is defined using SBML's lambda notation:
+    lambda(arg1, arg2, ..., expression).
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model to which the function definition will be added
+    function_name : str
+        Human-readable name for the function
+    function_id : str
+        Unique identifier for the function in the SBML model
+    args : list of str
+        List of argument names for the function parameters
+    expression : str
+        Mathematical expression defining the function body in SBML formula syntax
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    libsbml.FunctionDefinition or None
+        The created SBML function definition object, or None if creation failed
+
+    Notes
+    -----
+    The function constructs a lambda expression in the form:
+    lambda(arg1, arg2, ..., argN, expression)
+
+    Returns None if:
+    - The formula cannot be parsed
+    - Setting the mathematical expression fails
     """
 
-    
     function = sbml_model.createFunctionDefinition()
 
     if function_id:
@@ -903,65 +930,64 @@ def create_sbml_reaction_LMA(
     modifiers: list,
     local_parameters: list,
     reaction_comps: list,
-    kl_expr: str = None,
-    function_id: str =None,
-    function_args: list =None,
+    kl_expr: str | None = None,
+    function_id: str | None = None,
+    function_args: list | None = None,
     log_file=None,
 ) -> libsbml.Reaction:
-    
     """
-        Create an SBML reaction with Law of Mass Action (LMA) kinetics.
-        
-        This function creates a new irreversible SBML reaction with either an explicit
-        kinetic law expression or a function-based kinetic law. The kinetic law can be
-        defined directly as a mathematical expression or via a reference to an SBML
-        function definition.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model to which the reaction will be added
-        reaction_name : str
-            Human-readable name for the reaction
-        reaction_id : str
-            Unique identifier for the reaction in the SBML model
-        reactants : list of tuple
-            List of (species_id, stoichiometry) tuples for reactants
-        products : list of tuple
-            List of (species_id, stoichiometry) tuples for products
-        modifiers : list of tuple
-            List of (modifier_id, value) tuples for modifiers
-        local_parameters : list of tuple
-            List of (parameter_id, parameter_value) tuples for local parameters
-        reaction_comps : list of str
-            List of compartment IDs involved in the reaction
-        kl_expr : str, optional
-            Explicit kinetic law expression (used when function_id is None), by default None
-        function_id : str, optional
-            ID of the SBML function to use for kinetics, by default None
-        function_args : list of str, optional
-            Arguments to pass to the function (used with function_id), by default None
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        libsbml.Reaction
-            The created SBML reaction object
-        
-        Notes
-        -----
-        The function supports two modes of kinetic law definition:
-        
-        1. Explicit expression mode (when function_id is None):
-        Kinetic law = compartments * kl_expr
-        
-        2. Function-based mode (when function_id is provided):
-        Kinetic law = compartments * function_id(function_args)
-        
-        The created reaction is always set as irreversible (reversible = False).
+    Create an SBML reaction with Law of Mass Action (LMA) kinetics.
+
+    This function creates a new irreversible SBML reaction with either an explicit
+    kinetic law expression or a function-based kinetic law. The kinetic law can be
+    defined directly as a mathematical expression or via a reference to an SBML
+    function definition.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model to which the reaction will be added
+    reaction_name : str
+        Human-readable name for the reaction
+    reaction_id : str
+        Unique identifier for the reaction in the SBML model
+    reactants : list of tuple
+        List of (species_id, stoichiometry) tuples for reactants
+    products : list of tuple
+        List of (species_id, stoichiometry) tuples for products
+    modifiers : list of tuple
+        List of (modifier_id, value) tuples for modifiers
+    local_parameters : list of tuple
+        List of (parameter_id, parameter_value) tuples for local parameters
+    reaction_comps : list of str
+        List of compartment IDs involved in the reaction
+    kl_expr : str, optional
+        Explicit kinetic law expression (used when function_id is None), by default None
+    function_id : str, optional
+        ID of the SBML function to use for kinetics, by default None
+    function_args : list of str, optional
+        Arguments to pass to the function (used with function_id), by default None
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    libsbml.Reaction
+        The created SBML reaction object
+
+    Notes
+    -----
+    The function supports two modes of kinetic law definition:
+
+    1. Explicit expression mode (when function_id is None):
+    Kinetic law = compartments * kl_expr
+
+    2. Function-based mode (when function_id is provided):
+    Kinetic law = compartments * function_id(function_args)
+
+    The created reaction is always set as irreversible (reversible = False).
     """
-    
+
     reaction = sbml_model.createReaction()
     reaction.setId(reaction_id)
     reaction.setName(reaction_name)
@@ -989,9 +1015,20 @@ def create_sbml_reaction_LMA(
 
     # Creating the local parameters
     for lp_id, lp_value in local_parameters:
-        local_parameter = kinetic_law.createLocalParameter()
+        __import__("pprint").pprint(lp_id)
+        __import__("pprint").pprint(lp_value)
+        if sbml_model.getLevel() == 2:
+            local_parameter = kinetic_law.createParameter()
+        elif sbml_model.getLevel() == 3:
+            local_parameter = kinetic_law.createLocalParameter()
+        else:
+            raise exceptions.ModelError()
+
+        __import__("pprint").pprint(local_parameter)
         local_parameter.setId(lp_id)
         local_parameter.setValue(lp_value)
+
+    __import__("pprint").pprint(kinetic_law.getNumLocalParameters())
 
     # Construct the string
     if function_id is None or function_args is None:
@@ -1039,38 +1076,40 @@ def create_sbml_reaction_LMA(
     return reaction
 
 
-def split_kinetic_function(sbml_model: libsbml.Model, kinetic_math: libsbml.ASTNode, log_file=None) -> tuple:
+def split_kinetic_function(
+    sbml_model: libsbml.Model, kinetic_math: libsbml.ASTNode, log_file=None
+) -> tuple:
     """
-        Split a kinetic function's mathematical expression into forward and reverse components.
-        
-        This function analyzes a lambda-notation kinetic function to separate it into 
-        forward and reverse reaction expressions. It expects the function to be in the 
-        form: lambda(args, forward_expr - reverse_expr).
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the kinetic function (currently not used in implementation)
-        kinetic_math : libsbml.ASTNode
-            The AST node representing the kinetic law mathematical expression in lambda notation
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        tuple of (str, str, list, list) or (None, None, None, None)
-            A tuple containing:
-            - forward_reaction (str): Mathematical expression for the forward reaction
-            - reverse_reaction (str): Mathematical expression for the reverse reaction
-            - fwd_args (list): List of argument names used in the forward expression
-            - rev_args (list): List of argument names used in the reverse expression
-            Returns (None, None, None, None) if the pattern doesn't match
-        
-        Notes
-        -----
-        The function expects kinetic expressions in the pattern: `function_name(arg1, arg2, ..., expr1 - expr2)`
-        where the last argument contains the subtraction operation separating forward and reverse kinetics.
-        Arguments are classified based on their presence in either the forward or reverse expression.
+    Split a kinetic function's mathematical expression into forward and reverse components.
+
+    This function analyzes a lambda-notation kinetic function to separate it into
+    forward and reverse reaction expressions. It expects the function to be in the
+    form: lambda(args, forward_expr - reverse_expr).
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the kinetic function (currently not used in implementation)
+    kinetic_math : libsbml.ASTNode
+        The AST node representing the kinetic law mathematical expression in lambda notation
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    tuple of (str, str, list, list) or (None, None, None, None)
+        A tuple containing:
+        - forward_reaction (str): Mathematical expression for the forward reaction
+        - reverse_reaction (str): Mathematical expression for the reverse reaction
+        - fwd_args (list): List of argument names used in the forward expression
+        - rev_args (list): List of argument names used in the reverse expression
+        Returns (None, None, None, None) if the pattern doesn't match
+
+    Notes
+    -----
+    The function expects kinetic expressions in the pattern: `function_name(arg1, arg2, ..., expr1 - expr2)`
+    where the last argument contains the subtraction operation separating forward and reverse kinetics.
+    Arguments are classified based on their presence in either the forward or reverse expression.
     """
     pattern = r"^(\w+)\((.*)\)$"
 
@@ -1118,56 +1157,59 @@ def split_reversible_reaction_explicit(
     log_file=None,
 ) -> tuple:
     """
-        Split a reversible reaction with explicit Law of Mass Action kinetics into forward and reverse reactions.
-        
-        This function decomposes a reversible reaction into two separate irreversible reactions
-        (forward and reverse) by parsing the kinetic law expression. It assumes the kinetic law
-        follows the explicit Mass Action pattern: comps*(kforward*[reactants] - krev*[products]).
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the reaction to split
-        reaction_id : str
-            Unique identifier of the reversible reaction to modify
-        model_compartments : list of str
-            List of compartment IDs in the model
-        model_parameters_dict : dict
-            Dictionary mapping parameter IDs to their values
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        tuple of (libsbml.Reaction, libsbml.Reaction)
-            A tuple containing:
-            - fwd_reaction: The forward irreversible reaction
-            - rev_reaction: The reverse irreversible reaction
-        
-        Raises
-        ------
-        SystemExit
-            If the kinetic law doesn't match expected Law of Mass Action patterns or
-            if reaction creation fails
-        
-        Notes
-        -----
-        The function supports two kinetic law patterns:
-        1. `comp*(kf*r1 - kr*p1)` - Compartment multiplied by parenthesized expression
-        2. `comp*kf*r1 - kr*p1` - Flattened expression without parentheses
-        
-        The original reversible reaction is removed from the model after successful splitting.
-        New reactions are named with '_fwd' and '_rev' suffixes.
-        
-        Examples
-        --------
-        For a reaction with kinetic law `cell*(k1*A*B - k2*C)`:
-        - Forward reaction: kinetic law = `cell*k1*A*B`
-        - Reverse reaction: kinetic law = `cell*k2*C`
+    Split a reversible reaction with explicit Law of Mass Action kinetics into forward and reverse reactions.
+
+    This function decomposes a reversible reaction into two separate irreversible reactions
+    (forward and reverse) by parsing the kinetic law expression. It assumes the kinetic law
+    follows the explicit Mass Action pattern: comps*(kforward*[reactants] - krev*[products]).
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the reaction to split
+    reaction_id : str
+        Unique identifier of the reversible reaction to modify
+    model_compartments : list of str
+        List of compartment IDs in the model
+    model_parameters_dict : dict
+        Dictionary mapping parameter IDs to their values
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    tuple of (libsbml.Reaction, libsbml.Reaction)
+        A tuple containing:
+        - fwd_reaction: The forward irreversible reaction
+        - rev_reaction: The reverse irreversible reaction
+
+    Raises
+    ------
+    SystemExit
+        If the kinetic law doesn't match expected Law of Mass Action patterns or
+        if reaction creation fails
+
+    Notes
+    -----
+    The function supports two kinetic law patterns:
+    1. `comp*(kf*r1 - kr*p1)` - Compartment multiplied by parenthesized expression
+    2. `comp*kf*r1 - kr*p1` - Flattened expression without parentheses
+
+    The original reversible reaction is removed from the model after successful splitting.
+    New reactions are named with '_fwd' and '_rev' suffixes.
+
+    Examples
+    --------
+    For a reaction with kinetic law `cell*(k1*A*B - k2*C)`:
+    - Forward reaction: kinetic law = `cell*k1*A*B`
+    - Reverse reaction: kinetic law = `cell*k2*C`
     """
     reaction = sbml_model.getReaction(reaction_id)
 
     kl = reaction.getKineticLaw()
+
+    if kl is None:
+        raise exceptions.InvalidKineticLawError(reaction.getId())
 
     reaction_parameters = [
         (lp.getId(), lp.getValue()) for lp in kl.getListOfLocalParameters()
@@ -1187,7 +1229,14 @@ def split_reversible_reaction_explicit(
     reactants = reaction.getListOfReactants()
     products = reaction.getListOfProducts()
     modifiers = reaction.getListOfModifiers()
-    local_parameters = kl.getListOfLocalParameters()
+    # local_parameters = kl.getListOfLocalParameters()
+
+    if sbml_model.getLevel() == 2:
+        local_parameters = kl.getListOfParameters()
+    elif sbml_model.getLevel() == 3:
+        local_parameters = kl.getListOfLocalParameters()
+    else:
+        raise exceptions.ModelError
 
     rs = []
     ps = []
@@ -1207,7 +1256,8 @@ def split_reversible_reaction_explicit(
         ms.append(m_tuple)
 
     for lp in local_parameters:
-        lp_tuple = (lp.getId(), lp.getValue())
+        lp_id = lp.getName() if lp.getId() is None else lp.getId()
+        lp_tuple = (lp_id, lp.getValue())
         lps.append(lp_tuple)
 
     pattern1 = r"^(.*)\*\((.*)\)$"  # match: comp*(kf*r1-kr*p1)
@@ -1364,69 +1414,72 @@ def split_reversible_reaction_function(
     log_file=None,
 ) -> tuple:
     """
-        Split a reversible reaction with function-based kinetics into forward and reverse reactions.
-        
-        This function decomposes a reversible reaction that uses a function definition for its
-        kinetic law into two separate irreversible reactions (forward and reverse). It handles
-        both compartment-prefixed and standalone function call patterns.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the reaction and function definitions
-        reaction_id : str
-            Unique identifier of the reversible reaction to split
-        function_name : str
-            Name of the function definition used in the reaction's kinetic law
-        model_compartments : list of str
-            List of compartment IDs in the model
-        model_parameters_dict : dict
-            Dictionary mapping parameter IDs to their values
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        tuple of (libsbml.FunctionDefinition, libsbml.FunctionDefinition, libsbml.Reaction, libsbml.Reaction) or (None, None, None, None)
-            A tuple containing:
-            - fwd_function: Forward reaction function definition
-            - rev_function: Reverse reaction function definition
-            - fwd_reaction: Forward irreversible reaction
-            - rev_reaction: Reverse irreversible reaction
-            Returns (None, None, None, None) if splitting fails
-        
-        Raises
-        ------
-        SystemExit
-            If kinetic split information is unavailable or if reaction/function creation fails
-        
-        Notes
-        -----
-        The function supports two kinetic law patterns:
-        1. `comp*function_name(params)` - Compartment multiplied by function call
-        2. `function_name(params)` - Standalone function call
-        
-        The original reversible reaction and its function definition are removed from the
-        model after successful splitting. New functions and reactions are named with '_fwd'
-        and '_rev' suffixes.
-        
-        The function assumes that:
-        - Lambda function body contains subtraction: `forward_expr - reverse_expr`
-        - First parameter in actual_params is the forward rate constant
-        - Second parameter in actual_params is the reverse rate constant
-        
-        Examples
-        --------
-        For a reaction with kinetic law `cell*Henri_Michaelis_Menten(k1, k2, A, B)`:
-        - Forward function: `Henri_Michaelis_Menten_fwd(k1, A)`
-        - Reverse function: `Henri_Michaelis_Menten_rev(k2, B)`
-        - Forward reaction: kinetic law = `cell*Henri_Michaelis_Menten_fwd(k1, A)`
-        - Reverse reaction: kinetic law = `cell*Henri_Michaelis_Menten_rev(k2, B)`
+    Split a reversible reaction with function-based kinetics into forward and reverse reactions.
+
+    This function decomposes a reversible reaction that uses a function definition for its
+    kinetic law into two separate irreversible reactions (forward and reverse). It handles
+    both compartment-prefixed and standalone function call patterns.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the reaction and function definitions
+    reaction_id : str
+        Unique identifier of the reversible reaction to split
+    function_name : str
+        Name of the function definition used in the reaction's kinetic law
+    model_compartments : list of str
+        List of compartment IDs in the model
+    model_parameters_dict : dict
+        Dictionary mapping parameter IDs to their values
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    tuple of (libsbml.FunctionDefinition, libsbml.FunctionDefinition, libsbml.Reaction, libsbml.Reaction) or (None, None, None, None)
+        A tuple containing:
+        - fwd_function: Forward reaction function definition
+        - rev_function: Reverse reaction function definition
+        - fwd_reaction: Forward irreversible reaction
+        - rev_reaction: Reverse irreversible reaction
+        Returns (None, None, None, None) if splitting fails
+
+    Raises
+    ------
+    SystemExit
+        If kinetic split information is unavailable or if reaction/function creation fails
+
+    Notes
+    -----
+    The function supports two kinetic law patterns:
+    1. `comp*function_name(params)` - Compartment multiplied by function call
+    2. `function_name(params)` - Standalone function call
+
+    The original reversible reaction and its function definition are removed from the
+    model after successful splitting. New functions and reactions are named with '_fwd'
+    and '_rev' suffixes.
+
+    The function assumes that:
+    - Lambda function body contains subtraction: `forward_expr - reverse_expr`
+    - First parameter in actual_params is the forward rate constant
+    - Second parameter in actual_params is the reverse rate constant
+
+    Examples
+    --------
+    For a reaction with kinetic law `cell*Henri_Michaelis_Menten(k1, k2, A, B)`:
+    - Forward function: `Henri_Michaelis_Menten_fwd(k1, A)`
+    - Reverse function: `Henri_Michaelis_Menten_rev(k2, B)`
+    - Forward reaction: kinetic law = `cell*Henri_Michaelis_Menten_fwd(k1, A)`
+    - Reverse reaction: kinetic law = `cell*Henri_Michaelis_Menten_rev(k2, B)`
     """
 
     reaction = sbml_model.getReaction(reaction_id)
 
     kl = reaction.getKineticLaw()
+
+    if kl is None:
+        raise exceptions.InvalidKineticLawError(reaction_id)
 
     reaction_parameters = [
         (lp.getId(), lp.getValue()) for lp in kl.getListOfLocalParameters()
@@ -1770,53 +1823,57 @@ def split_reversible_reaction_function(
 
 
 def split_reversible_reaction(
-    sbml_model: libsbml.Model, reaction_id: str, model_compartments: list, model_parameters_dict: dict, log_file=None
+    sbml_model: libsbml.Model,
+    reaction_id: str,
+    model_compartments: list,
+    model_parameters_dict: dict,
+    log_file=None,
 ) -> tuple:
     """
-        Split a reversible reaction into two irreversible reactions (forward and reverse).
-        
-        This is a legacy function that extracts compartments and parameters from the AST
-        to construct forward and reverse reactions. It assumes the kinetic law has the form:
-        k_forward * [reactants] - k_reverse * [products].
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the reaction to split
-        reaction_id : str
-            Unique identifier of the reversible reaction to split
-        model_compartments : list of str
-            List of compartment IDs in the model
-        model_parameters_dict : dict
-            Dictionary mapping parameter IDs to their values
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        tuple of (libsbml.Reaction, libsbml.Reaction)
-            A tuple containing:
-            - forward_reaction: The forward irreversible reaction
-            - reverse_reaction: The reverse irreversible reaction
-        
-        Raises
-        ------
-        ValueError
-            If the reaction is not found in the model, is already irreversible,
-            or does not have a kinetic law defined
-        
-        Notes
-        -----
-        This function is deprecated. Use `split_reversible_reaction_explicit()` or
-        `split_reversible_reaction_function()` instead for more robust splitting.
-        
-        The function assumes:
-        - First parameter in the kinetic law is the forward rate constant
-        - Second parameter is the reverse rate constant
-        - Reactants and products can be directly swapped for the reverse reaction
-        
-        The original reversible reaction is removed from the model after splitting.
-        New reactions are named with '_forward' and '_reverse' suffixes.
+    Split a reversible reaction into two irreversible reactions (forward and reverse).
+
+    This is a legacy function that extracts compartments and parameters from the AST
+    to construct forward and reverse reactions. It assumes the kinetic law has the form:
+    k_forward * [reactants] - k_reverse * [products].
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the reaction to split
+    reaction_id : str
+        Unique identifier of the reversible reaction to split
+    model_compartments : list of str
+        List of compartment IDs in the model
+    model_parameters_dict : dict
+        Dictionary mapping parameter IDs to their values
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    tuple of (libsbml.Reaction, libsbml.Reaction)
+        A tuple containing:
+        - forward_reaction: The forward irreversible reaction
+        - reverse_reaction: The reverse irreversible reaction
+
+    Raises
+    ------
+    ValueError
+        If the reaction is not found in the model, is already irreversible,
+        or does not have a kinetic law defined
+
+    Notes
+    -----
+    This function is deprecated. Use `split_reversible_reaction_explicit()` or
+    `split_reversible_reaction_function()` instead for more robust splitting.
+
+    The function assumes:
+    - First parameter in the kinetic law is the forward rate constant
+    - Second parameter is the reverse rate constant
+    - Reactants and products can be directly swapped for the reverse reaction
+
+    The original reversible reaction is removed from the model after splitting.
+    New reactions are named with '_forward' and '_reverse' suffixes.
     """
 
     # Get the reaction from the model
@@ -1839,9 +1896,7 @@ def split_reversible_reaction(
     kinetic_law = reaction.getKineticLaw()
 
     if kinetic_law is None:
-        raise ValueError(
-            f"Reaction '{reaction_id}' does not have a kinetic law defined."
-        )
+        raise exceptions.InvalidKineticLawError(reaction_id)
 
     parameters = {}
 
@@ -1993,35 +2048,37 @@ def split_reversible_reaction(
 
 
 # KEEP
-def knockout_reaction(sbml_model: libsbml.Model, target_reaction_id: str, log_file=None) -> libsbml.Model:
+def knockout_reaction(
+    sbml_model: libsbml.Model, target_reaction_id: str, log_file=None
+) -> libsbml.Model:
     """
-        Knockout a reaction by setting its kinetic law to zero.
-        
-        This function performs a knockout operation on a reaction by setting its kinetic law
-        mathematical expression to 0, effectively disabling the reaction without removing it
-        from the model structure.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the reaction to knockout
-        target_reaction_id : str
-            Unique identifier of the reaction to knockout
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        libsbml.Model
-            The modified SBML model with the reaction knocked out
-        
-        Notes
-        -----
-        The function sets the kinetic law to 0 rather than removing the reaction entirely,
-        preserving the model structure. If the reaction is not found, a warning is logged
-        but no error is raised.
-        
-        If the reaction has no kinetic law defined, an error is logged and the program exits.
+    Knockout a reaction by setting its kinetic law to zero.
+
+    This function performs a knockout operation on a reaction by setting its kinetic law
+    mathematical expression to 0, effectively disabling the reaction without removing it
+    from the model structure.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the reaction to knockout
+    target_reaction_id : str
+        Unique identifier of the reaction to knockout
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    libsbml.Model
+        The modified SBML model with the reaction knocked out
+
+    Notes
+    -----
+    The function sets the kinetic law to 0 rather than removing the reaction entirely,
+    preserving the model structure. If the reaction is not found, a warning is logged
+    but no error is raised.
+
+    If the reaction has no kinetic law defined, an error is logged and the program exits.
     """
     # Verify if the reaction exists
     reaction = sbml_model.getReaction(target_reaction_id)
@@ -2046,10 +2103,7 @@ def knockout_reaction(sbml_model: libsbml.Model, target_reaction_id: str, log_fi
             else:
                 print_log(log_file, f"Error setting kinetic law: {result}")
         else:
-            print_log(
-                log_file, f"No kinetic law found for reaction {target_reaction_id}"
-            )
-            exit(1)
+            raise exceptions.InvalidKineticLawError(reaction.getId())
     else:
         print_log(
             log_file,
@@ -2059,52 +2113,57 @@ def knockout_reaction(sbml_model: libsbml.Model, target_reaction_id: str, log_fi
     return sbml_model
 
 
-def knockin_reaction(sbml_model: libsbml.Model, target_reaction: libsbml.Reaction, new_vals: list, log_file=None) -> libsbml.Model:
+def knockin_reaction(
+    sbml_model: libsbml.Model,
+    target_reaction: libsbml.Reaction,
+    new_vals: list,
+    log_file=None,
+) -> libsbml.Model:
     """
-        Perform a knock-in operation on a reaction by replacing its reactants with constant species.
-        
-        This function creates new constant species with specified values for each reactant in the
-        target reaction, then modifies the reaction to use these new constant species. The original
-        reactants are replaced with new species having '_KI' suffix.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the target reaction
-        target_reaction : libsbml.Reaction
-            The reaction object to perform knock-in on
-        new_vals : list of float
-            List of new initial concentration/amount values for each reactant.
-            Order must match the order of reactants in the reaction
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        libsbml.Model
-            The modified SBML model with the knocked-in reaction
-        
-        Raises
-        ------
-        SystemExit
-            If the reaction has no kinetic law or if species creation/modification fails
-        
-        Notes
-        -----
-        The function performs the following operations:
-        1. Creates new constant species for each reactant with '_KI' suffix
-        2. Sets new species to specified values (amounts or concentrations)
-        3. Makes new species constant (boundary condition = True, constant = True)
-        4. Clones the original reaction with '_KI' suffix
-        5. Replaces reactants in the cloned reaction with the new constant species
-        6. Updates the kinetic law to reference the new species
-        7. Removes the original reaction and adds the modified one
-        
-        The function automatically detects whether species use substance units (amounts)
-        or concentration values and applies the new values accordingly.
-        
-        The kinetic law is updated by token replacement, supporting both explicit
-        kinetic laws and function-based kinetic laws.
+    Perform a knock-in operation on a reaction by replacing its reactants with constant species.
+
+    This function creates new constant species with specified values for each reactant in the
+    target reaction, then modifies the reaction to use these new constant species. The original
+    reactants are replaced with new species having '_KI' suffix.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the target reaction
+    target_reaction : libsbml.Reaction
+        The reaction object to perform knock-in on
+    new_vals : list of float
+        List of new initial concentration/amount values for each reactant.
+        Order must match the order of reactants in the reaction
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    libsbml.Model
+        The modified SBML model with the knocked-in reaction
+
+    Raises
+    ------
+    SystemExit
+        If the reaction has no kinetic law or if species creation/modification fails
+
+    Notes
+    -----
+    The function performs the following operations:
+    1. Creates new constant species for each reactant with '_KI' suffix
+    2. Sets new species to specified values (amounts or concentrations)
+    3. Makes new species constant (boundary condition = True, constant = True)
+    4. Clones the original reaction with '_KI' suffix
+    5. Replaces reactants in the cloned reaction with the new constant species
+    6. Updates the kinetic law to reference the new species
+    7. Removes the original reaction and adds the modified one
+
+    The function automatically detects whether species use substance units (amounts)
+    or concentration values and applies the new values accordingly.
+
+    The kinetic law is updated by token replacement, supporting both explicit
+    kinetic laws and function-based kinetic laws.
     """
     # Retrieve the reactants, products, modifiers and local parameters
     rs = []
@@ -2163,8 +2222,7 @@ def knockin_reaction(sbml_model: libsbml.Model, target_reaction: libsbml.Reactio
     kl = target_reaction.getKineticLaw()
 
     if kl is None:
-        print_log(log_file, f"[ERROR] No Kinetikc Law for reaction {target_reaction}")
-        exit(1)
+        exceptions.InvalidKineticLawError(target_reaction.getId())
 
     kl_math = kl.getMath()
     kl_string = libsbml.formulaToL3String(kl_math).replace(" ", "")
@@ -2242,31 +2300,31 @@ def knockin_reaction(sbml_model: libsbml.Model, target_reaction: libsbml.Reactio
 # ============
 def get_functions_list(SBML_model: libsbml.Model) -> list:
     """
-        Extract function definitions from an SBML model as Function objects.
-        
-        This function retrieves all function definitions from the SBML model and converts
-        them into Function objects using the Function class's from_sbml() method.
-        
-        Parameters
-        ----------
-        SBML_model : libsbml.Model
-            The SBML model containing function definitions to extract
-        
-        Returns
-        -------
-        list of Function
-            List of Function objects created from SBML function definitions.
-            Returns empty list if no function definitions exist in the model
-        
-        Notes
-        -----
-        Function definitions in SBML are typically lambda expressions that define
-        reusable mathematical functions for kinetic laws or other model components.
-        
-        See Also
-        --------
-        create_sbml_function : Create a new SBML function definition
-        split_kinetic_function : Split kinetic function into forward/reverse components
+    Extract function definitions from an SBML model as Function objects.
+
+    This function retrieves all function definitions from the SBML model and converts
+    them into Function objects using the Function class's from_sbml() method.
+
+    Parameters
+    ----------
+    SBML_model : libsbml.Model
+        The SBML model containing function definitions to extract
+
+    Returns
+    -------
+    list of Function
+        List of Function objects created from SBML function definitions.
+        Returns empty list if no function definitions exist in the model
+
+    Notes
+    -----
+    Function definitions in SBML are typically lambda expressions that define
+    reusable mathematical functions for kinetic laws or other model components.
+
+    See Also
+    --------
+    create_sbml_function : Create a new SBML function definition
+    split_kinetic_function : Split kinetic function into forward/reverse components
     """
     functions_list = []
 
@@ -2284,44 +2342,44 @@ def get_functions_list(SBML_model: libsbml.Model) -> list:
 
 def save_sbml_model(model: libsbml.Model, file_path: str, log_file=None) -> bool:
     """
-        Save an SBML model to a file in XML format.
-        
-        This function accepts an SBML model in various formats (Model, XML string, or 
-        SBMLDocument) and writes it to the specified file path. It handles automatic 
-        conversion to SBMLDocument when necessary.
-        
-        Parameters
-        ----------
-        model : libsbml.Model, str, or libsbml.SBMLDocument
-            The SBML model to save. Can be:
-            - libsbml.Model: A model object (will be wrapped in SBMLDocument if needed)
-            - str: An XML string representation of the model
-            - libsbml.SBMLDocument: A complete SBML document
-        file_path : str
-            The absolute or relative path where the SBML file will be saved
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        bool
-            True if the file was successfully written, False otherwise
-        
-        Notes
-        -----
-        If the model is a libsbml.Model without an associated SBMLDocument, a new 
-        SBMLDocument is created using the model's SBML level and version.
-        
-        Success and error messages are logged to log_file if provided.
-        
-        Examples
-        --------
-        Save a model object:
-        >>> success = save_sbml_model(my_model, "output/model.xml", log_file)
-        
-        Save from XML string:
-        >>> xml_str = "<sbml>...</sbml>"
-        >>> success = save_sbml_model(xml_str, "output/model.xml")
+    Save an SBML model to a file in XML format.
+
+    This function accepts an SBML model in various formats (Model, XML string, or
+    SBMLDocument) and writes it to the specified file path. It handles automatic
+    conversion to SBMLDocument when necessary.
+
+    Parameters
+    ----------
+    model : libsbml.Model, str, or libsbml.SBMLDocument
+        The SBML model to save. Can be:
+        - libsbml.Model: A model object (will be wrapped in SBMLDocument if needed)
+        - str: An XML string representation of the model
+        - libsbml.SBMLDocument: A complete SBML document
+    file_path : str
+        The absolute or relative path where the SBML file will be saved
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    bool
+        True if the file was successfully written, False otherwise
+
+    Notes
+    -----
+    If the model is a libsbml.Model without an associated SBMLDocument, a new
+    SBMLDocument is created using the model's SBML level and version.
+
+    Success and error messages are logged to log_file if provided.
+
+    Examples
+    --------
+    Save a model object:
+    >>> success = save_sbml_model(my_model, "output/model.xml", log_file)
+
+    Save from XML string:
+    >>> xml_str = "<sbml>...</sbml>"
+    >>> success = save_sbml_model(xml_str, "output/model.xml")
     """
     # Check the type of the model and convert to SBMLDocument if necessary
     if isinstance(model, libsbml.Model):
@@ -2351,50 +2409,50 @@ def save_sbml_model(model: libsbml.Model, file_path: str, log_file=None) -> bool
 
 def get_sbml_as_xml(model: str, log_file=None) -> str:
     """
-        Convert an SBML model to its XML string representation.
-        
-        This function accepts an SBML model in various formats and converts it to an XML 
-        string. It handles automatic conversion to SBMLDocument when necessary before 
-        serialization.
-        
-        Parameters
-        ----------
-        model : libsbml.Model, str, or libsbml.SBMLDocument
-            The SBML model to convert. Can be:
-            - libsbml.Model: A model object (will be wrapped in SBMLDocument if needed)
-            - str: An XML string (returned as-is)
-            - libsbml.SBMLDocument: A complete SBML document
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        str or None
-            The XML string representation of the SBML model, or None if conversion fails
-        
-        Notes
-        -----
-        If the model is a libsbml.Model without an associated SBMLDocument, a new 
-        SBMLDocument is created using the model's SBML level and version.
-        
-        If the input is already a string, it is returned unchanged without validation.
-        
-        Error messages are logged to log_file if provided.
-        
-        See Also
-        --------
-        save_sbml_model : Save an SBML model to a file
-        
-        Examples
-        --------
-        Convert a model to XML string:
-        >>> xml_string = get_sbml_as_xml(my_model)
-        >>> print(xml_string[:100])  # Print first 100 characters
-        
-        Pass through an existing XML string:
-        >>> xml_str = "<sbml>...</sbml>"
-        >>> result = get_sbml_as_xml(xml_str)
-        >>> assert result == xml_str
+    Convert an SBML model to its XML string representation.
+
+    This function accepts an SBML model in various formats and converts it to an XML
+    string. It handles automatic conversion to SBMLDocument when necessary before
+    serialization.
+
+    Parameters
+    ----------
+    model : libsbml.Model, str, or libsbml.SBMLDocument
+        The SBML model to convert. Can be:
+        - libsbml.Model: A model object (will be wrapped in SBMLDocument if needed)
+        - str: An XML string (returned as-is)
+        - libsbml.SBMLDocument: A complete SBML document
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    str or None
+        The XML string representation of the SBML model, or None if conversion fails
+
+    Notes
+    -----
+    If the model is a libsbml.Model without an associated SBMLDocument, a new
+    SBMLDocument is created using the model's SBML level and version.
+
+    If the input is already a string, it is returned unchanged without validation.
+
+    Error messages are logged to log_file if provided.
+
+    See Also
+    --------
+    save_sbml_model : Save an SBML model to a file
+
+    Examples
+    --------
+    Convert a model to XML string:
+    >>> xml_string = get_sbml_as_xml(my_model)
+    >>> print(xml_string[:100])  # Print first 100 characters
+
+    Pass through an existing XML string:
+    >>> xml_str = "<sbml>...</sbml>"
+    >>> result = get_sbml_as_xml(xml_str)
+    >>> assert result == xml_str
     """
     # Check the type of the model and convert to SBMLDocument if necessary
     if isinstance(model, libsbml.Model):
@@ -2422,69 +2480,69 @@ def get_sbml_as_xml(model: str, log_file=None) -> str:
 # KEEP
 def generate_species_random_combinations(
     sbml_model: libsbml.Model,
-    target_species:list = [],
+    target_species: list = [],
     n_samples: int = 5,
     variation: int = 20,
     log_file=None,
 ) -> list:
     """
-        Generate random concentration/amount samples for specified species with percentage variation.
-        
-        This function creates random samples for each target species by varying their initial 
-        values within a specified percentage range. The samples are uniformly distributed 
-        around each species' initial concentration or amount.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the species to sample
-        target_species : list of str, optional
-            List of species IDs for which to generate samples, by default []
-        n_samples : int, optional
-            Number of random samples to generate for each species, by default 5
-        variation : int, optional
-            Percentage variation range around the initial value (e.g., 20 means ±20%), 
-            by default 20
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        list of list of float
-            2D list where each sublist contains n_samples random values for one species.
-            Order matches the order of target_species
-        
-        Raises
-        ------
-        SystemExit
-            If a species is not found in the model or if initial values cannot be accessed
-        
-        Notes
-        -----
-        For each species, samples are generated as:
-        - Normal case: uniform distribution in [initial * (1 - variation/100), initial * (1 + variation/100)]
-        - Zero initial value: uniform distribution in [0, 1e-10] as a fallback
-        
-        The function automatically detects whether species use substance units (amounts) 
-        or concentration values.
-        
-        Random number generation uses numpy's default_rng for reproducibility.
-        
-        See Also
-        --------
-        get_fixed_combinations : Generate fixed variation combinations
-        create_combinations : Generate all combinations from input samples
-        
-        Examples
-        --------
-        Generate 10 samples with ±30% variation for two species:
-        >>> samples = generate_species_random_combinations(
-        ...     model, ['A', 'B'], n_samples=10, variation=30, log_file=log
-        ... )
-        >>> len(samples)  # Number of species
-        2
-        >>> len(samples[0])  # Number of samples per species
-        10
+    Generate random concentration/amount samples for specified species with percentage variation.
+
+    This function creates random samples for each target species by varying their initial
+    values within a specified percentage range. The samples are uniformly distributed
+    around each species' initial concentration or amount.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the species to sample
+    target_species : list of str, optional
+        List of species IDs for which to generate samples, by default []
+    n_samples : int, optional
+        Number of random samples to generate for each species, by default 5
+    variation : int, optional
+        Percentage variation range around the initial value (e.g., 20 means ±20%),
+        by default 20
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    list of list of float
+        2D list where each sublist contains n_samples random values for one species.
+        Order matches the order of target_species
+
+    Raises
+    ------
+    SystemExit
+        If a species is not found in the model or if initial values cannot be accessed
+
+    Notes
+    -----
+    For each species, samples are generated as:
+    - Normal case: uniform distribution in [initial * (1 - variation/100), initial * (1 + variation/100)]
+    - Zero initial value: uniform distribution in [0, 1e-10] as a fallback
+
+    The function automatically detects whether species use substance units (amounts)
+    or concentration values.
+
+    Random number generation uses numpy's default_rng for reproducibility.
+
+    See Also
+    --------
+    get_fixed_combinations : Generate fixed variation combinations
+    create_combinations : Generate all combinations from input samples
+
+    Examples
+    --------
+    Generate 10 samples with ±30% variation for two species:
+    >>> samples = generate_species_random_combinations(
+    ...     model, ['A', 'B'], n_samples=10, variation=30, log_file=log
+    ... )
+    >>> len(samples)  # Number of species
+    2
+    >>> len(samples[0])  # Number of samples per species
+    10
     """
     res = []
 
@@ -2534,61 +2592,61 @@ def generate_species_random_combinations(
 
 
 # KEEP
-def create_combinations(input_samples: list, log_file=None) -> list:
+def create_combinations(input_samples: list, log_file=None) -> Generator:
     """
-        Generate all possible combinations from a 2D list of sample values using Cartesian product.
-        
-        This generator function creates all possible combinations by computing the Cartesian 
-        product of the input lists. It yields combinations one at a time, making it memory-efficient 
-        for large datasets.
-        
-        Parameters
-        ----------
-        input_samples : list of list
-            2D list where each sublist contains sample values for one variable.
-            For example: [[1, 2], [3, 4], [5, 6]] represents 2 values for var1,
-            2 values for var2, and 2 values for var3
-        log_file : file, optional
-            File object for logging operations (currently unused), by default None
-        
-        Yields
-        ------
-        tuple
-            Each combination as a tuple, where the i-th element comes from input_samples[i].
-            Total number of combinations = product of lengths of all sublists
-        
-        Notes
-        -----
-        This function uses itertools.product for efficient Cartesian product computation.
-        Memory usage is minimal as combinations are generated lazily.
-        
-        The order of elements in each yielded tuple corresponds to the order of sublists
-        in input_samples.
-        
-        See Also
-        --------
-        generate_species_random_combinations : Generate random samples for species
-        get_fixed_combinations : Generate fixed variation combinations
-        
-        Examples
-        --------
-        Generate all combinations from 2D samples:
-        >>> samples = [[1, 2], [3, 4], [5, 6]]
-        >>> combinations = list(create_combinations(samples))
-        >>> len(combinations)
-        8
-        >>> combinations[0]
-        (1, 3, 5)
-        >>> combinations[-1]
-        (2, 4, 6)
-        
-        Use as a generator for memory efficiency:
-        >>> for combo in create_combinations([[1, 2], [3, 4]]):
-        ...     print(combo)
-        (1, 3)
-        (1, 4)
-        (2, 3)
-        (2, 4)
+    Generate all possible combinations from a 2D list of sample values using Cartesian product.
+
+    This generator function creates all possible combinations by computing the Cartesian
+    product of the input lists. It yields combinations one at a time, making it memory-efficient
+    for large datasets.
+
+    Parameters
+    ----------
+    input_samples : list of list
+        2D list where each sublist contains sample values for one variable.
+        For example: [[1, 2], [3, 4], [5, 6]] represents 2 values for var1,
+        2 values for var2, and 2 values for var3
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None
+
+    Yields
+    ------
+    tuple
+        Each combination as a tuple, where the i-th element comes from input_samples[i].
+        Total number of combinations = product of lengths of all sublists
+
+    Notes
+    -----
+    This function uses itertools.product for efficient Cartesian product computation.
+    Memory usage is minimal as combinations are generated lazily.
+
+    The order of elements in each yielded tuple corresponds to the order of sublists
+    in input_samples.
+
+    See Also
+    --------
+    generate_species_random_combinations : Generate random samples for species
+    get_fixed_combinations : Generate fixed variation combinations
+
+    Examples
+    --------
+    Generate all combinations from 2D samples:
+    >>> samples = [[1, 2], [3, 4], [5, 6]]
+    >>> combinations = list(create_combinations(samples))
+    >>> len(combinations)
+    8
+    >>> combinations[0]
+    (1, 3, 5)
+    >>> combinations[-1]
+    (2, 4, 6)
+
+    Use as a generator for memory efficiency:
+    >>> for combo in create_combinations([[1, 2], [3, 4]]):
+    ...     print(combo)
+    (1, 3)
+    (1, 4)
+    (2, 3)
+    (2, 4)
     """
     # input_samples is a 2D array: e.g., [[1, 2], [3, 4], [5, 6]]
     for comb in itertools.product(*input_samples):
@@ -2596,67 +2654,72 @@ def create_combinations(input_samples: list, log_file=None) -> list:
 
 
 # KEEP
-def get_fixed_combinations(sbml_model: libsbml.Model, input_species: list, fixed_variations: list, log_file=None) -> list:
+def get_fixed_combinations(
+    sbml_model: libsbml.Model,
+    input_species: list,
+    fixed_variations: list,
+    log_file=None,
+) -> list:
     """
-        Generate fixed-percentage variation samples for specified species.
-        
-        This function creates samples for each target species by applying a set of fixed 
-        percentage variations to their initial values. Unlike random sampling, this produces 
-        deterministic samples based on the specified variation percentages.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing the species to sample
-        input_species : list of str
-            List of species IDs for which to generate variation samples
-        fixed_variations : list of float
-            List of percentage variations to apply (e.g., [-20, 0, 20] for -20%, 0%, +20%)
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        list of list of float
-            2D list where each sublist contains samples for one species.
-            Each sublist has len(fixed_variations) values, sorted by variation percentage.
-            Order matches the order of input_species
-        
-        Raises
-        ------
-        Exception
-            If initial concentration/amount values cannot be accessed for any species
-        
-        Notes
-        -----
-        For each species, samples are generated as:
-        - Normal case: initial_value * (1 + variation/100) for each variation percentage
-        - Zero initial value: abs(variation) * 1e-10 as a fallback
-        
-        The function automatically detects whether species use substance units (amounts) 
-        or concentration values.
-        
-        Samples are sorted by variation percentage in ascending order.
-        
-        See Also
-        --------
-        generate_species_random_combinations : Generate random samples for species
-        create_combinations : Generate Cartesian product of samples
-        
-        Examples
-        --------
-        Generate samples with fixed variations for two species:
-        >>> samples = get_fixed_combinations(
-        ...     model, ['A', 'B'], [-50, 0, 50], log_file=log
-        ... )
-        >>> len(samples)  # Number of species
-        2
-        >>> len(samples[0])  # Number of samples per species (3 variations)
-        3
-        
-        For species 'A' with initial value 100:
-        >>> # fixed_variations = [-50, 0, 50]
-        >>> # samples[0] = [50.0, 100.0, 150.0]
+    Generate fixed-percentage variation samples for specified species.
+
+    This function creates samples for each target species by applying a set of fixed
+    percentage variations to their initial values. Unlike random sampling, this produces
+    deterministic samples based on the specified variation percentages.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing the species to sample
+    input_species : list of str
+        List of species IDs for which to generate variation samples
+    fixed_variations : list of float
+        List of percentage variations to apply (e.g., [-20, 0, 20] for -20%, 0%, +20%)
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    list of list of float
+        2D list where each sublist contains samples for one species.
+        Each sublist has len(fixed_variations) values, sorted by variation percentage.
+        Order matches the order of input_species
+
+    Raises
+    ------
+    Exception
+        If initial concentration/amount values cannot be accessed for any species
+
+    Notes
+    -----
+    For each species, samples are generated as:
+    - Normal case: initial_value * (1 + variation/100) for each variation percentage
+    - Zero initial value: abs(variation) * 1e-10 as a fallback
+
+    The function automatically detects whether species use substance units (amounts)
+    or concentration values.
+
+    Samples are sorted by variation percentage in ascending order.
+
+    See Also
+    --------
+    generate_species_random_combinations : Generate random samples for species
+    create_combinations : Generate Cartesian product of samples
+
+    Examples
+    --------
+    Generate samples with fixed variations for two species:
+    >>> samples = get_fixed_combinations(
+    ...     model, ['A', 'B'], [-50, 0, 50], log_file=log
+    ... )
+    >>> len(samples)  # Number of species
+    2
+    >>> len(samples[0])  # Number of samples per species (3 variations)
+    3
+
+    For species 'A' with initial value 100:
+    >>> # fixed_variations = [-50, 0, 50]
+    >>> # samples[0] = [50.0, 100.0, 150.0]
     """
     samples = []
 
@@ -2753,34 +2816,36 @@ def check_for_duplicates(combinations, log_file=None):
         return True, num_duplicates
 
 
-def get_selections(sbml_model: libsbml.Model, rr_model, target_ids: list, log_file=None) -> list:
+def get_selections(
+    sbml_model: libsbml.Model, rr_model, target_ids: list, log_file=None
+) -> list:
     """
-        Get selections for target species/reactions in the SBML model.
-        
-        This function retrieves the current selections from the roadrunner model and
-        adds target species or reactions to the selection list based on their presence
-        in the SBML model.
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model
-            The SBML model containing species and reactions
-        rr_model : roadrunner.RoadRunner
-            The roadrunner model for accessing current selections
-        target_ids : list of str
-            List of target species or reaction IDs to check and add to selections
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        list of str
-            Updated list of selections including target species/reactions
-        Notes
-        -----
-        The function checks if each target ID is a reaction or species in the SBML model.
-        If it's a reaction, it is added directly. If it's a species, it is added in the
-        format "[species_id]" if not already present in the selections.
+    Get selections for target species/reactions in the SBML model.
+
+    This function retrieves the current selections from the roadrunner model and
+    adds target species or reactions to the selection list based on their presence
+    in the SBML model.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model containing species and reactions
+    rr_model : roadrunner.RoadRunner
+        The roadrunner model for accessing current selections
+    target_ids : list of str
+        List of target species or reaction IDs to check and add to selections
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    list of str
+        Updated list of selections including target species/reactions
+    Notes
+    -----
+    The function checks if each target ID is a reaction or species in the SBML model.
+    If it's a reaction, it is added directly. If it's a species, it is added in the
+    format "[species_id]" if not already present in the selections.
     """
 
     selections = rr_model.selections

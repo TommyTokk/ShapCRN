@@ -30,65 +30,69 @@ from utils.sbml_utils import create_combinations
 
 # KEEP
 def load_roadrunner_model(
-    sbml_model: libsbml.Model, rel_tol: float = 1e-8, abs_tol:float = 1e-12, integrator:str ="cvode", log_file=None
+    sbml_model: libsbml.Model,
+    rel_tol: float = 1e-8,
+    abs_tol: float = 1e-12,
+    integrator: str = "cvode",
+    log_file=None,
 ) -> rr.RoadRunner:
     """
-        Load an SBML model into a RoadRunner instance and configure integrator settings.
-        
-        This function creates a RoadRunner instance from an SBML model and configures the
-        numerical integrator with specified tolerance values. It supports multiple integrator
-        types for different simulation approaches (deterministic ODE, Runge-Kutta, or stochastic).
-        
-        Parameters
-        ----------
-        sbml_model : libsbml.Model or str
-            The SBML model to load. Can be either:
-            - libsbml.Model: A model object (will be converted to SBML string)
-            - str: SBML XML string or file path
-        rel_tol : float, optional
-            Relative tolerance for the integrator, by default 1e-8
-        abs_tol : float, optional
-            Absolute tolerance for the integrator, by default 1e-12
-        integrator : str, optional
-            Integrator type to use for simulations, by default "cvode"
-            Supported values:
-            - "cvode": CVODE integrator for ODEs (deterministic)
-            - "rk4": Fourth-order Runge-Kutta method
-            - "gillespie": Gillespie stochastic simulation algorithm
-        log_file : file, optional
-            File object for logging operations, by default None
-        
-        Returns
-        -------
-        roadrunner.RoadRunner
-            Configured RoadRunner instance ready for simulation
-        
-        Raises
-        ------
-        SystemExit
-            If model loading fails due to invalid SBML or file path errors
-        
-        Notes
-        -----
-        The function automatically handles conversion between libsbml.Model objects and
-        SBML string representations required by RoadRunner.
-        
-        Integrator tolerances affect simulation accuracy and performance:
-        - Lower tolerances increase accuracy but slow down simulations
-        - Higher tolerances speed up simulations but may reduce accuracy
-        
-        Examples
-        --------
-        Load model from libsbml.Model object:
-        >>> rr_model = load_roadrunner_model(sbml_model, rel_tol=1e-6, abs_tol=1e-10)
-        
-        Load model with stochastic integrator:
-        >>> rr_model = load_roadrunner_model(
-        ...     sbml_model, integrator="gillespie", log_file=log
-        ... )
-        
-        Load from SBML file path:
-        >>> rr_model = load_roadrunner_model("model.xml", integrator="rk4")
+    Load an SBML model into a RoadRunner instance and configure integrator settings.
+
+    This function creates a RoadRunner instance from an SBML model and configures the
+    numerical integrator with specified tolerance values. It supports multiple integrator
+    types for different simulation approaches (deterministic ODE, Runge-Kutta, or stochastic).
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model or str
+        The SBML model to load. Can be either:
+        - libsbml.Model: A model object (will be converted to SBML string)
+        - str: SBML XML string or file path
+    rel_tol : float, optional
+        Relative tolerance for the integrator, by default 1e-8
+    abs_tol : float, optional
+        Absolute tolerance for the integrator, by default 1e-12
+    integrator : str, optional
+        Integrator type to use for simulations, by default "cvode"
+        Supported values:
+        - "cvode": CVODE integrator for ODEs (deterministic)
+        - "rk4": Fourth-order Runge-Kutta method
+        - "gillespie": Gillespie stochastic simulation algorithm
+    log_file : file, optional
+        File object for logging operations, by default None
+
+    Returns
+    -------
+    roadrunner.RoadRunner
+        Configured RoadRunner instance ready for simulation
+
+    Raises
+    ------
+    SystemExit
+        If model loading fails due to invalid SBML or file path errors
+
+    Notes
+    -----
+    The function automatically handles conversion between libsbml.Model objects and
+    SBML string representations required by RoadRunner.
+
+    Integrator tolerances affect simulation accuracy and performance:
+    - Lower tolerances increase accuracy but slow down simulations
+    - Higher tolerances speed up simulations but may reduce accuracy
+
+    Examples
+    --------
+    Load model from libsbml.Model object:
+    >>> rr_model = load_roadrunner_model(sbml_model, rel_tol=1e-6, abs_tol=1e-10)
+
+    Load model with stochastic integrator:
+    >>> rr_model = load_roadrunner_model(
+    ...     sbml_model, integrator="gillespie", log_file=log
+    ... )
+
+    Load from SBML file path:
+    >>> rr_model = load_roadrunner_model("model.xml", integrator="rk4")
     """
 
     try:
@@ -118,79 +122,79 @@ def load_roadrunner_model(
 # KEEP
 def simulate(
     rr_model: rr.RoadRunner,
-    start_time: float=0,
-    end_time:float=1000,
-    output_rows:int=100,
-    steady_state:bool=False,
-    max_end_time:float=1000,
-    sim_step:int=5,
-    threshold:float=1e-6,
+    start_time: float = 0,
+    end_time: float = 1000,
+    output_rows: int = 100,
+    steady_state: bool = False,
+    max_end_time: float = 1000,
+    sim_step: int = 5,
+    threshold: float = 1e-6,
     log_file=None,
 ) -> tuple:
     """
-        Simulate a RoadRunner model with optional steady state detection.
-        
-        This function runs either a standard time-course simulation or an adaptive simulation
-        that continues until steady state is reached. Steady state detection uses a block-by-block
-        approach to monitor concentration changes.
-        
-        Parameters
-        ----------
-        rr_model : roadrunner.RoadRunner
-            Configured RoadRunner model instance to simulate
-        start_time : float, optional
-            Simulation start time, by default 0
-        end_time : float, optional
-            Simulation end time (used when steady_state=False), by default 1000
-        output_rows : int, optional
-            Number of output time points in the results, by default 100
-        steady_state : bool, optional
-            If True, run adaptive simulation until steady state is reached, by default False
-        max_end_time : float, optional
-            Maximum simulation time when detecting steady state, by default 1000
-        sim_step : int, optional
-            Time step size for each simulation block during steady state detection, by default 5
-        threshold : float, optional
-            Convergence threshold for steady state detection (max relative change), by default 1e-6
-        log_file : file, optional
-            File object for logging simulation progress, by default None
-        
-        Returns
-        -------
-        tuple of (numpy.ndarray, float or None, list)
-            A tuple containing:
-            - simulation_results : Structured array with time-course data (columns: time, species)
-            - steady_state_time : Time when steady state was reached, or None if not reached/not requested
-            - colnames : List of column names from the simulation results
-        
-        Notes
-        -----
-        The function automatically sets `nonnegative = True` on the integrator to prevent
-        negative concentration values during stochastic simulations.
-        
-        When `steady_state=True`:
-        - Uses `simulate_with_steady_state()` for adaptive block-by-block simulation
-        - Points per block is calculated as max(20, output_rows // (max_end_time / sim_step))
-        - Simulation continues until convergence or max_end_time is reached
-        - Steady state is detected when all monitored species change by less than threshold
-        
-        When `steady_state=False`:
-        - Runs standard RoadRunner time-course simulation from start_time to end_time
-        - Returns exactly output_rows time points
-        
-        Examples
-        --------
-        Standard time-course simulation:
-        >>> results, ss_time, cols = simulate(rr_model, end_time=500, output_rows=200)
-        >>> print(f"Simulation completed with {len(cols)} species")
-        
-        Steady state simulation:
-        >>> results, ss_time, cols = simulate(
-        ...     rr_model, steady_state=True, max_end_time=2000, 
-        ...     threshold=1e-8, log_file=log
-        ... )
-        >>> if ss_time is not None:
-        ...     print(f"Steady state reached at time {ss_time}")
+    Simulate a RoadRunner model with optional steady state detection.
+
+    This function runs either a standard time-course simulation or an adaptive simulation
+    that continues until steady state is reached. Steady state detection uses a block-by-block
+    approach to monitor concentration changes.
+
+    Parameters
+    ----------
+    rr_model : roadrunner.RoadRunner
+        Configured RoadRunner model instance to simulate
+    start_time : float, optional
+        Simulation start time, by default 0
+    end_time : float, optional
+        Simulation end time (used when steady_state=False), by default 1000
+    output_rows : int, optional
+        Number of output time points in the results, by default 100
+    steady_state : bool, optional
+        If True, run adaptive simulation until steady state is reached, by default False
+    max_end_time : float, optional
+        Maximum simulation time when detecting steady state, by default 1000
+    sim_step : int, optional
+        Time step size for each simulation block during steady state detection, by default 5
+    threshold : float, optional
+        Convergence threshold for steady state detection (max relative change), by default 1e-6
+    log_file : file, optional
+        File object for logging simulation progress, by default None
+
+    Returns
+    -------
+    tuple of (numpy.ndarray, float or None, list)
+        A tuple containing:
+        - simulation_results : Structured array with time-course data (columns: time, species)
+        - steady_state_time : Time when steady state was reached, or None if not reached/not requested
+        - colnames : List of column names from the simulation results
+
+    Notes
+    -----
+    The function automatically sets `nonnegative = True` on the integrator to prevent
+    negative concentration values during stochastic simulations.
+
+    When `steady_state=True`:
+    - Uses `simulate_with_steady_state()` for adaptive block-by-block simulation
+    - Points per block is calculated as max(20, output_rows // (max_end_time / sim_step))
+    - Simulation continues until convergence or max_end_time is reached
+    - Steady state is detected when all monitored species change by less than threshold
+
+    When `steady_state=False`:
+    - Runs standard RoadRunner time-course simulation from start_time to end_time
+    - Returns exactly output_rows time points
+
+    Examples
+    --------
+    Standard time-course simulation:
+    >>> results, ss_time, cols = simulate(rr_model, end_time=500, output_rows=200)
+    >>> print(f"Simulation completed with {len(cols)} species")
+
+    Steady state simulation:
+    >>> results, ss_time, cols = simulate(
+    ...     rr_model, steady_state=True, max_end_time=2000,
+    ...     threshold=1e-8, log_file=log
+    ... )
+    >>> if ss_time is not None:
+    ...     print(f"Steady state reached at time {ss_time}")
     """
     # Setting nonnegative for stochastic simulations
     rr_model.getIntegrator().nonnegative = True
@@ -231,54 +235,54 @@ def simulate(
 
 def simulate_with_steady_state(
     rr_model: rr.RoadRunner,
-    start_time: float=0,
-    max_end_time: float=1000,
-    block_size: int=10,
-    points_per_block: int=100,
-    threshold:float=1e-12,
-    consecutive_checks:int=3,
-    monitor_species:list=None,
+    start_time: float = 0,
+    max_end_time: float = 1000,
+    block_size: int = 10,
+    points_per_block: int = 100,
+    threshold: float = 1e-12,
+    consecutive_checks: int = 3,
+    monitor_species: list = None,
     log_file=None,
 ) -> tuple:
     """
-        Simulates a model until steady state is reached using a block-by-block approach.
+    Simulates a model until steady state is reached using a block-by-block approach.
 
-        Parameters
-        ----------
-        rr_model : roadrunner.RoadRunner
-            RoadRunner model instance to simulate
-        start_time : float, optional
-            Start time for simulation, by default 0
-        max_end_time : float, optional
-            Maximum end time if steady state is not reached, by default 1000
-        block_size : float, optional
-            Size of each simulation block, by default 10
-        points_per_block : int, optional
-            Number of points to calculate in each block, by default 100
-        threshold : float, optional
-            Threshold for steady state detection, by default 1e-12
-        consecutive_checks : int, optional
-            Number of consecutive blocks that must meet threshold for steady state, by default 3
-        monitor_species : list of str, optional
-            Species to monitor for steady state detection. If None, all floating species are monitored, by default None
-        log_file : file, optional
-            Optional log file for debugging output, by default None
+    Parameters
+    ----------
+    rr_model : roadrunner.RoadRunner
+        RoadRunner model instance to simulate
+    start_time : float, optional
+        Start time for simulation, by default 0
+    max_end_time : float, optional
+        Maximum end time if steady state is not reached, by default 1000
+    block_size : float, optional
+        Size of each simulation block, by default 10
+    points_per_block : int, optional
+        Number of points to calculate in each block, by default 100
+    threshold : float, optional
+        Threshold for steady state detection, by default 1e-12
+    consecutive_checks : int, optional
+        Number of consecutive blocks that must meet threshold for steady state, by default 3
+    monitor_species : list of str, optional
+        Species to monitor for steady state detection. If None, all floating species are monitored, by default None
+    log_file : file, optional
+        Optional log file for debugging output, by default None
 
-        Returns
-        -------
-        tuple of (numpy.ndarray, float or None, list)
-            A tuple containing:
-            - simulation_results : Structured array with time-course data
-            - steady_state_time : Time when steady state was reached, or None if not reached
-            - column_names : List of column names from the simulation results
-        
-        Notes
-        -----
-        The function uses adaptive block sizing:
-        - When approaching steady state, block size increases up to max_block_size (50) for efficiency
-        - When not in steady state, block size decreases down to min_block_size (1.0) for better resolution
-        - Steady state is detected when all monitored species show variations below threshold 
-        for consecutive_checks consecutive blocks
+    Returns
+    -------
+    tuple of (numpy.ndarray, float or None, list)
+        A tuple containing:
+        - simulation_results : Structured array with time-course data
+        - steady_state_time : Time when steady state was reached, or None if not reached
+        - column_names : List of column names from the simulation results
+
+    Notes
+    -----
+    The function uses adaptive block sizing:
+    - When approaching steady state, block size increases up to max_block_size (50) for efficiency
+    - When not in steady state, block size decreases down to min_block_size (1.0) for better resolution
+    - Steady state is detected when all monitored species show variations below threshold
+    for consecutive_checks consecutive blocks
     """
     rr_model.setIntegrator("cvode")
     rr_model.reset()
@@ -396,52 +400,52 @@ def simulate_samples(
     rr_model: rr.RoadRunner,
     combination: list,
     input_species_id: str,
-    max_end_time: float=1000,
-    start_time: float=0,
-    end_time: float=1000,
-    output_rows: int=100,
-    steady_state: bool=False,
+    max_end_time: float = 1000,
+    start_time: float = 0,
+    end_time: float = 1000,
+    output_rows: int = 100,
+    steady_state: bool = False,
 ) -> tuple:
     """
-        Simulate a model with a specific input species concentration combination.
-        
-        This function applies a given combination of input species concentrations to a 
-        RoadRunner model and runs a simulation, supporting both standard time-course 
-        and steady-state simulations.
-        
-        Parameters
-        ----------
-        rr_model : roadrunner.RoadRunner
-            RoadRunner model to simulate
-        combination : list of float
-            Single combination of input species concentrations to apply
-        input_species_id : list of str
-            IDs of species considered as inputs (must match length of combination)
-        max_end_time : float, optional
-            Maximum end time for steady state detection, by default 1000
-        start_time : float, optional
-            Start time of the simulation, by default 0
-        end_time : float, optional
-            End time of the simulation (for non-steady-state mode), by default 1000
-        output_rows : int, optional
-            Number of output rows in the simulation results, by default 100
-        steady_state : bool, optional
-            If True, simulate until steady state is reached, by default False
-        
-        Returns
-        -------
-        tuple of (numpy.ndarray, float or None, list)
-            A tuple containing:
-            - simulation_results : Structured array with time-course data
-            - steady_state_time : Time when steady state was reached, or None
-            - colnames : List of column names from the simulation results
-        
-        Notes
-        -----
-        - The function preserves the original timeCourseSelections of the model
-        - For Gillespie integrator, nonnegative is automatically set to True
-        - Initial concentrations are set via `setInitConcentration()` before simulation
-        - The model is reset before applying new concentrations
+    Simulate a model with a specific input species concentration combination.
+
+    This function applies a given combination of input species concentrations to a
+    RoadRunner model and runs a simulation, supporting both standard time-course
+    and steady-state simulations.
+
+    Parameters
+    ----------
+    rr_model : roadrunner.RoadRunner
+        RoadRunner model to simulate
+    combination : list of float
+        Single combination of input species concentrations to apply
+    input_species_id : list of str
+        IDs of species considered as inputs (must match length of combination)
+    max_end_time : float, optional
+        Maximum end time for steady state detection, by default 1000
+    start_time : float, optional
+        Start time of the simulation, by default 0
+    end_time : float, optional
+        End time of the simulation (for non-steady-state mode), by default 1000
+    output_rows : int, optional
+        Number of output rows in the simulation results, by default 100
+    steady_state : bool, optional
+        If True, simulate until steady state is reached, by default False
+
+    Returns
+    -------
+    tuple of (numpy.ndarray, float or None, list)
+        A tuple containing:
+        - simulation_results : Structured array with time-course data
+        - steady_state_time : Time when steady state was reached, or None
+        - colnames : List of column names from the simulation results
+
+    Notes
+    -----
+    - The function preserves the original timeCourseSelections of the model
+    - For Gillespie integrator, nonnegative is automatically set to True
+    - Initial concentrations are set via `setInitConcentration()` before simulation
+    - The model is reset before applying new concentrations
     """
     # rr_model.reset()
     #
@@ -478,11 +482,11 @@ def simulate_samples(
 def process_species_samples(args: tuple) -> tuple:
     """
     Simulate knockout model with perturbations across multiple input combinations.
-    
+
     This worker function processes a single knockout species by simulating the modified
-    (knockout) model both with and without perturbations. It's designed to be called 
+    (knockout) model both with and without perturbations. It's designed to be called
     within a multiprocessing context.
-    
+
     Parameters
     ----------
     args : tuple
@@ -511,7 +515,7 @@ def process_species_samples(args: tuple) -> tuple:
             Minimum steady state time observed so far
         - log_file : file
             File object for logging
-    
+
     Returns
     -------
     tuple of (str, list of pandas.DataFrame)
@@ -522,19 +526,19 @@ def process_species_samples(args: tuple) -> tuple:
             List of DataFrames where:
             - First element: baseline knockout simulation (no perturbations)
             - Subsequent elements: knockout simulations with each perturbation combination
-    
+
     Raises
     ------
     Exception
         If any error occurs during model loading, simulation, or data processing
-    
+
     Notes
     -----
     - This function is intended to be used with multiprocessing.Pool.map()
     - The modified model is loaded fresh for each call to ensure thread safety
     - All DataFrames exclude the time column (columns start from index 1)
     - The function updates min_ss_time based on steady state detection
-    
+
     See Also
     --------
     process_species_no_samples : Similar function without perturbations
@@ -609,11 +613,11 @@ def process_species_samples(args: tuple) -> tuple:
 def process_species_no_samples(args: tuple) -> tuple:
     """
     Simulate knockout model without perturbations.
-    
+
     This worker function processes a single knockout species by simulating the modified
-    (knockout) model without input perturbations. It's designed to be called within a 
+    (knockout) model without input perturbations. It's designed to be called within a
     multiprocessing context.
-    
+
     Parameters
     ----------
     args : tuple
@@ -642,7 +646,7 @@ def process_species_no_samples(args: tuple) -> tuple:
             Minimum steady state time observed so far (updated but not returned)
         - log_file : file
             File object for logging
-    
+
     Returns
     -------
     tuple of (str, pandas.DataFrame)
@@ -651,19 +655,19 @@ def process_species_no_samples(args: tuple) -> tuple:
             ID of the knocked out species
         - knockout_data : pandas.DataFrame
             Simulation results excluding the time column
-    
+
     Raises
     ------
     Exception
         If any error occurs during model loading, simulation, or data processing
-    
+
     Notes
     -----
     - This function is intended to be used with multiprocessing.Pool.map()
     - The modified model is loaded fresh for each call to ensure thread safety
     - The DataFrame excludes the time column (columns start from index 1)
     - Unlike process_species_samples, this only runs a single baseline simulation
-    
+
     See Also
     --------
     process_species_samples : Similar function with perturbations
@@ -731,18 +735,17 @@ def process_species_multiprocessing(
     max_end_time: float = 1000,
     min_ss_time: float = 1000,
     log_file=None,
-    max_workers: int=None,
-    use_perturbations: bool=False,
-    preserve_input: bool=False,
+    max_workers: int = None,
+    use_perturbations: bool = False,
+    preserve_input: bool = False,
 ) -> list:
-    
     """
     Orchestrate parallel simulation of multiple knockout models using multiprocessing.
-    
+
     This function distributes the simulation of knockout models across multiple CPU cores,
     automatically determining the optimal number of workers and preparing arguments for
     parallel execution. It supports both perturbation-based and standard knockout analyses.
-    
+
     Parameters
     ----------
     target_ids : list of str
@@ -774,31 +777,31 @@ def process_species_multiprocessing(
         Maximum number of worker processes. If None, uses 40% of available CPU cores
         (capped at 8), by default None
     use_perturbations : bool, optional
-        If True, use process_species_samples (with perturbations); 
+        If True, use process_species_samples (with perturbations);
         if False, use process_species_no_samples, by default False
     preserve_input : bool, optional
         Currently unused parameter (reserved for future functionality), by default False
-    
+
     Returns
     -------
     list of tuple
         List of tuples where each tuple contains:
         - If use_perturbations=True: (species_id, list of pandas.DataFrame)
         - If use_perturbations=False: (species_id, pandas.DataFrame)
-    
+
     Raises
     ------
     SystemExit
         If a critical error occurs during multiprocessing pool execution
-    
+
     Notes
     -----
     - Worker allocation: Uses 40% of available CPU cores by default, capped at 8 workers
-    - Missing models: Species in target_ids without corresponding entries in 
+    - Missing models: Species in target_ids without corresponding entries in
       modified_models_dict are skipped with a warning
     - Thread safety: Each worker loads models independently to avoid shared state issues
     - The function uses multiprocessing.Pool.map() for parallel execution
-    
+
     Examples
     --------
     Without perturbations:
@@ -811,7 +814,7 @@ def process_species_multiprocessing(
     ...     integrator='cvode',
     ...     use_perturbations=False
     ... )
-    
+
     With perturbations:
     >>> results = process_species_multiprocessing(
     ...     target_ids=['S1', 'S2'],
@@ -823,7 +826,7 @@ def process_species_multiprocessing(
     ...     use_perturbations=True,
     ...     max_workers=4
     ... )
-    
+
     See Also
     --------
     process_species_samples : Worker function for simulations with perturbations
@@ -867,7 +870,6 @@ def process_species_multiprocessing(
             print_log(log_file, f"Warning: No knockout model found for species {ts}")
         i += 1
 
-
     # Create and run the pool
     try:
         # Implement the logic using Pool and imap
@@ -890,14 +892,16 @@ def process_species_multiprocessing(
     return result
 
 
-def get_knockout_variation(original_model, ko_models: list, colnames: list, log_file=None) -> dict:
+def get_knockout_variation(
+    original_model, ko_models: list, colnames: list, log_file=None
+) -> dict:
     """
     Calculate variation and relative variation of species with respect to internal species knockout.
-    
+
     This version is used when perturbations are not required. It compares the final steady-state
     concentrations between the original model and knockout models to quantify the impact of
     removing each species from the system.
-    
+
     Parameters
     ----------
     original_model : numpy.ndarray
@@ -913,7 +917,7 @@ def get_knockout_variation(original_model, ko_models: list, colnames: list, log_
         Column names from the simulation output, typically in format ['time', '[species1]', '[species2]', ...]
     log_file : file, optional
         File object for logging operations, by default None
-    
+
     Returns
     -------
     dict
@@ -928,9 +932,9 @@ def get_knockout_variation(original_model, ko_models: list, colnames: list, log_
         }
         - variation: Absolute difference (ko_value - original_value)
         - relative-variation: Relative difference ((ko_value - original_value) / original_value)
-        
+
         Self-comparisons (knockout species vs itself) have NaN values.
-    
+
     Notes
     -----
     - Uses epsilon = 1e-20 as threshold for numerical stability
@@ -938,7 +942,7 @@ def get_knockout_variation(original_model, ko_models: list, colnames: list, log_
     - When original value < epsilon, relative variation is set to inf
     - Only the final time point concentrations are compared
     - Column names are cleaned by removing brackets using regex pattern r"[\[\]]"
-    
+
     Examples
     --------
     >>> original_sim = simulate(model)
@@ -946,7 +950,7 @@ def get_knockout_variation(original_model, ko_models: list, colnames: list, log_
     >>> variations = get_knockout_variation(original_sim, ko_sims, original_sim.colnames)
     >>> print(variations['S1']['S2']['relative-variation'])
     0.25  # S2 increased by 25% when S1 was knocked out
-    
+
     See Also
     --------
     get_absolute_variations_no_samples : Calculate absolute variations without perturbations
@@ -1021,18 +1025,18 @@ def get_knockout_variation(original_model, ko_models: list, colnames: list, log_
 
 # KEEP
 def get_absolute_variations_samples(
-    final_results_original_model: pd.DataFrame,
-    final_results_knocked_model: pd.DataFrame,
-    epsilon: float=1e-20,
+    final_results_original_model: list[pd.DataFrame],
+    final_results_knocked_model: list[pd.DataFrame],
+    epsilon: float = 1e-20,
     log_file=None,
 ) -> pd.DataFrame:
     """
     Calculate absolute variations between original and knockout model results with perturbations.
-    
+
     This function computes the root mean square (RMS) of absolute concentration differences
     across multiple perturbation combinations. It compares the final steady-state values
     between original and knockout models for each species across all input perturbations.
-    
+
     Parameters
     ----------
     final_results_original_model : list of pandas.DataFrame
@@ -1050,7 +1054,7 @@ def get_absolute_variations_samples(
         by default 1e-20
     log_file : file, optional
         File object for logging operations (currently unused), by default None
-    
+
     Returns
     -------
     pandas.DataFrame
@@ -1058,23 +1062,23 @@ def get_absolute_variations_samples(
         - Rows: Knockout species IDs
         - Columns: All species IDs (with brackets removed)
         - Values: RMS of absolute variations across all perturbations
-        
+
         NaN values appear where:
         - Knockout species is compared to itself (diagonal)
         - Infinite values are encountered
-    
+
     Notes
     -----
     The function calculates variations as:
     1. For each perturbation: var = knockout_value - original_value
     2. Aggregate using RMS: RMS = sqrt(mean(var²))
-    
+
     Values ≤ epsilon are masked to zero before calculating differences.
     Self-comparisons (knockout species vs itself) are set to NaN to avoid meaningless data.
-    
+
     The RMS aggregation emphasizes larger variations and provides a single metric
     that summarizes the impact across all perturbations.
-    
+
     Examples
     --------
     >>> original_results = [df1, df2, df3]  # 3 perturbations
@@ -1082,7 +1086,7 @@ def get_absolute_variations_samples(
     >>> variations = get_absolute_variations_samples(original_results, ko_results)
     >>> print(variations.loc['S1', 'S2'])  # RMS variation of S2 when S1 is knocked out
     0.145
-    
+
     See Also
     --------
     get_relative_variations_samples : Calculate relative variations with perturbations
@@ -1128,16 +1132,18 @@ def get_absolute_variations_samples(
 
 # KEEP
 def get_absolute_variations_no_samples(
-    original_data: pd.DataFrame, ko_data: pd.DataFrame, epsilon:float=1e-20, log_file=None
+    original_data: pd.DataFrame,
+    ko_data: pd.DataFrame,
+    epsilon: float = 1e-20,
+    log_file=None,
 ) -> pd.DataFrame:
-    
     """
     Calculate absolute variations between original and knockout model results without perturbations.
-    
+
     This function computes the absolute concentration differences at steady state
     between the original model and each knockout model. Unlike the samples version,
     this operates on single simulation runs without input perturbations.
-    
+
     Parameters
     ----------
     original_data : pandas.DataFrame
@@ -1155,7 +1161,7 @@ def get_absolute_variations_no_samples(
         by default 1e-20
     log_file : file, optional
         File object for logging operations (currently unused), by default None
-    
+
     Returns
     -------
     pandas.DataFrame
@@ -1163,24 +1169,24 @@ def get_absolute_variations_no_samples(
         - Rows: Knockout species IDs
         - Columns: All species IDs (with brackets removed)
         - Values: Absolute variation (knockout_value - original_value) at final time point
-        
+
         NaN values appear where:
         - Knockout species is compared to itself (diagonal)
         - Infinite values are encountered
-    
+
     Notes
     -----
     The function calculates variations as:
     - var = knockout_final_value - original_final_value
-    
+
     Processing steps:
     1. Extract final time point values using .tail(1)
     2. Mask values ≤ epsilon to zero
     3. Calculate absolute difference
     4. Set diagonal (self-comparisons) to NaN
-    
+
     This is the non-perturbation counterpart to get_absolute_variations_samples.
-    
+
     Examples
     --------
     >>> original_df = pd.DataFrame({'S1': [1.0], 'S2': [2.0], 'S3': [0.5]})
@@ -1191,7 +1197,7 @@ def get_absolute_variations_no_samples(
     >>> variations = get_absolute_variations_no_samples(original_df, ko_data)
     >>> print(variations.loc['S1', 'S2'])  # Change in S2 when S1 is knocked out
     0.3
-    
+
     See Also
     --------
     get_absolute_variations_samples : Calculate absolute variations with perturbations
@@ -1229,19 +1235,19 @@ def get_absolute_variations_no_samples(
 
 # KEEP
 def get_relative_variations_samples(
-    final_results_original_model: pd.DataFrame,
-    final_results_knocked_model: pd.DataFrame,
-    epsilon:float=1e-20,
+    final_results_original_model: list[pd.DataFrame],
+    final_results_knocked_model: list[pd.DataFrame],
+    epsilon: float = 1e-20,
     log_file=None,
 ) -> pd.DataFrame:
     """
     Calculate relative variations between original and knockout model results with perturbations.
-    
+
     This function computes the root mean square (RMS) of relative concentration changes
     across multiple perturbation combinations. It compares the final steady-state values
     between original and knockout models for each species across all input perturbations,
     normalized by the original values.
-    
+
     Parameters
     ----------
     final_results_original_model : list of pandas.DataFrame
@@ -1259,7 +1265,7 @@ def get_relative_variations_samples(
         by default 1e-20
     log_file : file, optional
         File object for logging operations (currently unused), by default None
-    
+
     Returns
     -------
     pandas.DataFrame
@@ -1267,27 +1273,27 @@ def get_relative_variations_samples(
         - Rows: Knockout species IDs
         - Columns: All species IDs (with brackets removed)
         - Values: RMS of relative variations across all perturbations
-        
+
         NaN values appear where:
         - Knockout species is compared to itself (diagonal)
         - Infinite values are encountered (e.g., division by zero)
-    
+
     Notes
     -----
     The function calculates relative variations as:
     1. For each perturbation: rel_var = (knockout_value - original_value) / original_value
     2. Aggregate using RMS: RMS = sqrt(mean(rel_var²))
-    
+
     Processing steps:
     - Values ≤ epsilon are masked to zero before calculations
     - Relative changes are computed for each perturbation
     - RMS aggregation provides a single metric across all perturbations
     - Self-comparisons (knockout species vs itself) are set to NaN
     - Infinite values (from division by zero) are masked to NaN
-    
+
     The RMS aggregation emphasizes larger relative variations and provides a robust
     measure that is less sensitive to outliers than simple averaging.
-    
+
     Examples
     --------
     >>> original_results = [df1, df2, df3]  # 3 perturbations
@@ -1295,7 +1301,7 @@ def get_relative_variations_samples(
     >>> rel_variations = get_relative_variations_samples(original_results, ko_results)
     >>> print(rel_variations.loc['S1', 'S2'])  # RMS relative change in S2 when S1 is knocked out
     0.125  # S2 changed by ~12.5% on average (RMS) across perturbations
-    
+
     See Also
     --------
     get_absolute_variations_samples : Calculate absolute variations with perturbations
@@ -1341,17 +1347,19 @@ def get_relative_variations_samples(
 
 # KEEP
 def get_relative_variations_no_samples(
-    original_data:pd.DataFrame, ko_data:pd.DataFrame, epsilon:float=1e-20, log_file=None
+    original_data: pd.DataFrame,
+    ko_data: pd.DataFrame,
+    epsilon: float = 1e-20,
+    log_file=None,
 ) -> pd.DataFrame:
-    
     """
     Calculate relative variations between original and knockout model results without perturbations.
-    
+
     This function computes the relative concentration changes at steady state between the
     original model and each knockout model. Unlike the samples version, this operates on
     single simulation runs without input perturbations, normalizing changes by the original
     concentrations.
-    
+
     Parameters
     ----------
     original_data : pandas.DataFrame
@@ -1369,7 +1377,7 @@ def get_relative_variations_no_samples(
         by default 1e-20
     log_file : file, optional
         File object for logging operations (currently unused), by default None
-    
+
     Returns
     -------
     pandas.DataFrame
@@ -1377,29 +1385,29 @@ def get_relative_variations_no_samples(
         - Rows: Knockout species IDs
         - Columns: All species IDs (with brackets removed)
         - Values: Relative variation ((knockout_value - original_value) / original_value) at final time point
-        
+
         NaN values appear where:
         - Knockout species is compared to itself (diagonal)
         - Infinite values are encountered (e.g., division by zero)
-    
+
     Notes
     -----
     The function calculates relative variations as:
     - rel_var = (knockout_final_value - original_final_value) / original_final_value
-    
+
     Processing steps:
     1. Extract final time point values using .tail(1)
     2. Mask values ≤ epsilon to zero
     3. Calculate relative difference (normalized by original value)
     4. Set diagonal (self-comparisons) to NaN
     5. Mask infinite values (from division by zero) to NaN
-    
+
     Relative variations provide scale-independent measures of knockout impact,
     making them suitable for comparing effects across species with different
     concentration magnitudes.
-    
+
     This is the non-perturbation counterpart to get_relative_variations_samples.
-    
+
     Examples
     --------
     >>> original_df = pd.DataFrame({'S1': [1.0], 'S2': [2.0], 'S3': [0.5]})
@@ -1410,7 +1418,7 @@ def get_relative_variations_no_samples(
     >>> rel_variations = get_relative_variations_no_samples(original_df, ko_data)
     >>> print(rel_variations.loc['S1', 'S2'])  # Relative change in S2 when S1 is knocked out
     0.2  # S2 increased by 20%
-    
+
     See Also
     --------
     get_relative_variations_samples : Calculate relative variations with perturbations
@@ -1452,17 +1460,16 @@ def get_payoff_vals(
     final_results_original_model: pd.DataFrame,
     final_results_knocked_model: pd.DataFrame,
     payoff_function: callable,
-    epsilon:float=1e-20,
+    epsilon: float = 1e-20,
     log_file=None,
 ) -> list:
-    
     """
     Calculate payoff differences between original and knockout model results using a custom payoff function.
-    
+
     This function applies a user-defined payoff function to both original and knockout simulation
     results across multiple perturbation combinations, then computes the difference. This is
     typically used for Shapley value calculations or game-theoretic analyses of knockout impacts.
-    
+
     Parameters
     ----------
     final_results_original_model : list of pandas.DataFrame
@@ -1484,7 +1491,7 @@ def get_payoff_vals(
         by default 1e-20
     log_file : file, optional
         File object for logging operations (currently unused), by default None
-    
+
     Returns
     -------
     list of tuple
@@ -1494,36 +1501,36 @@ def get_payoff_vals(
         - payoffs_df : pandas.DataFrame
             DataFrame of payoff differences (original - knockout) for all perturbations
             Shape: (n_perturbations, n_output_values) depending on payoff_function
-    
+
     Notes
     -----
     The payoff difference is calculated as:
     - payoff_diff = payoff_function(original_simulation) - payoff_function(knockout_simulation)
-    
+
     Positive values indicate that the original model had higher payoff (knockout decreased performance).
     Negative values indicate that the knockout model had higher payoff (knockout improved performance).
-    
+
     This function is commonly used as input to Shapley value calculations, where the payoff
     represents a measure of system performance or output.
-    
+
     Examples
     --------
     Using sum of final concentrations as payoff:
     >>> def total_concentration(df):
     ...     return df.iloc[-1].sum()
-    >>> 
+    >>>
     >>> original_results = [df1, df2, df3]
     >>> ko_results = [('S1', [ko_df1, ko_df2, ko_df3]), ('S2', [...])]
     >>> payoffs = get_payoff_vals(original_results, ko_results, total_concentration)
     >>> for ko_species, payoff_df in payoffs:
     ...     print(f"{ko_species}: mean payoff difference = {payoff_df.mean()}")
-    
+
     Using specific species as payoff:
     >>> def species_S3_payoff(df):
     ...     return df['S3'].iloc[-1]
-    >>> 
+    >>>
     >>> payoffs = get_payoff_vals(original_results, ko_results, species_S3_payoff)
-    
+
     See Also
     --------
     get_shapley_values : Compute Shapley values from payoff differences
@@ -1559,7 +1566,9 @@ def get_payoff_vals(
 
 
 # KEEP
-def get_shapley_values(payoff_values:list, n_combinations: int, n_inputs:int, log_file=None) -> pd.DataFrame:
+def get_shapley_values(
+    payoff_values: list, n_combinations: int, n_inputs: int, log_file=None
+) -> pd.DataFrame:
     """
     Calculate Shapley values from payoff differences across knockout species.
 
@@ -1594,11 +1603,11 @@ def get_shapley_values(payoff_values:list, n_combinations: int, n_inputs:int, lo
     Notes
     -----
     The Shapley value formula used is:
-        
+
     $$\phi_i = \sum_{S \subseteq N \setminus \{i\}} \frac{|S|! (n - |S| - 1)!}{n!} [v(S \cup \{i\}) - v(S)]$$
 
     Simplified for this implementation:
-        
+
     $$\text{Shapley}_{\text{ko}} = \frac{n_{\text{inputs}}! \cdot (n_{\text{combinations}} - n_{\text{inputs}})!}{n_{\text{combinations}}!} \sum_{\text{all combinations}} \text{payoff}_{\text{ko}}$$
 
     Where:
@@ -1664,11 +1673,11 @@ def generate_values_distance_report(
     ko_species_list: list,
     model_name: str,
     saving_path: str,
-    threshold:float=0.2,
-    alpha:float=0.05,
-    report_title:str="VALUES DISTANCE REPORT",
+    threshold: float = 0.2,
+    alpha: float = 0.05,
+    report_title: str = "VALUES DISTANCE REPORT",
     log_file=None,
- ) -> None:
+) -> None:
     """
     Generate a comprehensive distance analysis report with Pearson correlation and knockout rankings.
 
@@ -1729,10 +1738,10 @@ def generate_values_distance_report(
     - Strength interpretation (very weak to very strong)
     - Direction (positive/negative)
     - Statistical significance assessment
-    
+
     2. Distance Matrix Statistics
     - Maximum, minimum, mean, and standard deviation of distances
-    
+
     3. Knockout Species Ranking
     - Top 10 species most sensitive to parameter uncertainty
     - Based on knockout impact scores
@@ -1925,9 +1934,9 @@ def generate_pattern_distance_report(
     ko_species_list: list,
     model_name: str,
     saving_path: str,
-    threshold:float=0.2,
-    alpha: float=0.05,
-    report_title:str="PATTERN DISTANCE REPORT",
+    threshold: float = 0.2,
+    alpha: float = 0.05,
+    report_title: str = "PATTERN DISTANCE REPORT",
     log_file=None,
 ) -> None:
     """
@@ -2498,10 +2507,9 @@ def simulate_combinations(
     min_ss_time: float,
     end_time: float = 1000,
     max_end_time: float = 1000,
-    steady_state: bool=False,
+    steady_state: bool = False,
     log_file=None,
 ) -> tuple:
-    
     """
     Simulate a RoadRunner model across multiple input perturbation combinations.
 
@@ -2588,7 +2596,7 @@ def simulate_combinations(
     simulate : Core simulation function
     process_species_samples : Uses this function for knockout analysis with perturbations
     """
-    
+
     samples_simulations_results = []
     i = 1
     for comb in combinations:

@@ -13,10 +13,16 @@ import numpy as np
 
 def parse_args():
     """
-    Parse command line arguments using a subcommand structure.
+    Parse command line arguments for SBML model analysis tool.
 
-    Returns:
-        argparse.Namespace: Object containing all parsed arguments
+    Sets up argument parsing with multiple subcommands for model simulation,
+    sensitivity analysis, knockout/knockin operations, and network visualization.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command-line arguments containing the selected subcommand and
+        all associated options.
     """
     import argparse
 
@@ -409,7 +415,21 @@ def parse_args():
     return parser.parse_args()
 
 
-def print_log(log_file, string):
+def print_log(log_file: str | None, string):
+    """
+    Log a message with timestamp to file or stdout.
+
+    Parameters
+    ----------
+    log_file : str or None
+        Path to log file. If None, prints to stdout instead.
+    string : str
+        Message to log.
+
+    Returns
+    -------
+    None
+    """
     current_date = datetime.datetime.now()
     if log_file:
         with open(log_file, "a") as out:
@@ -419,10 +439,17 @@ def print_log(log_file, string):
 
 
 def dict_pretty_print(dict_obj):
-    """Pretty print a dictionary as formatted JSON.
+    """
+    Pretty print a dictionary as formatted JSON.
 
-    Args:
-        dict_obj: Dictionary to be printed
+    Parameters
+    ----------
+    dict_obj : dict
+        Dictionary to be printed.
+
+    Returns
+    -------
+    None
     """
 
     json_formatted_str = json.dumps(dict_obj, indent=2)

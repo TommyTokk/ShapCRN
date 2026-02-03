@@ -6,26 +6,18 @@
 Thank you for your constant support, encouragement, and guidance.
 This work wouldn’t be what it is without you.
 
-                
+
                 Non est ad astra mollis e terris via.
 """
 
-import enum
-import itertools
-from logging import raiseExceptions
-from math import log, nan
 import os
-import re
+
 import sys
-import networkx as nx
-import matplotlib.pyplot as plt
-from networkx.algorithms.assortativity import correlation
-from pandas.core.generic import pprint_thing
-from classes.SBMLHandler import SBMLHandler
+
+from exceptions import KOShapleyError
 import roadrunner
 import libsbml
 import numpy as np
-from dotenv import load_dotenv
 import time
 import pandas as pd
 from pathlib import Path
@@ -33,8 +25,6 @@ from pathlib import Path
 from SALib.sample import sobol as sobol_sample
 from SALib.analyze import sobol as sobol_analyze
 from SALib.util import ProblemSpec
-
-from scipy.special import factorial
 
 
 # Add the src folder path to the Python path
@@ -65,7 +55,7 @@ def main():
     file_path = Path(args.input_path)
 
     if not file_path.exists():
-        ut.print_log(log_file, f"[ERROR] The specified model doesn't exists")
+        raise ModuleNotFoundError(f"Input file {args.input_path} does not exist")
 
     file_name, extension = os.path.splitext(os.path.basename(args.input_path))
 
@@ -84,8 +74,8 @@ def main():
             # Load the model
             sbml_doc = sbml_ut.load_model(args.input_path)
 
-            sbml_model = sbml_doc.getModel()
-            # sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
+            # sbml_model = sbml_doc.getModel()
+            sbml_model = sbml_ut.split_all_reversible_reactions(sbml_doc.getModel())
 
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
@@ -1307,10 +1297,7 @@ def main():
             )
 
     except Exception as e:
-        ut.print_log(log_file, f"Error during execution: {e}")
-        import traceback
-
-        traceback.print_exc()
+        raise KOShapleyError()
 
 
 if __name__ == "__main__":

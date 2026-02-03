@@ -18,15 +18,25 @@ from src.utils.utils import print_log
 # ============
 # KEEP
 def get_network_from_sbml(sbml_model, log_file=None):
-    # TODO: Add code to include modifiers in the graph
     """
-    Create a directed graph from the SBML model using the class structure.
+    Create a directed graph from the SBML model.
 
-    Args:
-       sbml_model: The SBML model to use to generate the network
+    Constructs a NetworkX directed graph where species and reactions are represented
+    as nodes, with edges indicating reactant-to-reaction and reaction-to-product
+    relationships. Edge weights represent stoichiometric coefficients.
 
-    Returns:
-        nx.DiGraph: A directed graph representing the reaction network
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model to convert into a network representation.
+    log_file : str or None, optional
+        Path to log file for messages, by default None
+
+    Returns
+    -------
+    nx.DiGraph
+        A directed graph representing the reaction network with nodes for both
+        species and reactions, and weighted edges for stoichiometry.
     """
     DG = nx.DiGraph()
 
@@ -69,16 +79,25 @@ def get_network_from_sbml(sbml_model, log_file=None):
 # TODO: Test this version
 def all_simple_paths_from_target(G: nx.DiGraph, target, cutoff=None):
     """
-    Yield all simple paths in G that start at `target` and reach any other node in the network.
-    Explores all reachable nodes from the target.
+    Yield all simple paths starting at target and reaching any other node.
 
-    Parameters:
-      G: directed graph
-      target: source node (starting point)
-      cutoff: optional depth cutoff (max path length)
+    Explores all reachable nodes from the target node and yields simple paths
+    connecting the target to each reachable node in the network.
 
-    Yields:
-      Lists representing simple paths from target to reachable nodes
+    Parameters
+    ----------
+    G : nx.DiGraph
+        Directed graph to search for paths.
+    target : node
+        Starting node for all paths.
+    cutoff : int, optional
+        Maximum path length (depth limit), by default None
+
+    Yields
+    ------
+    list
+        Simple paths from target to reachable nodes, where each path is
+        represented as a list of nodes.
     """
     if target not in G:
         return
@@ -95,99 +114,55 @@ def all_simple_paths_from_target(G: nx.DiGraph, target, cutoff=None):
                 yield path
 
 
-def network_to_sbml(net, rr_model, sbml):
-    # #TODO: Creare il metodo per convertire la rete in un modello SBML per la simulazione
-    pass
-
-
-def inhibit_reaction_from_network(
-    network, target_reaction_id, sbml_model, log_file=None
-):
-    # #TODO: Test if the model changes are correct
-    """
-    Removes the target reaction node and all its edges, and updates the SBML model
-
-    Args:
-        network: The networkx network to modify
-        target_reaction_id: The id of the target reaction to remove
-        sbml_model: SBML model to update
-
-    Returns:
-        tuple: (modified network, updated SBML model)
-    """
-
-    in_edges = list(network.in_edges(target_reaction_id))
-    out_edges = list(network.out_edges(target_reaction_id))
-
-    # Removing in_edges of the reaction
-    network.remove_edges_from(in_edges)
-
-    # removing out_edges of the reaction
-    network.remove_edges_from(out_edges)
-
-    new_model = sbml_utils.inhibit_reaction(sbml_model, target_reaction_id, log_file)
-
-    return network, new_model
-
-
-def inhibit_species_from_network(network, target_species_id, sbml_model, log_file=None):
-    # #TODO: Test if the model changes are correct
-    """
-    Removes all the input edges to the specified species node and updates the SBML model
-
-    Args:
-        network: The networkx network to modify
-        target_species_id: The id of the target species to isolate
-        sbml_model: SBML model to update
-
-    Returns:
-        tuple: (modified network, updated SBML model)
-    """
-
-    # Get the input edges of the species node
-    in_edges = list(network.in_edges(target_species_id))
-
-    # Remove all the input edges
-    network.remove_edges_from(in_edges)
-
-    # Set the concentration to 0.0 in the node
-    network[target_species_id].set_initial_concentration(0.0)
-
-    # Update the SBML model
-    new_model = sbml_utils.inhibit_species(sbml_model, target_species_id, log_file)
-
-    return network, sbml_model
-
 
 # KEEP
 def plot_network(
-    graph,
-    img_dir_path="./imgs/PetriNets",
-    save_dot_dir="./dots",
-    img_name="network",
+    graph: nx.DiGraph,
+    img_dir_path:str="./imgs/PetriNets",
+    save_dot_dir:str="./dots",
+    img_name:str="network",
     log_file=None,
-    engine="dot",
-    orientation="TB",
-    ranksep="0.5",
-    nodesep="1",
-    edge_label_distance=2.0,
+    engine:str="dot",
+    orientation:str="TB",
+    ranksep:str="0.5",
+    nodesep:str="1",
+    edge_label_distance:float=2.0,
 ):
     """
     Plot the reaction network using Petri Net notation with Graphviz layout.
-    - Species = circles
-    - Reactions = rectangles
-    - Node size adapts automatically to label length
-    - Supports tuning for orientation and spacing
 
-    Args:
-        graph: A networkx DiGraph with node attribute "type" in {"species", "reaction"}
-        img_dir_path: Directory where to save the image (default: "./imgs")
-        img_name: Name of the image file without extension (default: "network")
-        log_file: Optional log file handler
-        engine: Graphviz layout engine ("dot", "neato", "fdp", "sfdp", ...)
-        orientation: Graph orientation, "TB" (top-bottom), "LR" (left-right), etc.
-        ranksep: Vertical spacing between ranks (default: 0.5)
-        nodesep: Horizontal spacing between nodes (default: 0.3)
+    Creates a visualization where species are represented as circles and reactions
+    as rectangles. Node sizes adapt automatically to label length, and the layout
+    can be customized for orientation and spacing.
+
+    Parameters
+    ----------
+    graph : nx.DiGraph
+        NetworkX directed graph with node attribute "type" in {"species", "reaction"}.
+    img_dir_path : str, optional
+        Directory where to save the image, by default "./imgs/PetriNets"
+    save_dot_dir : str, optional
+        Directory where to save the DOT file, by default "./dots"
+    img_name : str, optional
+        Name of the image file without extension, by default "network"
+    log_file : str or None, optional
+        Path to log file for messages, by default None
+    engine : str, optional
+        Graphviz layout engine ("dot", "neato", "fdp", "sfdp"), by default "dot"
+    orientation : str, optional
+        Graph orientation ("TB" for top-bottom, "LR" for left-right, etc.), 
+        by default "TB"
+    ranksep : str, optional
+        Vertical spacing between ranks, by default "0.5"
+    nodesep : str, optional
+        Horizontal spacing between nodes, by default "1"
+    edge_label_distance : float, optional
+        Distance of edge labels from edges, by default 2.0
+
+    Returns
+    -------
+    None
+        Saves the network plot as PNG and DOT files.
     """
     if img_dir_path is None:
         img_dir_path = "./imgs/PetriNets"
@@ -269,11 +244,36 @@ def plot_network(
             print(err_msg)
 
 
-# TODO: Add the color scheme for the target node
+
 # KEEP
 def plot_interaction_graph(
     shap_values, input_nodes, sbml_model, target_node, log_file=None
 ):
+    """
+    Plot interaction graph with Shapley values colored by influence.
+
+    Creates a network visualization where nodes are colored based on their Shapley
+    value influence on the target node: green for positive influence, red for
+    negative influence, and purple for the target node itself.
+
+    Parameters
+    ----------
+    shap_values : pd.DataFrame
+        DataFrame containing Shapley values with species as index and columns.
+    input_nodes : list
+        List of input node IDs.
+    sbml_model : libsbml.Model
+        SBML model to extract network structure.
+    target_node : str
+        ID of the target node to analyze influences for.
+    log_file : str or None, optional
+        Path to log file for messages, by default None
+
+    Returns
+    -------
+    None
+        Saves the interaction graph as a PNG file at ./imgs/test.png
+    """
     all_species = shap_values.columns.str.strip("[]")
 
     N = get_network_from_sbml(sbml_model, log_file)
