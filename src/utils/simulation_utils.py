@@ -739,18 +739,18 @@ def process_species_multiprocessing(
     preserve_input: bool = False,
 ) -> list:
     """
-    Orchestrate parallel simulation of multiple knockout models using multiprocessing.
+    Orchestrate parallel simulation of multiple knocked models using multiprocessing.
 
-    This function distributes the simulation of knockout models across multiple CPU cores,
+    This function distributes the simulation of knocked models across multiple CPU cores,
     automatically determining the optimal number of workers and preparing arguments for
-    parallel execution. It supports both perturbation-based and standard knockout analyses.
+    parallel execution. It supports both perturbation-based and standard knocked analyses.
 
     Parameters
     ----------
     target_ids : list of str
-        List of species IDs to be knocked out and analyzed
+        List of species IDs to be knocked and analyzed
     modified_models_dict : dict
-        Dictionary mapping species IDs to their corresponding knockout models
+        Dictionary mapping species IDs to their corresponding knocked models
         Keys are species IDs, values are libsbml.Model or SBML strings
     samples : list or array-like
         Sample values for input species perturbations (used only if use_perturbations=True)
@@ -795,7 +795,7 @@ def process_species_multiprocessing(
 
     Notes
     -----
-    - Worker allocation: Uses 40% of available CPU cores by default, capped at 8 workers
+    - Worker allocation: Uses 75% of available CPU cores by default, capped at 8 workers
     - Missing models: Species in target_ids without corresponding entries in
       modified_models_dict are skipped with a warning
     - Thread safety: Each worker loads models independently to avoid shared state issues
@@ -1029,11 +1029,11 @@ def get_absolute_variations_samples(
     log_file=None,
 ) -> pd.DataFrame:
     """
-    Calculate absolute variations between original and knockout model results with perturbations.
+    Calculate absolute variations between original and knocked model results with perturbations.
 
     This function computes the root mean square (RMS) of absolute concentration differences
     across multiple perturbation combinations. It compares the final steady-state values
-    between original and knockout models for each species across all input perturbations.
+    between original and knocked models for each species across all input perturbations.
 
     Parameters
     ----------
@@ -1056,23 +1056,23 @@ def get_absolute_variations_samples(
     Returns
     -------
     pandas.DataFrame
-        DataFrame with shape (n_knockout_species, n_species) where:
-        - Rows: Knockout species IDs
+        DataFrame with shape (n_knocked_species, n_species) where:
+        - Rows: Knocked species IDs
         - Columns: All species IDs (with brackets removed)
         - Values: RMS of absolute variations across all perturbations
 
         NaN values appear where:
-        - Knockout species is compared to itself (diagonal)
+        - Knocked species is compared to itself (diagonal)
         - Infinite values are encountered
 
     Notes
     -----
     The function calculates variations as:
-    1. For each perturbation: var = knockout_value - original_value
+    1. For each perturbation: var = knocked_value - original_value
     2. Aggregate using RMS: RMS = sqrt(mean(var²))
 
     Values ≤ epsilon are masked to zero before calculating differences.
-    Self-comparisons (knockout species vs itself) are set to NaN to avoid meaningless data.
+    Self-comparisons (knocked species vs itself) are set to NaN to avoid meaningless data.
 
     The RMS aggregation emphasizes larger variations and provides a single metric
     that summarizes the impact across all perturbations.
@@ -1091,29 +1091,29 @@ def get_absolute_variations_samples(
     get_absolute_variations_no_samples : Calculate absolute variations without perturbations
     """
     rms = []
-    for ko_species, ko_data in final_results_knocked_model:
+    for knocked_species, knocked_data in final_results_knocked_model:
         variations = []
 
-        for c in range(len(ko_data)):
-            ko_sim_i = ko_data[c]
+        for c in range(len(knocked_data)):
+            knocked_sim_i = knocked_data[c]
             original_sim_i = final_results_original_model[c]
 
             # Getting the last values
-            last_ko_values = ko_sim_i.tail(1)
+            last_knocked_values = knocked_sim_i.tail(1)
             last_original_values = original_sim_i.tail(1)
 
             # Masking
-            last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+            last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
             last_original_values = last_original_values.mask(
                 last_original_values <= epsilon, 0
             )
 
-            var = last_ko_values - last_original_values
+            var = last_knocked_values - last_original_values
             variations.append(var)
 
         variations_df = pd.concat(variations, ignore_index=True)
         variations_rms = np.sqrt((variations_df**2).mean())
-        variations_rms.name = ko_species
+        variations_rms.name = knocked_species
         rms.append(variations_rms)
 
     res_df = pd.DataFrame(rms)
@@ -1131,15 +1131,15 @@ def get_absolute_variations_samples(
 # KEEP
 def get_absolute_variations_no_samples(
     original_data: pd.DataFrame,
-    ko_data: pd.DataFrame,
+    knocked_data: pd.DataFrame,
     epsilon: float = 1e-20,
     log_file=None,
 ) -> pd.DataFrame:
     """
-    Calculate absolute variations between original and knockout model results without perturbations.
+    Calculate absolute variations between original and knocked model results without perturbations.
 
     This function computes the absolute concentration differences at steady state
-    between the original model and each knockout model. Unlike the samples version,
+    between the original model and each knocked model. Unlike the samples version,
     this operates on single simulation runs without input perturbations.
 
     Parameters
@@ -1148,12 +1148,12 @@ def get_absolute_variations_no_samples(
         DataFrame containing the original model simulation results.
         Expected to have species concentrations as columns.
         Typically excludes the time column.
-    ko_data : list of tuple
+    knocked_data : list of tuple
         List of tuples where each tuple contains:
         - ko_species : str
-            ID of the knocked out species
+            ID of the knocked species
         - ko_info : pandas.DataFrame
-            DataFrame with knockout simulation results for that species
+            DataFrame with knocked simulation results for that species
     epsilon : float, optional
         Threshold below which values are considered zero to avoid numerical issues,
         by default 1e-20
@@ -1163,19 +1163,19 @@ def get_absolute_variations_no_samples(
     Returns
     -------
     pandas.DataFrame
-        DataFrame with shape (n_knockout_species, n_species) where:
-        - Rows: Knockout species IDs
+        DataFrame with shape (n_knocked_species, n_species) where:
+        - Rows: Knocked species IDs
         - Columns: All species IDs (with brackets removed)
-        - Values: Absolute variation (knockout_value - original_value) at final time point
+        - Values: Absolute variation (knocked_value - original_value) at final time point
 
         NaN values appear where:
-        - Knockout species is compared to itself (diagonal)
+        - Knocked species is compared to itself (diagonal)
         - Infinite values are encountered
 
     Notes
     -----
     The function calculates variations as:
-    - var = knockout_final_value - original_final_value
+    - var = knocked_final_value - original_final_value
 
     Processing steps:
     1. Extract final time point values using .tail(1)
@@ -1203,20 +1203,20 @@ def get_absolute_variations_no_samples(
     """
     variations = []
 
-    for ko_species, ko_info in ko_data:
-        last_ko_values = ko_info.tail(1)
+    for knocked_species, knocked_info in knocked_data:
+        last_knocked_values = knocked_info.tail(1)
         last_original_values = original_data.tail(1)
 
         # Masking
-        last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+        last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
         last_original_values = last_original_values.mask(
             last_original_values <= epsilon, 0
         )
 
-        var = last_ko_values - last_original_values
+        var = last_knocked_values - last_original_values
         # rms_vars = np.sqrt(var**2)
         var_series = var.squeeze()
-        var_series.name = ko_species
+        var_series.name = knocked_species
         variations.append(var_series)
 
     res_df = pd.DataFrame(variations)
@@ -1239,11 +1239,11 @@ def get_relative_variations_samples(
     log_file=None,
 ) -> pd.DataFrame:
     """
-    Calculate relative variations between original and knockout model results with perturbations.
+    Calculate relative variations between original and knocked model results with perturbations.
 
     This function computes the root mean square (RMS) of relative concentration changes
     across multiple perturbation combinations. It compares the final steady-state values
-    between original and knockout models for each species across all input perturbations,
+    between original and knocked models for each species across all input perturbations,
     normalized by the original values.
 
     Parameters
@@ -1255,9 +1255,9 @@ def get_relative_variations_samples(
     final_results_knocked_model : list of tuple
         List of tuples where each tuple contains:
         - ko_species : str
-            ID of the knocked out species
+            ID of the knocked species
         - ko_data : list of pandas.DataFrame
-            List of DataFrames with knockout simulation results for each perturbation
+            List of DataFrames with knocked simulation results for each perturbation
     epsilon : float, optional
         Threshold below which values are considered zero to avoid numerical issues,
         by default 1e-20
@@ -1267,19 +1267,19 @@ def get_relative_variations_samples(
     Returns
     -------
     pandas.DataFrame
-        DataFrame with shape (n_knockout_species, n_species) where:
+        DataFrame with shape (n_knocked_species, n_species) where:
         - Rows: Knockout species IDs
         - Columns: All species IDs (with brackets removed)
         - Values: RMS of relative variations across all perturbations
 
         NaN values appear where:
-        - Knockout species is compared to itself (diagonal)
+        - knocked species is compared to itself (diagonal)
         - Infinite values are encountered (e.g., division by zero)
 
     Notes
     -----
     The function calculates relative variations as:
-    1. For each perturbation: rel_var = (knockout_value - original_value) / original_value
+    1. For each perturbation: rel_var = (knocked - original_value) / original_value
     2. Aggregate using RMS: RMS = sqrt(mean(rel_var²))
 
     Processing steps:
@@ -1306,29 +1306,29 @@ def get_relative_variations_samples(
     get_relative_variations_no_samples : Calculate relative variations without perturbations
     """
     rms = []
-    for ko_species, ko_data in final_results_knocked_model:
+    for knocked_species, knocked_data in final_results_knocked_model:
         variations = []
 
-        for c in range(len(ko_data)):
-            ko_sim_i = ko_data[c]
+        for c in range(len(knocked_data)):
+            knocked_sim_i = knocked_data[c]
             original_sim_i = final_results_original_model[c]
 
             # Getting the last values
-            last_ko_values = ko_sim_i.tail(1)
+            last_knocked_values = knocked_sim_i.tail(1)
             last_original_values = original_sim_i.tail(1)
 
             # Masking
-            last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+            last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
             last_original_values = last_original_values.mask(
                 last_original_values <= epsilon, 0
             )
 
-            var = (last_ko_values - last_original_values) / last_original_values
+            var = (last_knocked_values - last_original_values) / last_original_values
             variations.append(var)
 
         variations_df = pd.concat(variations, ignore_index=True)
         variations_rms = np.sqrt((variations_df**2).mean())
-        variations_rms.name = ko_species
+        variations_rms.name = knocked_species
         rms.append(variations_rms)
 
     res_df = pd.DataFrame(rms)
@@ -1346,15 +1346,15 @@ def get_relative_variations_samples(
 # KEEP
 def get_relative_variations_no_samples(
     original_data: pd.DataFrame,
-    ko_data: pd.DataFrame,
+    knocked_data: pd.DataFrame,
     epsilon: float = 1e-20,
     log_file=None,
 ) -> pd.DataFrame:
     """
-    Calculate relative variations between original and knockout model results without perturbations.
+    Calculate relative variations between original and knocked model results without perturbations.
 
     This function computes the relative concentration changes at steady state between the
-    original model and each knockout model. Unlike the samples version, this operates on
+    original model and each knocked model. Unlike the samples version, this operates on
     single simulation runs without input perturbations, normalizing changes by the original
     concentrations.
 
@@ -1364,12 +1364,12 @@ def get_relative_variations_no_samples(
         DataFrame containing the original model simulation results.
         Expected to have species concentrations as columns.
         Typically excludes the time column.
-    ko_data : list of tuple
+    knocked_data : list of tuple
         List of tuples where each tuple contains:
         - ko_species : str
-            ID of the knocked out species
+            ID of the knocked species
         - ko_info : pandas.DataFrame
-            DataFrame with knockout simulation results for that species
+            DataFrame with knocked simulation results for that species
     epsilon : float, optional
         Threshold below which values are considered zero to avoid numerical issues,
         by default 1e-20
@@ -1379,19 +1379,19 @@ def get_relative_variations_no_samples(
     Returns
     -------
     pandas.DataFrame
-        DataFrame with shape (n_knockout_species, n_species) where:
+        DataFrame with shape (n_knocked_species, n_species) where:
         - Rows: Knockout species IDs
         - Columns: All species IDs (with brackets removed)
-        - Values: Relative variation ((knockout_value - original_value) / original_value) at final time point
+        - Values: Relative variation ((knocked_value - original_value) / original_value) at final time point
 
         NaN values appear where:
-        - Knockout species is compared to itself (diagonal)
+        - Knocked species is compared to itself (diagonal)
         - Infinite values are encountered (e.g., division by zero)
 
     Notes
     -----
     The function calculates relative variations as:
-    - rel_var = (knockout_final_value - original_final_value) / original_final_value
+    - rel_var = (knocked_value - original_final_value) / original_final_value
 
     Processing steps:
     1. Extract final time point values using .tail(1)
@@ -1424,21 +1424,21 @@ def get_relative_variations_no_samples(
     """
     variations = []
 
-    for ko_species, ko_info in ko_data:
-        last_ko_values = ko_info.tail(1)
+    for knocked_species, knocked_info in knocked_data:
+        last_knocked_values = knocked_info.tail(1)
         last_original_values = original_data.tail(1)
 
         # Masking
-        last_ko_values = last_ko_values.mask(last_ko_values <= epsilon, 0)
+        last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
         last_original_values = last_original_values.mask(
             last_original_values <= epsilon, 0
         )
 
-        var = (last_ko_values - last_original_values) / last_original_values
+        var = (last_knocked_values - last_original_values) / last_original_values
 
         # rms_vars = np.sqrt(var**2)
         var_series = var.squeeze()
-        var_series.name = ko_species
+        var_series.name = knocked_species
         variations.append(var_series)
 
     res_df = pd.DataFrame(variations)
@@ -1462,11 +1462,11 @@ def get_payoff_vals(
     log_file=None,
 ) -> list:
     """
-    Calculate payoff differences between original and knockout model results using a custom payoff function.
+    Calculate payoff differences between original and knocked model results using a custom payoff function.
 
-    This function applies a user-defined payoff function to both original and knockout simulation
+    This function applies a user-defined payoff function to both original and knocked simulation
     results across multiple perturbation combinations, then computes the difference. This is
-    typically used for Shapley value calculations or game-theoretic analyses of knockout impacts.
+    typically used for Shapley value calculations or game-theoretic analyses of knock impacts.
 
     Parameters
     ----------
@@ -1477,9 +1477,9 @@ def get_payoff_vals(
     final_results_knocked_model : list of tuple
         List of tuples where each tuple contains:
         - ko_species : str
-            ID of the knocked out species
+            ID of the knocked species
         - ko_data : list of pandas.DataFrame
-            List of DataFrames with knockout simulation results for each perturbation
+            List of DataFrames with knocked simulation results for each perturbation
     payoff_function : callable
         Function that computes a payoff value from a simulation DataFrame.
         Should accept a pandas.DataFrame and return a numeric value or Series.
@@ -1495,18 +1495,18 @@ def get_payoff_vals(
     list of tuple
         List of tuples where each tuple contains:
         - ko_species : str
-            ID of the knocked out species
+            ID of the knocked species
         - payoffs_df : pandas.DataFrame
-            DataFrame of payoff differences (original - knockout) for all perturbations
+            DataFrame of payoff differences (original - knocked) for all perturbations
             Shape: (n_perturbations, n_output_values) depending on payoff_function
 
     Notes
     -----
     The payoff difference is calculated as:
-    - payoff_diff = payoff_function(original_simulation) - payoff_function(knockout_simulation)
+    - payoff_diff = payoff_function(original_simulation) - payoff_function(knocked_simulation)
 
-    Positive values indicate that the original model had higher payoff (knockout decreased performance).
-    Negative values indicate that the knockout model had higher payoff (knockout improved performance).
+    Positive values indicate that the original model had higher payoff (knocked decreased performance).
+    Negative values indicate that the knockout model had higher payoff (knocked improved performance).
 
     This function is commonly used as input to Shapley value calculations, where the payoff
     represents a measure of system performance or output.
@@ -1535,22 +1535,22 @@ def get_payoff_vals(
     """
     res = []
 
-    ko_species_list = []
+    knocked_species_list = []
 
-    for ko_species, _ in final_results_knocked_model:
-        ko_species_list.append(ko_species)
+    for knocked_species, _ in final_results_knocked_model:
+        knocked_species_list.append(knocked_species)
 
-    for ko_species, ko_data in final_results_knocked_model:
+    for knocked_species, knocked_data in final_results_knocked_model:
         payoffs = []
 
-        for c in range(len(ko_data)):
-            ko_sim_i = ko_data[c]
+        for c in range(len(knocked_data)):
+            knocked_sim_i = knocked_data[c]
             original_sim_i = final_results_original_model[c]
 
             payoff_original = payoff_function(original_sim_i)
-            payoff_ko = payoff_function(ko_sim_i)
+            payoff_knocked = payoff_function(knocked_sim_i)
 
-            payoff_diff = payoff_original - payoff_ko
+            payoff_diff = payoff_original - payoff_knocked
 
             payoffs.append(payoff_diff)
 
@@ -1558,7 +1558,7 @@ def get_payoff_vals(
         payoffs_df = pd.concat(payoffs, ignore_index=True)
         # Append to the results
 
-        res.append((ko_species, payoffs_df))
+        res.append((knocked_species, payoffs_df))
     # Return a list of tuple (ko_species, payoffs)
     return res
 
@@ -1568,18 +1568,18 @@ def get_shapley_values(
     payoff_values: list, n_combinations: int, n_inputs: int, log_file=None
 ) -> pd.DataFrame:
     """
-    Calculate Shapley values from payoff differences across knockout species.
+    Calculate Shapley values from payoff differences across knocked species.
 
     This function computes Shapley values for each species and output metric by aggregating
     payoff differences across all input perturbation combinations. Shapley values quantify
-    the marginal contribution of each knocked-out species to the overall system behavior.
+    the marginal contribution of each knocked species to the overall system behavior.
 
     Parameters
     ----------
     payoff_values : list of tuple
         List of tuples where each tuple contains:
         - ko_species : str
-            ID of the knocked out species
+            ID of the knocked species
         - payoffs_df : pandas.DataFrame
             DataFrame of payoff differences for all perturbations
             Shape: (n_combinations, n_output_metrics)
@@ -1593,8 +1593,8 @@ def get_shapley_values(
     Returns
     -------
     pandas.DataFrame
-        DataFrame with shape (n_knockout_species, n_output_metrics) where:
-        - Rows: Knockout species IDs
+        DataFrame with shape (n_knocked_species, n_output_metrics) where:
+        - Rows: Knocked species IDs
         - Columns: Output metric names (depends on payoff_function used)
         - Values: Shapley values representing the contribution of each knockout
 
@@ -1648,16 +1648,14 @@ def get_shapley_values(
 
     # __import__("pprint").pprint(left_factor)
 
-    for ko_species, payoffs in payoff_values:
+    for knocked_species, payoffs in payoff_values:
         factors = left_factor * payoffs
 
         sums = factors.sum()
-        sums.name = ko_species
+        sums.name = knocked_species
         shap_vals.append(sums)
 
     shap_df = pd.DataFrame(shap_vals)
-
-    # __import__("pprint").pprint(shap_df["[species_10]"])
 
     return shap_df
 
@@ -1668,7 +1666,7 @@ def generate_values_distance_report(
     correlation_coefficient: float,
     p_value: float,
     alternative: str,
-    ko_species_list: list,
+    knocked_species_list: list,
     model_name: str,
     saving_path: str,
     threshold: float = 0.2,
@@ -1677,18 +1675,18 @@ def generate_values_distance_report(
     log_file=None,
 ) -> None:
     """
-    Generate a comprehensive distance analysis report with Pearson correlation and knockout rankings.
+    Generate a comprehensive distance analysis report with Pearson correlation and knocked rankings.
 
-    This function creates a detailed text report analyzing distance matrices between knockout
+    This function creates a detailed text report analyzing distance matrices between knocked
     species behaviors, including statistical correlation analysis and species importance rankings.
-    It combines Pearson correlation results with knockout impact assessments to provide insights
+    It combines Pearson correlation results with knocked impact assessments to provide insights
     into parameter uncertainty and species sensitivity.
 
     Parameters
     ----------
     distance_matrix : numpy.ndarray or pandas.DataFrame
-        2D array containing distance values between knockout species.
-        Shape: (n_knockout_species, n_knockout_species) or similar metric matrix.
+        2D array containing distance values between knocked species.
+        Shape: (n_knocked_species, n_knocked_species) or similar metric matrix.
     correlation_coefficient : float
         Pearson correlation coefficient (r) between compared datasets.
         Range: [-1, 1] where values closer to ±1 indicate stronger correlation.
@@ -1700,8 +1698,8 @@ def generate_values_distance_report(
         - 'two-sided' : Test for any linear relationship (r ≠ 0)
         - 'greater' : Test for positive relationship (r > 0)
         - 'less' : Test for negative relationship (r < 0)
-    ko_species_list : list of str
-        List of knockout species IDs corresponding to distance matrix rows/columns.
+    knocked_species_list : list of str
+        List of knocked species IDs corresponding to distance matrix rows/columns.
     model_name : str
         Name of the model being analyzed (used in report header and filename).
     saving_path : str
@@ -1740,9 +1738,9 @@ def generate_values_distance_report(
     2. Distance Matrix Statistics
     - Maximum, minimum, mean, and standard deviation of distances
 
-    3. Knockout Species Ranking
+    3. Knocked Species Ranking
     - Top 10 species most sensitive to parameter uncertainty
-    - Based on knockout impact scores
+    - Based on knocked impact scores
 
     Correlation strength categories:
     - Very strong: |r| ≥ 0.9
@@ -1772,7 +1770,7 @@ def generate_values_distance_report(
     See Also
     --------
     generate_pattern_distance_report : Generate pattern distance report (simpler version)
-    get_ko_species_importance : Calculate knockout species importance scores
+    get_ko_species_importance : Calculate knocked species importance scores
     """
     # Check if the destinations folder exists otherwise create it
     if not os.path.exists(saving_path):
@@ -1854,7 +1852,7 @@ def generate_values_distance_report(
 
     # Calculate knockout importance
     ko_impact, ko_ranking = get_ko_species_importance(
-        distance_matrix, ko_species_list, log_file
+        distance_matrix, knocked_species_list, log_file
     )
 
     # Generate report filename
@@ -1904,7 +1902,7 @@ def generate_values_distance_report(
                 f.write("Top 10 knockouts most sensitive to parameter uncertainty:\n")
                 for i in range(min(10, len(ko_ranking))):
                     ko_idx = ko_ranking[i]
-                    ko_name = ko_species_list[ko_idx]
+                    ko_name = knocked_species_list[ko_idx]
                     impact_score = ko_impact[ko_idx]
                     if np.isnan(impact_score):
                         f.write(f"  {i + 1:2d}. {ko_name:<20} NaN (no valid data)\n")
