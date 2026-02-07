@@ -138,7 +138,7 @@ def main():
                         "[ERROR] --use_fixed_perturbations and --fixed_perturbations must be both present to be used",
                     )
                 else:
-                    fixed_perturbations = [int(p) for p in args.fixed_perturbations]
+                    fixed_perturbations = [float(p) for p in args.fixed_perturbations]
 
             num_samples = args.num_samples
             variation = args.variation

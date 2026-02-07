@@ -376,12 +376,7 @@ def plot_results_interactive(
         fig.write_html(html_file_path)
         success = True
     except Exception as e:
-        success = False
-        error_msg = f"Failed to save interactive plot: {str(e)}"
-        try:
-            print_log(log_file, error_msg)
-        except NameError:
-            print(error_msg)
+        raise IOError(f"Failed to save interactive plot to {html_file_path}: {str(e)}")
 
     # Display the plot if requested and save was successful
     if show_plot and success:

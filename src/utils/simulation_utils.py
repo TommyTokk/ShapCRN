@@ -17,6 +17,7 @@ import multiprocessing as mp
 from multiprocessing import Pool
 import datetime
 
+import exceptions
 from src.utils.utils import (
     get_ko_species_importance,
     print_log,
@@ -105,7 +106,7 @@ def load_roadrunner_model(
             # Assume it's a string representation or file path
             rr_model = rr.RoadRunner(sbml_model)
     except Exception as e:
-        exit(f"Error during model loading: {e}")
+        raise exceptions.ModelError(f"Failed to load SBML model: {str(e)}")
 
     # Configure integrator settings
     # Setting the relative and absolute tolerance of the model
@@ -718,7 +719,7 @@ def process_species_no_samples(args: tuple) -> tuple:
             pd.DataFrame(knockout_model_results[:, 1:], columns=colnames[1:]),
         )
     except Exception as e:
-        raise Exception(f"Error during processing species :\n Error: {e}")
+        raise exceptions.ModelError(f"Error during processing species:\n Error: {e}")
 
 
 # KEEP
@@ -886,8 +887,7 @@ def process_species_multiprocessing(
             # Running the workers
             result = pool.map(operation, process_args)
     except Exception as e:
-        print_log(log_file, f"Critical error in multiprocessing : {e}")
-        exit(1)
+        raise exceptions.SimulationError(f"Error during multiprocessing execution: {str(e)}")   
 
     return result
 
@@ -1920,8 +1920,7 @@ def generate_values_distance_report(
         print_log(log_file, f"Distance report saved to: {report_path}")
 
     except Exception as e:
-        print_log(log_file, f"Error writing report to {report_path}: {e}")
-        raise
+        raise IOError(f"Error writing report file: {e}")
 
     return report_path
 
@@ -2128,8 +2127,7 @@ def generate_pattern_distance_report(
         print_log(log_file, f"Distance report saved to: {report_path}")
 
     except Exception as e:
-        print_log(log_file, f"Error writing report to {report_path}: {e}")
-        raise
+        raise IOError(f"Error writing report file: {e}")
 
     return report_path
 

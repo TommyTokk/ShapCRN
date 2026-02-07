@@ -628,8 +628,7 @@ def get_kinetic_type(
     """
 
     if kl_math is None:
-        print_log(log_file, "[ERROR] Cannot get the type of the kinetic")
-        return (-1, None)
+        raise exceptions.InvalidKineticLawError("Cannot get the type of the kinetic")
 
     for node in get_nodes_iterator(kl_math):
         # Get the node type
@@ -710,10 +709,7 @@ def is_reversible(sbml_model: libsbml.Model, reaction: libsbml.Reaction, log_fil
     kl_type, fn = get_kinetic_type(sbml_model, kl_math, log_file)
 
     if kl_type == -1:
-        print_log(
-            log_file, f"[ERROR] No kinetic law found for reaction {reaction.getId()}"
-        )
-        exit(1)
+        raise exceptions.InvalidKineticLawError(reaction.getId(), "No kinetic law found")
 
     if kl_type == 2:  # Is Michaelis-Menten
         return False
@@ -836,9 +832,9 @@ def split_all_reversible_reactions(
                 model.addReaction(forward_reaction)
                 model.addReaction(reverse_reaction)
             else:
-                print_log(
-                    log_file,
-                    f"[ERROR] Error during the splitting of the reaction {reaction.getId()}",
+                raise exceptions.InvalidKineticLawError(
+                    reaction.getId(),
+                    "Error during the splitting of the reversible reaction with function-based kinetics",
                 )
 
     return model
@@ -908,15 +904,17 @@ def create_sbml_function(
     math_ast = libsbml.parseL3Formula(full_formula)
 
     if math_ast is None:
-        print_log(log_file, "[ERROR] Could not parse the formula for the function")
-        return None
+        raise exceptions.InvalidFunctionDefinitionError(
+            function_id, "Error during the creation of the AST for the function"
+        )
 
     # Setting the math
     check = function.setMath(math_ast)
 
     if check != libsbml.LIBSBML_OPERATION_SUCCESS:
-        print_log(log_file, "[ERROR] Error setting the math for the function")
-        return None
+        raise exceptions.InvalidFunctionDefinitionError(
+            function_id, "Error during the setting of the math for the function"
+        )
 
     return function
 
@@ -1024,11 +1022,8 @@ def create_sbml_reaction_LMA(
         else:
             raise exceptions.ModelError()
 
-        __import__("pprint").pprint(local_parameter)
         local_parameter.setId(lp_id)
         local_parameter.setValue(lp_value)
-
-    __import__("pprint").pprint(kinetic_law.getNumLocalParameters())
 
     # Construct the string
     if function_id is None or function_args is None:
@@ -1037,18 +1032,15 @@ def create_sbml_reaction_LMA(
         # Assumes the order comps, parameters, reactants
         comps_str = ("*").join(reaction_comps)
 
-        reaction_kl_formula = f"{comps_str}*{kl_expr}"
-
-        __import__("pprint").pprint(f"[CSBMLR] {reaction_kl_formula}")
+        reaction_kl_formula = f"{comps_str}*({kl_expr})"
 
         reaction_kl_ast = libsbml.parseL3Formula(reaction_kl_formula)
 
         if reaction_kl_ast:
             kinetic_law.setMath(reaction_kl_ast)
         else:
-            print_log(
-                log_file,
-                f"[ERROR] Error during creation of the AST for reaction {reaction_id}",
+            raise exceptions.InvalidKineticLawError(
+                reaction_id, "Error during creation of the AST for the kinetic law"
             )
 
     else:
@@ -1068,9 +1060,8 @@ def create_sbml_reaction_LMA(
         if function_formula:
             kinetic_law.setMath(function_formula)
         else:
-            print_log(
-                log_file,
-                f"[ERROR] Error during creation of the AST using function for reaction {reaction_id}",
+            raise exceptions.InvalidKineticLawError(
+                reaction_id, "Error during creation of the AST for the kinetic law with function"
             )
 
     return reaction
@@ -1224,8 +1215,6 @@ def split_reversible_reaction_explicit(
 
     kl_string_clean = kl_string.replace(" ", "")
 
-    __import__("pprint").pprint(f"[SRRE] {kl_string_clean}")
-
     reactants = reaction.getListOfReactants()
     products = reaction.getListOfProducts()
     modifiers = reaction.getListOfModifiers()
@@ -1297,11 +1286,7 @@ def split_reversible_reaction_explicit(
         )
 
         if fwd_reaction is None:
-            print_log(
-                log_file,
-                f"[ERROR] Error during the creation of the forward reaction for {reaction.getId()}",
-            )
-            exit(1)
+            raise exceptions.ModelError(f"Error during the creation of the forward reaction for {reaction.getId()}")
 
         # Create the new reverse reaction
         rev_reaction = create_sbml_reaction_LMA(
@@ -1320,11 +1305,7 @@ def split_reversible_reaction_explicit(
         )
 
         if rev_reaction is None:
-            print_log(
-                log_file,
-                f"[ERROR] Error during the creation of the reverse reaction for {reaction.getId()}",
-            )
-            exit(1)
+            raise exceptions.ModelError(f"Error during the creation of the reverse reaction for {reaction.getId()}")
 
     else:
         if match2:
@@ -1362,11 +1343,7 @@ def split_reversible_reaction_explicit(
             )
 
             if fwd_reaction is None:
-                print_log(
-                    log_file,
-                    f"[ERROR] Error creating the forward reaction for {reaction.getId()}",
-                )
-                exit(1)
+                raise exceptions.ModelError(f"Error during the creation of the forward reaction for {reaction.getId()}")
 
             # Creating the reverse reaction
             rev_reaction = create_sbml_reaction_LMA(
@@ -1385,18 +1362,13 @@ def split_reversible_reaction_explicit(
             )
 
             if rev_reaction is None:
-                print_log(
-                    log_file,
-                    f"[ERROR] Error while creating the reverse reaction for {reaction.getId()}",
-                )
-                exit(1)
+                raise exceptions.ModelError(f"Error during the creation of the reverse reaction for {reaction.getId()}")
 
         else:
-            print_log(
-                log_file,
-                f"[ERROR] Kinetic law not described using explicit Law of Mass Action!\n {kl_string_clean}",
+            raise exceptions.InvalidKineticLawError(
+                reaction.getId(),
+                "Kinetic law doesn't match expected explicit Mass Action patterns",
             )
-            exit(1)
 
     if fwd_reaction is not None and rev_reaction is not None:
         # Delete the old reaction
@@ -1548,12 +1520,10 @@ def split_reversible_reaction_function(
         )
 
         if None in kinetic_split_info:
-            print_log(
-                log_file,
-                f"[ERROR] Not available info for the kinetic split for reaction {reaction_id}",
+            raise exceptions.InvalidKineticLawError(
+                reaction_id,
+                "Not available info for the kinetic split for reaction with function-based kinetics",
             )
-
-            exit(1)
 
         else:
             forward_formula, reverse_formula, forward_args, reverse_args = (
@@ -1571,9 +1541,9 @@ def split_reversible_reaction_function(
             )
 
             if fwd_function is None:
-                print_log(
-                    log_file,
-                    f"[ERROR] Error while creating the forward function {function_name}",
+                raise exceptions.InvalidFunctionDefinitionError(
+                    f"{function_name}_fwd",
+                    "Error during the creation of the forward function for reaction with function-based kinetics",
                 )
 
             # Create the reverese function
@@ -1587,9 +1557,9 @@ def split_reversible_reaction_function(
             )
 
             if rev_function is None:
-                print_log(
-                    log_file,
-                    f"[ERROR] Error while creating the reverse function for {function_name}",
+                raise exceptions.InvalidFunctionDefinitionError(
+                    f"{function_name}_rev",
+                    "Error during the creation of the reverse function for reaction with function-based kinetics",
                 )
 
             # Creating the forward reaction
@@ -1654,12 +1624,10 @@ def split_reversible_reaction_function(
         )
 
         if None in kinetic_split_info:
-            print_log(
-                log_file,
-                f"[ERROR] Not available info for the kinetic split for reaction {reaction_id}",
+            raise exceptions.InvalidKineticLawError(
+                reaction_id,
+                "Not available info for the kinetic split for reaction with function-based kinetics",
             )
-
-            exit(1)
 
         else:  # Assumes that the arguments are ordered like comps, fwd_constant, reacts, rev_constant, prods
             reaction_pattern = r"^(\w+)\((.*)\)$"
@@ -1724,9 +1692,9 @@ def split_reversible_reaction_function(
                     )
 
                     if fwd_function is None:
-                        print_log(
-                            log_file,
-                            f"[ERROR] Error while creating the forward function in reaction {reaction_id}",
+                        raise exceptions.InvalidFunctionDefinitionError(
+                            f"{function_name}_fwd",
+                            "Error during the creation of the forward function in reaction with function-based kinetics",
                         )
 
                     # Creating the reverse reaction
@@ -1740,12 +1708,10 @@ def split_reversible_reaction_function(
                     )
 
                     if rev_function is None:
-                        print_log(
-                            log_file,
-                            f"[ERROR] Error while creating the reverse function in reaction {reaction_id}",
+                        raise exceptions.InvalidFunctionDefinitionError(
+                            f"{function_name}_rev",
+                            "Error during the creation of the reverse function in reaction with function-based kinetics",
                         )
-
-                        exit(1)
 
                     # CREATION OF THE REACTIONS
                     # Creating the forward reaction
@@ -1771,11 +1737,10 @@ def split_reversible_reaction_function(
                     )
 
                     if fwd_reaction is None:
-                        print_log(
-                            log_file,
-                            f"[ERROR] Error while creating the forward reaction of reaction {reaction_id}",
+                        raise exceptions.InvalidKineticLawError(    
+                            reaction_id,
+                            "Error during the creation of the forward reaction of reaction with function-based kinetics",
                         )
-                        exit(1)
 
                     # Creating the reverse reaction
 
@@ -1799,11 +1764,10 @@ def split_reversible_reaction_function(
                     )
 
                     if rev_reaction is None:
-                        print_log(
-                            log_file,
-                            f"[ERROR] Error while creating the reverse reaction of reaction {reaction_id}",
+                        raise exceptions.InvalidKineticLawError(
+                            reaction_id,
+                            "Error during the creation of the reverse reaction of reaction with function-based kinetics",
                         )
-                        exit(1)
 
                     # Remove the old reaction
                     if fwd_reaction is not None and rev_reaction is not None:
@@ -1814,11 +1778,10 @@ def split_reversible_reaction_function(
 
                     return fwd_function, rev_function, fwd_reaction, rev_reaction
             else:
-                print_log(
-                    log_file,
-                    f"[ERROR] The kinetic law of the reaction {reaction_id} is not supported",
+                raise exceptions.InvalidKineticLawError(
+                    reaction_id,
+                    "Kinetic law doesn't match expected function call pattern for reaction with function-based kinetics",
                 )
-                return None, None, None, None
         return None, None, None, None
 
 
@@ -2207,8 +2170,9 @@ def knockin_reaction(
             # The species has concentration
             new_species.setInitialConcentration(new_vals[i])
         else:
-            print_log(log_file, "[ERROR] Something went wrong in creating new species")
-            exit(1)
+            raise exceptions.ModelError(
+                f"Original species {r} must have either initial amount or initial concentration set."
+            )
 
         # Make the new species constant
         new_species.setBoundaryCondition(True)
@@ -2235,11 +2199,11 @@ def knockin_reaction(
         if kin_type == 1 or kin_type == 2:  # KL is described using MM or LMA
             tokens = re.findall(r"\w+|[^\w\s]", kl_string)
         else:
-            print_log(
-                log_file,
-                f"[ERROR] Error while detecting kinetic type of reaction {target_reaction}",
+            raise exceptions.InvalidKineticLawError(
+                target_reaction.getId(),
+                "Kinetic law type not supported for knock-in operation. " \
+                "Only explicit kinetic laws (Mass Action or Michaelis-Menten) are supported.",
             )
-            exit(1)
     else:  # KL described by function
         fun_pattern = r"\d+(?:\.\d+)?|\w+|[^\w\s]"
 
@@ -2402,7 +2366,7 @@ def save_sbml_model(model: libsbml.Model, file_path: str, log_file=None) -> bool
     if success:
         print_log(log_file, f"Successfully saved SBML to: {file_path}")
     else:
-        print_log(log_file, f"Error: Failed to write SBML file to {file_path}")
+        raise IOError(f"Failed to save SBML model to {file_path}. Check log for details.")
 
     return success
 
@@ -2473,8 +2437,7 @@ def get_sbml_as_xml(model: str, log_file=None) -> str:
     if xml_string:
         return xml_string
     else:
-        print_log(log_file, "Error: Failed to convert SBML to XML string")
-        return None
+        raise ValueError("Failed to convert SBML model to XML string. Check log for details.")
 
 
 # KEEP
@@ -2550,10 +2513,7 @@ def generate_species_random_combinations(
         species = sbml_model.getListOfSpecies().getElementBySId(ts)
 
         if species is None:
-            print_log(
-                log_file, f"[ERROR] Species {ts} not present in the model, exiting..."
-            )
-            exit(1)
+            raise exceptions.ModelError(f"Species {ts} not found in the model.")
 
         if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
             print_log(log_file, f"Using amounts for {ts}")
@@ -2562,8 +2522,9 @@ def generate_species_random_combinations(
             print_log(log_file, f"Using concentration for {ts}")
             t0_val = species.getInitialConcentration()
         else:
-            print_log(log_file, f"[ERROR] Cannot access species {ts} intial values")
-            exit(1)
+            raise exceptions.ModelError(
+                f"Species {ts} must have either initial amount or initial concentration set."
+            )
         tmp = []
 
         for i in range(n_samples):
@@ -2656,8 +2617,8 @@ def create_combinations(input_samples: list, log_file=None) -> Generator:
 # KEEP
 def get_fixed_combinations(
     sbml_model: libsbml.Model,
-    input_species: list,
-    fixed_variations: list,
+    input_species: list[str],
+    fixed_variations: list[float] | None,
     log_file=None,
 ) -> list:
     """
@@ -2734,7 +2695,9 @@ def get_fixed_combinations(
             print_log(log_file, f"Using concentration for {s_id}")
             t0_conc = species.getInitialConcentration()
         else:
-            raise Exception("Cannot access species initial values")
+            raise exceptions.ModelError(
+                f"Species {s_id} must have either initial amount or initial concentration set."
+            )
 
         tmp = []
 
