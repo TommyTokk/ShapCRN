@@ -448,8 +448,7 @@ def simulate_samples(
     - Initial concentrations are set via `setInitConcentration()` before simulation
     - The model is reset before applying new concentrations
     """
-    # rr_model.reset()
-    #
+
     # Save the current selections
     current_selections = rr_model.timeCourseSelections
     rr_model.reset()
@@ -482,20 +481,20 @@ def simulate_samples(
 # KEEP
 def process_species_samples(args: tuple) -> tuple:
     """
-    Simulate knockout model with perturbations across multiple input combinations.
+    Simulate knocked model with perturbations across multiple input combinations.
 
-    This worker function processes a single knockout species by simulating the modified
-    (knockout) model both with and without perturbations. It's designed to be called
+    This worker function processes a single knocked species by simulating the modified
+    (knockout or knockin) model both with and without perturbations. It's designed to be called
     within a multiprocessing context.
 
     Parameters
     ----------
     args : tuple
         A tuple containing the following elements (in order):
-        - knockedout_species : str
-            ID of the species that has been knocked out
+        - knocked_species : str
+            ID of the species that has been knocked out or knocked in
         - modified_model : libsbml.Model or str
-            SBML model with the knockout applied
+            SBML model with the knockout or knockin applied
         - samples : array-like
             Sample values for input species perturbations
         - input_species_ids : list of str
@@ -521,12 +520,12 @@ def process_species_samples(args: tuple) -> tuple:
     -------
     tuple of (str, list of pandas.DataFrame)
         A tuple containing:
-        - knockedout_species : str
-            ID of the knocked out species
-        - ko_data : list of pandas.DataFrame
+        - knocked_species : str
+            ID of the knocked species
+        - knocked_data : list of pandas.DataFrame
             List of DataFrames where:
-            - First element: baseline knockout simulation (no perturbations)
-            - Subsequent elements: knockout simulations with each perturbation combination
+            - First element: baseline knockout or knockin simulation (no perturbations)
+            - Subsequent elements: knockout or knockin simulations with each perturbation combination
 
     Raises
     ------
@@ -547,7 +546,7 @@ def process_species_samples(args: tuple) -> tuple:
     """
     try:
         (
-            knockedout_species,
+            knocked_species,
             modified_model,
             samples,
             input_species_ids,
@@ -561,7 +560,7 @@ def process_species_samples(args: tuple) -> tuple:
             log_file,
         ) = args
 
-        print_log(log_file, f"Starting processing: {knockedout_species}")
+        print_log(log_file, f"Starting processing: {knocked_species}")
 
         # Loading the modified model
         modified_rr = load_roadrunner_model(
@@ -572,7 +571,7 @@ def process_species_samples(args: tuple) -> tuple:
         modified_rr.timeCourseSelections = selections
 
         # Simulating the not perturbed model
-        knockout_model_results, ss_time, colnames = simulate(
+        modified_model_results, ss_time, colnames = simulate(
             modified_rr,
             start_time=start_time,
             end_time=end_time,
@@ -588,7 +587,7 @@ def process_species_samples(args: tuple) -> tuple:
         )
 
         # Simulating the modified model with the perturbations
-        combinations_knockout_model_results, colnames = simulate_combinations(
+        combinations_knocked_model_results, colnames = simulate_combinations(
             modified_rr,
             create_combinations(samples),
             input_species_ids,
@@ -599,13 +598,13 @@ def process_species_samples(args: tuple) -> tuple:
             log_file,
         )
 
-        ko_data = [pd.DataFrame(knockout_model_results[:, 1:], columns=colnames[1:])]
+        knocked_data = [pd.DataFrame(modified_model_results[:, 1:], columns=colnames[1:])]
 
-        for i in range(len(combinations_knockout_model_results)):
-            ko_res_i = combinations_knockout_model_results[i]
-            ko_data.append(pd.DataFrame(ko_res_i[:, 1:], columns=colnames[1:]))
+        for i in range(len(combinations_knocked_model_results)):
+            ko_res_i = combinations_knocked_model_results[i]
+            knocked_data.append(pd.DataFrame(ko_res_i[:, 1:], columns=colnames[1:]))
 
-        return (knockedout_species, ko_data)
+        return (knocked_species, knocked_data)
     except Exception as e:
         raise Exception(f"Error during processing species:\n Error: {e}")
 
@@ -613,20 +612,20 @@ def process_species_samples(args: tuple) -> tuple:
 # KEEP
 def process_species_no_samples(args: tuple) -> tuple:
     """
-    Simulate knockout model without perturbations.
+    Simulate knocked model without perturbations.
 
-    This worker function processes a single knockout species by simulating the modified
-    (knockout) model without input perturbations. It's designed to be called within a
+    This worker function processes a single knocked species by simulating the modified
+    (knockout or knockin) model without input perturbations. It's designed to be called within a
     multiprocessing context.
 
     Parameters
     ----------
     args : tuple
         A tuple containing the following elements (in order):
-        - knockedout_species : str
-            ID of the species that has been knocked out
+        - knocked_species : str
+            ID of the species that has been knocked out or knocked in
         - modified_model : libsbml.Model or str
-            SBML model with the knockout applied
+            SBML model with the knockout or knockin applied
         - combinations : array-like
             Not used in this function (for compatibility with parallel processing)
         - input_species_ids : list of str
@@ -652,9 +651,9 @@ def process_species_no_samples(args: tuple) -> tuple:
     -------
     tuple of (str, pandas.DataFrame)
         A tuple containing:
-        - knockedout_species : str
-            ID of the knocked out species
-        - knockout_data : pandas.DataFrame
+        - knocked_species : str
+            ID of the knocked out or knocked in species
+        - knocked_data : pandas.DataFrame
             Simulation results excluding the time column
 
     Raises
@@ -676,7 +675,7 @@ def process_species_no_samples(args: tuple) -> tuple:
     """
     try:
         (
-            knockedout_species,
+            knocked_species,
             modified_model,
             combinations,
             input_species_ids,
@@ -690,9 +689,8 @@ def process_species_no_samples(args: tuple) -> tuple:
             log_file,
         ) = args
 
-        print_log(log_file, knockedout_species)
 
-        print_log(log_file, f"Starting processing: {knockedout_species}")
+        print_log(log_file, f"Starting processing: {knocked_species}")
 
         modified_rr = load_roadrunner_model(
             modified_model, integrator=integrator, log_file=log_file
@@ -702,9 +700,9 @@ def process_species_no_samples(args: tuple) -> tuple:
 
         modified_rr.selections = selections
 
-        knockout_model_results, ss_time, colnames = simulate(
+        knocked_model_results, ss_time, colnames = simulate(
             modified_rr,
-            start_time=0,
+            start_time= 0 if start_time is None else start_time,
             end_time=end_time,
             steady_state=steady_state,
             max_end_time=max_end_time,
@@ -715,8 +713,8 @@ def process_species_no_samples(args: tuple) -> tuple:
         )
 
         return (
-            knockedout_species,
-            pd.DataFrame(knockout_model_results[:, 1:], columns=colnames[1:]),
+            knocked_species,
+            pd.DataFrame(knocked_model_results[:, 1:], columns=colnames[1:]),
         )
     except Exception as e:
         raise exceptions.ModelError(f"Error during processing species:\n Error: {e}")
