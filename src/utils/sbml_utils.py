@@ -47,6 +47,39 @@ def load_model(model_file_path: str) -> libsbml.SBMLDocument:
     return document
 
 
+def create_ki_model(
+    target_id: str, new_val: float, sbml_model, sbml_str: str, log_file=None
+) -> dict:
+    """
+    Create the knock-in model for the specified target ID.
+
+    Parameters
+    ----------
+    target_id : str
+        Target ID to knock-in.
+    new_val : float
+        New value to set for the knocked-in species.
+    sbml_model : libsbml.Model
+        The original SBML model.
+    sbml_str : str
+        The SBML model as a string.
+    log_file : file, optional
+        File to log information, by default None.
+
+    Returns
+    -------
+    dict
+        A dictionary with the target ID as key and its corresponding knock-in SBML model as value.
+    """
+    doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
+    model_copy = doc_copy.getModel()
+
+    modified_model = knockin_species(model_copy, target_id, new_val, log_file)
+
+    doc_copy.setModel(modified_model)
+
+    return {target_id: libsbml.writeSBMLToString(doc_copy)}
+
 def create_ko_models(
     target_ids: list, sbml_model, sbml_str: str, log_file=None
 ) -> dict:
@@ -1013,8 +1046,6 @@ def create_sbml_reaction_LMA(
 
     # Creating the local parameters
     for lp_id, lp_value in local_parameters:
-        __import__("pprint").pprint(lp_id)
-        __import__("pprint").pprint(lp_value)
         if sbml_model.getLevel() == 2:
             local_parameter = kinetic_law.createParameter()
         elif sbml_model.getLevel() == 3:
