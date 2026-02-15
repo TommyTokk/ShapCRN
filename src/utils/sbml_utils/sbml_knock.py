@@ -2,7 +2,7 @@ import libsbml
 import re
 
 from src.utils.utils import print_log
-from src.utils.sbml_reactions import get_kinetic_type
+from src.utils.sbml_utils.sbml_reactions import get_kinetic_type
 from src import exceptions
 
 
