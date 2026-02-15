@@ -82,6 +82,16 @@ class InvalidKineticLawError(ModelError):
         super().__init__(message)
 
 
+class InvalidFunctionDefinitionError(ModelError):
+    """Raised when the function has not been correctly defined"""
+
+    def __init__(self, function_id: str, message=None) -> None:
+        self.function_id = function_id
+        if message is None:
+            message = f"Function {function_id} has not been defined correctly."
+        super().__init__(message)
+
+
 class ModelModificationError(ModelError):
     """Raised when model modification (knockout/knockin) fails."""
 
