@@ -185,4 +185,6 @@ log
 reports/*
 dots/*
 
+results/*
+
 .DS_Store

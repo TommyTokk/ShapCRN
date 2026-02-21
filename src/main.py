@@ -14,7 +14,7 @@ import os
 
 import sys
 
-from exceptions import KOShapleyError
+from src.exceptions import KOShapleyError
 import roadrunner
 import libsbml
 import numpy as np
@@ -27,15 +27,12 @@ from SALib.analyze import sobol as sobol_analyze
 from SALib.util import ProblemSpec
 
 
-# Add the src folder path to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.utils import sbml_utils as sbml_ut
-from src.utils import simulation_utils as sim_ut
-from src.utils import net_utils as nu
+from src.utils.sbml import utils as sbml_ut
+from src.utils import simulation as sim_ut
+from src.utils import graph as nu
 from src.utils import utils as ut
-from src.utils import plot_utils as plt_ut
-from src.utils import sens_utils as sens_ut
+from src.utils import plot as plt_ut
+from src.utils import sensitivity as sens_ut
 
 
 payoff_functions_map = {
@@ -58,6 +55,9 @@ def main():
         raise ModuleNotFoundError(f"Input file {args.input_path} does not exist")
 
     file_name, extension = os.path.splitext(os.path.basename(args.input_path))
+
+    # Build standard output directory tree
+    out_dirs = ut.setup_output_dirs(args.output, file_name)
 
     try:
         if args.command == "simulate":
@@ -98,19 +98,22 @@ def main():
                 log_file=log_file,
             )
 
-            save_path = f"{args.save_images}/{file_name}"
+            save_path = out_dirs["images"]
+
+            res_df = pd.DataFrame(res, columns=colnames)
 
             if interactive_plot:
                 plt_ut.plot_results_interactive(
-                    res,
-                    colnames,
+                    res_df,
                     model_name=file_name,
                     log_file=log_file,
                 )
 
             else:
                 plt_ut.plot_results(
-                    res, colnames, save_path, "interactive_model_simulation", log_file
+                    res_df, img_dir_path=save_path,
+                    img_name="interactive_model_simulation",
+                    log_file=log_file,
                 )
 
             # ut.print_log(log_file, f"n. specs: {sbml_model.getNumSpecies()}")
@@ -369,21 +372,18 @@ def main():
                     log_file=log_file,
                 )
 
-                if args.generate_report is not None:
-                    save_path = args.generate_report
-                    # Create the directory if it doesn't exist
-                    os.makedirs(save_path, exist_ok=True)
+                save_path = out_dirs["reports"]
 
-                    cols = None
+                cols = None
 
-                    # if args.target_nodes:
-                    #     cols = args.target_nodes
-                    # else:
-                    #     cols = None
+                # if args.target_nodes:
+                #     cols = args.target_nodes
+                # else:
+                #     cols = None
 
-                    ut.save_shapley_values_to_csv_pivot(
-                        shap_values, save_path, cols=cols, log_file=log_file
-                    )
+                ut.save_shapley_values_to_csv_pivot(
+                    shap_values, save_path, cols=cols, log_file=log_file
+                )
 
             # === IF NO SAMPLES ===
             if not use_perturbations:
@@ -404,47 +404,38 @@ def main():
                 # log_relative = np.log10(relative_vars + 1)
                 # log_absolute = np.log10(absolute_vars + 1)
 
-                if args.generate_report is not None:
-                    saving_path = (
-                        args.generate_report
-                    )  # Check if the destinations folder exists otherwise create it
-                    if not os.path.exists(saving_path):
-                        os.makedirs(saving_path, exist_ok=True)
-                        ut.print_log(log_file, f"Created directory: {saving_path}")
+                saving_path = out_dirs["reports"]
 
-                    csv_paths = os.path.join(saving_path, "NoSamples")
+                csv_paths = os.path.join(saving_path, "NoSamples")
 
-                    os.makedirs(csv_paths, exist_ok=True)
+                os.makedirs(csv_paths, exist_ok=True)
 
-                    relative_vars.to_csv(f"{csv_paths}/relative_variations.csv")
+                relative_vars.to_csv(f"{csv_paths}/relative_variations.csv")
 
-                    absolute_vars.to_csv(f"{csv_paths}/absolute_variations.csv")
+                absolute_vars.to_csv(f"{csv_paths}/absolute_variations.csv")
 
-                if args.save_images is not None:
-                    saving_path = args.save_images
+                saving_path = out_dirs["images"]
 
-                    os.makedirs(saving_path, exist_ok=True)
+                plt_ut.plot_heatmap(
+                    relative_vars,
+                    relative_vars.index.tolist(),
+                    relative_vars.columns.tolist(),
+                    colnames_to_index=colnames_to_index,
+                    title="Relative variations without perturbations",
+                    save_path=f"{saving_path}/No Samples",
+                    img_name="Relative variations Heatmap.png",
+                )
 
-                    plt_ut.plot_heatmap(
-                        relative_vars,
-                        relative_vars.index.tolist(),
-                        relative_vars.columns.tolist(),
-                        colnames_to_index=colnames_to_index,
-                        title="Relative variations without perturbations",
-                        save_path=f"{saving_path}/No Samples",
-                        img_name="Relative variations Heatmap.png",
-                    )
-
-                    plt_ut.plot_heatmap(
-                        absolute_vars,
-                        absolute_vars.index.tolist(),
-                        absolute_vars.columns.tolist(),
-                        colnames_to_index=colnames_to_index,
-                        cmap="plasma",
-                        title="Absolute variations without perturbations",
-                        save_path=f"{saving_path}/No Samples",
-                        img_name="Absolute variations Heatmap.png",
-                    )
+                plt_ut.plot_heatmap(
+                    absolute_vars,
+                    absolute_vars.index.tolist(),
+                    absolute_vars.columns.tolist(),
+                    colnames_to_index=colnames_to_index,
+                    cmap="plasma",
+                    title="Absolute variations without perturbations",
+                    save_path=f"{saving_path}/No Samples",
+                    img_name="Absolute variations Heatmap.png",
+                )
 
             else:  # === IF SAMPLES ===
                 try:
@@ -509,46 +500,40 @@ def main():
                     # )
                     # minMax_samples_absolute = ut.minMax_normalize(log_samples_absolute)
 
-                    if args.save_images is not None:
-                        saving_path = args.save_images
+                    saving_path = out_dirs["images"]
 
-                        os.makedirs(saving_path, exist_ok=True)
+                    # PLOTTING HEATMAPS
+                    plt_ut.plot_heatmap(
+                        log_samples_relative,
+                        log_samples_relative.index.tolist(),
+                        log_no_samples_relative.columns.tolist(),
+                        colnames_to_index,
+                        title="Relative variations with perturbations (Log scaled)",
+                        save_path=saving_path,
+                        img_name="Log scaled relative variations Heatmap.png",
+                    )
 
-                        # PLOTTING HEATMAPS
-                        plt_ut.plot_heatmap(
-                            log_samples_relative,
-                            log_samples_relative.index.tolist(),
-                            log_no_samples_relative.columns.tolist(),
-                            colnames_to_index,
-                            title="Relative variations with perturbations (Log scaled)",
-                            save_path=saving_path,
-                            img_name="Log scaled relative variations Heatmap.png",
-                        )
-
-                        plt_ut.plot_heatmap(
-                            log_samples_absolute,
-                            log_samples_absolute.index.tolist(),
-                            log_samples_absolute.columns.tolist(),
-                            colnames_to_index,
-                            cmap="plasma",
-                            title="Absolute variations with perturbations (Log scaled)",
-                            save_path=saving_path,
-                            img_name="Log scaled absolute variations Heatmap.png",
-                        )
+                    plt_ut.plot_heatmap(
+                        log_samples_absolute,
+                        log_samples_absolute.index.tolist(),
+                        log_samples_absolute.columns.tolist(),
+                        colnames_to_index,
+                        cmap="plasma",
+                        title="Absolute variations with perturbations (Log scaled)",
+                        save_path=saving_path,
+                        img_name="Log scaled absolute variations Heatmap.png",
+                    )
 
                     # SAVING THE VARAITIONS HEATMAPS
-                    if args.generate_report:  # Saving the variation heatmaps
-                        save_path = args.generate_report
+                    save_path = out_dirs["reports"]
 
-                        os.makedirs(save_path, exist_ok=True)
+                    samples_relative_vars.to_csv(
+                        f"{save_path}/relative_variations.csv"
+                    )
 
-                        samples_relative_vars.to_csv(
-                            f"{save_path}/relative_variations.csv"
-                        )
-
-                        samples_absolute_vars.to_csv(
-                            f"{save_path}/absolute_variations.csv"
-                        )
+                    samples_absolute_vars.to_csv(
+                        f"{save_path}/absolute_variations.csv"
+                    )
 
                     _, ko_ranking_relative = ut.get_ko_species_importance(
                         samples_relative_vars,
@@ -595,74 +580,68 @@ def main():
                             )
                         )
 
-                        if args.generate_report:
-                            saving_path = args.generate_report
+                        saving_path = out_dirs["reports"]
 
-                            os.makedirs(saving_path, exist_ok=True)
+                        rel_diff_df = pd.DataFrame(relative_values_distances)
+                        abs_diff_df = pd.DataFrame(absolute_values_distances)
 
-                            rel_diff_df = pd.DataFrame(relative_values_distances)
-                            abs_diff_df = pd.DataFrame(absolute_values_distances)
+                        # Saving the csv files
+                        rel_diff_df.to_csv(
+                            f"{saving_path}/Perturbations importance analysis/relative_values_distances.csv"
+                        )
+                        abs_diff_df.to_csv(
+                            f"{saving_path}/Perturbations importance analysis/absolute_values_distances.csv"
+                        )
 
-                            # Saving the csv files
-                            rel_diff_df.to_csv(
-                                f"{saving_path}/Perturbations importance analysis/relative_values_distances.csv"
-                            )
-                            abs_diff_df.to_csv(
-                                f"{saving_path}/Perturbations importance analysis/absolute_values_distances.csv"
-                            )
+                        # GETTING THE VALUE DISTANCES REPORT
+                        _ = sim_ut.generate_values_distance_report(
+                            relative_values_distances,
+                            pearson_coefficient_relative,
+                            p_value_relative,
+                            correlation_type,
+                            samples_relative_vars.index.tolist(),
+                            file_name,
+                            f"{saving_path}/Perturbations importance analysis",
+                            report_title="Log scaled value distances report analysis (Relative map)",
+                            log_file=log_file,
+                        )
 
-                            # GETTING THE VALUE DISTANCES REPORT
-                            _ = sim_ut.generate_values_distance_report(
-                                relative_values_distances,
-                                pearson_coefficient_relative,
-                                p_value_relative,
-                                correlation_type,
-                                samples_relative_vars.index.tolist(),
-                                file_name,
-                                f"{saving_path}/Perturbations importance analysis",
-                                report_title="Log scaled value distances report analysis (Relative map)",
-                                log_file=log_file,
-                            )
+                        _ = sim_ut.generate_values_distance_report(
+                            absolute_values_distances,
+                            pearson_coefficient_absolute,
+                            p_value_absolute,
+                            correlation_type,
+                            samples_absolute_vars.index.tolist(),
+                            file_name,
+                            f"{saving_path}/Perturbations importance analysis",
+                            report_title="Log scaled value distances report analysis (Absolute map)",
+                            log_file=log_file,
+                        )
 
-                            _ = sim_ut.generate_values_distance_report(
-                                absolute_values_distances,
-                                pearson_coefficient_absolute,
-                                p_value_absolute,
-                                correlation_type,
-                                samples_absolute_vars.index.tolist(),
-                                file_name,
-                                f"{saving_path}/Perturbations importance analysis",
-                                report_title="Log scaled value distances report analysis (Absolute map)",
-                                log_file=log_file,
-                            )
+                        saving_path = out_dirs["images"]
 
-                        if args.save_images is not None:
-                            saving_path = args.save_images
+                        # PLOTTING THE VALUES DISTANCES
+                        plt_ut.plot_heatmap(
+                            relative_values_distances,
+                            samples_relative_vars.index.tolist(),
+                            samples_relative_vars.columns.tolist(),
+                            colnames_to_index,
+                            cmap="PiYG_r",
+                            save_path=f"{saving_path}/Perturbations importance analysis",
+                            title="Perturbations VS No Perturbations Distance (Relative map)",
+                            img_name="Relative Perturbations VS No Perturbations distance",
+                        )
 
-                            os.makedirs(saving_path, exist_ok=True)
-
-                            # PLOTTING THE VALUES DISTANCES
-                            plt_ut.plot_heatmap(
-                                relative_values_distances,
-                                samples_relative_vars.index.tolist(),
-                                samples_relative_vars.columns.tolist(),
-                                colnames_to_index,
-                                cmap="PiYG_r",
-                                save_path=f"{saving_path}/Perturbations importance analysis",
-                                title="Perturbations VS No Perturbations Distance (Relative map)",
-                                img_name="Relative Perturbations VS No Perturbations distance",
-                            )
-
-                            plt_ut.plot_heatmap(
-                                absolute_values_distances,
-                                samples_absolute_vars.index.tolist(),
-                                samples_absolute_vars.index.tolist(),
-                                colnames_to_index,
-                                cmap="PRGn_r",
-                                save_path=f"{saving_path}/Perturbations importance analysis",
-                                title="Perturbations VS No Perturbations Distance (Absolute map)",
-                                img_name="Absolute Perturbations VS No Perturbations distance",
-                            )
+                        plt_ut.plot_heatmap(
+                            absolute_values_distances,
+                            samples_absolute_vars.index.tolist(),
+                            samples_absolute_vars.index.tolist(),
+                            colnames_to_index,
+                            cmap="PRGn_r",
+                            save_path=f"{saving_path}/Perturbations importance analysis",
+                            title="Perturbations VS No Perturbations Distance (Absolute map)",
+                            img_name="Absolute Perturbations VS No Perturbations distance",
+                        )
 
                     if args.random_perturbations_importance:
                         ut.print_log(log_file, "=== FIXED SAMPLES ANALYSIS ===")
@@ -789,63 +768,57 @@ def main():
                             log_samples_absolute, fixed_log_absolute
                         )
 
-                        if args.generate_report is not None:
-                            saving_path = args.generate_report
+                        saving_path = out_dirs["reports"]
 
-                            os.makedirs(saving_path, exist_ok=True)
+                        # GENERATING DISTANCES REPORT
+                        _ = sim_ut.generate_values_distance_report(
+                            fixed_relative_values_distances,
+                            fixed_pearson_coefficient_relative,
+                            fixed_p_value_relative,
+                            correlation_type,
+                            fixed_relative_vars.index.tolist(),
+                            file_name,
+                            f"{saving_path}/Fixed perturbations importance analysis",
+                            report_title="Log scaled Fixed perturbations values distance report analysis (Relative map)",
+                            log_file=log_file,
+                        )
 
-                            # GENERATING DISTANCES REPORT
-                            _ = sim_ut.generate_values_distance_report(
-                                fixed_relative_values_distances,
-                                fixed_pearson_coefficient_relative,
-                                fixed_p_value_relative,
-                                correlation_type,
-                                fixed_relative_vars.index.tolist(),
-                                file_name,
-                                f"{saving_path}/Fixed perturbations importance analysis",
-                                report_title="Log scaled Fixed perturbations values distance report analysis (Relative map)",
-                                log_file=log_file,
-                            )
+                        _ = sim_ut.generate_values_distance_report(
+                            fixed_absolute_values_distances,
+                            fixed_pearson_coefficient_absolute,
+                            fixed_p_value_absolute,
+                            correlation_type,
+                            fixed_absolute_vars.index.tolist(),
+                            file_name,
+                            f"{saving_path}/Fixed perturbations importance analysis",
+                            report_title="Log scaled Fixed perturbations values distance report analysis (Absolute map)",
+                            log_file=log_file,
+                        )
 
-                            _ = sim_ut.generate_values_distance_report(
-                                fixed_absolute_values_distances,
-                                fixed_pearson_coefficient_absolute,
-                                fixed_p_value_absolute,
-                                correlation_type,
-                                fixed_absolute_vars.index.tolist(),
-                                file_name,
-                                f"{saving_path}/Fixed perturbations importance analysis",
-                                report_title="Log scaled Fixed perturbations values distance report analysis (Absolute map)",
-                                log_file=log_file,
-                            )
+                        saving_path = out_dirs["images"]
 
-                        if args.save_images:
-                            saving_path = args.save_images
+                        # PLOTTING VALUES DISTANCES HEATMAPS
+                        plt_ut.plot_heatmap(
+                            fixed_relative_values_distances,
+                            fixed_relative_vars.index.tolist(),
+                            species_list,
+                            colnames_to_index=colnames_to_index,
+                            cmap="cividis",
+                            save_path=f"{saving_path}/Random Perturbations Importance Analysis",
+                            title="Random Perturbations VS Fixed Perturbations Distance (Relative map)",
+                            img_name="Relative Random Perturbations VS Fixed Perturbations distance",
+                        )
 
-                            os.makedirs(saving_path, exist_ok=True)
-
-                            # PLOTTING VALUES DISTANCES HEATMAPS
-                            plt_ut.plot_heatmap(
-                                fixed_relative_values_distances,
-                                fixed_relative_vars.index.tolist(),
-                                species_list,
-                                colnames_to_index=colnames_to_index,
-                                cmap="cividis",
-                                save_path=f"{saving_path}/Random Perturbations Importance Analysis",
-                                title="Random Perturbations VS Fixed Perturbations Distance (Relative map)",
-                                img_name="Relative Random Perturbations VS Fixed Perturbations distance",
-                            )
-
-                            plt_ut.plot_heatmap(
-                                fixed_absolute_values_distances,
-                                fixed_absolute_vars.index.tolist(),
-                                species_list,
-                                colnames_to_index=colnames_to_index,
-                                cmap="PuOr_r",
-                                save_path=f"{saving_path}/Random Perturbations Importance Analysis",
-                                title="Random Perturbations VS Fixed Perturbations Distance (Absolute map)",
-                                img_name="Absolute Random Perturbations VS Fixed Perturbations distance",
-                            )
+                        plt_ut.plot_heatmap(
+                            fixed_absolute_values_distances,
+                            fixed_absolute_vars.index.tolist(),
+                            species_list,
+                            colnames_to_index=colnames_to_index,
+                            cmap="PuOr_r",
+                            save_path=f"{saving_path}/Random Perturbations Importance Analysis",
+                            title="Random Perturbations VS Fixed Perturbations Distance (Absolute map)",
+                            img_name="Absolute Random Perturbations VS Fixed Perturbations distance",
+                        )
 
                 except AssertionError as ae:
                     ut.print_log(
@@ -1060,14 +1033,12 @@ def main():
             # )
 
             normalized_diff = mean_diff / random_std
-
-            num_nodes = len(available_needed_selections)
-
             # sens_ut.convergence_analysis(RES, FIXED_RES, num_nodes)
-            sens_ut.statistical_tests(RES, FIXED_RES, num_nodes)
-
-            __import__("pprint").pprint(
-                f"fixed mean: {fixed_mean} | random_mean{random_mean} | mean diff: {mean_diff} | normalized diff: {normalized_diff}"
+            sens_ut.statistical_tests(
+                RES,
+                FIXED_RES,
+                available_internal_nodes,
+                report_file=f"./report/{file_name}/statistical_tests",
             )
 
             for j, node_id in enumerate(available_internal_nodes):
@@ -1126,7 +1097,7 @@ def main():
             # Simulate the modified model
             # rr_modified = sim_ut.load_roadrunner_model(xml_string, log_file)
             # res_modified = sim_ut.simulate(rr_modified)
-            # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
+            # sim_ut.plot_results(res_modified, out_dirs["models"], output_filename, log_file)
             #
         elif args.command == "knockin_species":
             sbml_model = sbml_ut.load_model(args.input_path).getModel()
@@ -1199,7 +1170,7 @@ def main():
             # Simulate the modified model
             # rr_modified = sim_ut.load_roadrunner_model(xml_string, log_file)
             # res_modified = sim_ut.simulate(rr_modified)
-            # sim_ut.plot_results(res_modified, args.output, output_filename, log_file)
+            # sim_ut.plot_results(res_modified, out_dirs["models"], output_filename, log_file)
             #
         elif args.command == "knockin_reaction":
             # Parse the args

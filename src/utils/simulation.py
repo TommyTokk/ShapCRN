@@ -17,14 +17,14 @@ import multiprocessing as mp
 from multiprocessing import Pool
 import datetime
 
-import exceptions
+from src import exceptions
 from src.utils.utils import (
     get_ko_species_importance,
     print_log,
     truncate_small_values,
 )
-from src.utils import plot_utils as plt_ut
-from utils.sbml_utils import create_combinations
+from src.utils import plot as plt_ut
+from src.utils.sbml.utils import create_combinations
 
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 

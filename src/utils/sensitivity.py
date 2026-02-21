@@ -1,63 +1,52 @@
 import multiprocessing
-from os import path
 import os
-
-from matplotlib.cbook import safe_masked_invalid
-from utils import simulation_utils
-from utils.simulation_utils import load_roadrunner_model, simulate
-from utils.utils import print_log
-import numpy as np
 import sys
-import matplotlib.pyplot as plt
-from SALib.sample import sobol as sobol_sample
 from multiprocessing import Pool
 
+import matplotlib.pyplot as plt
+import numpy as np
 import roadrunner as rr
-import libsbml
-
+from SALib.sample import sobol as sobol_sample
 from scipy import stats
+
+from src.utils.utils import print_log
 
 
 def _simulation_worker(args):
     """
     Worker function for parallel simulation execution.
-    
+
     Parameters
     ----------
     args : tuple
-        (index, param, sbml_string, valid_elements, valid_idxs, input_ids, current_selections)
-        
+        (index, param, sbml_string, valid_elements, valid_idxs,
+         input_ids, current_selections, sim_end_time)
+
     Returns
     -------
     tuple
-        (index, result_array) where result_array contains final concentrations
+        (index, result_array) where result_array contains final concentrations.
     """
-    i, param, sbml_string, valid_elements, valid_idxs, input_ids, current_selections = args
-    
-    # Create a new RoadRunner instance in this process
+    i, param, sbml_string, valid_elements, valid_idxs, input_ids, current_selections, sim_end_time = args
+
     rr_local = rr.RoadRunner(sbml_string)
     rr_local.timeCourseSelections = current_selections
-    
-    # Reset and set initial concentrations
+
     rr_local.reset()
-    for j in range(len(input_ids)):
-        rr_local.setInitConcentration(input_ids[j], param[j])
-    
-    # Simulate
-    sim_res = rr_local.simulate(0, 5000)
-    
-    # Extract final concentrations
+    for j, sp_id in enumerate(input_ids):
+        rr_local.setInitConcentration(sp_id, param[j])
+
+    sim_res = rr_local.simulate(0, sim_end_time)
+
     result = np.zeros(len(valid_elements))
     for j, el in enumerate(valid_elements):
-        s_idx = valid_idxs[el]
-        result[j] = sim_res[-1, s_idx]
-    
+        result[j] = sim_res[-1, valid_idxs[el]]
+
     return (i, result)
 
 
-# KEEP
 def get_problem_parameters(
-    sbml_model: libsbml.Model, n_input_species: int, input_species_ids: list, range: int=20, log_file=None
+    sbml_model, n_input_species: int, input_species_ids: list, perturbation_range: int = 20, log_file=None
 ) -> dict:
     
     """
@@ -77,10 +66,10 @@ def get_problem_parameters(
     input_species_ids : list of str
         IDs of input species to perturb for sensitivity analysis.
         Each species must exist in the SBML model.
-    range : int, optional
+    perturbation_range : int, optional
         Percentage range for perturbation bounds around baseline concentrations,
         by default 20 (i.e., ±20%)
-        Example: range=20 creates bounds [conc*0.8, conc*1.2]
+        Example: perturbation_range=20 creates bounds [conc*0.8, conc*1.2]
     log_file : file, optional
         File object for logging operations, by default None
 
@@ -103,7 +92,7 @@ def get_problem_parameters(
     - sobol.analyze() for computing sensitivity indices
 
     Bounds are symmetric around the initial concentration. For a species with
-    initial concentration C and range R%:
+    initial concentration C and perturbation_range R%:
     - Lower bound = C * (1 - R/100)
     - Upper bound = C * (1 + R/100)
 
@@ -114,7 +103,7 @@ def get_problem_parameters(
     ...     sbml_model=model,
     ...     n_input_species=3,
     ...     input_species_ids=['Input1', 'Input2', 'Input3'],
-    ...     range=20
+    ...     perturbation_range=20
     ... )
     >>> print(problem['bounds'])
     [[0.8, 1.2], [1.6, 2.4], [0.4, 0.6]]  # For initial concs [1.0, 2.0, 0.5]
@@ -124,13 +113,13 @@ def get_problem_parameters(
     ...     sbml_model=model,
     ...     n_input_species=2,
     ...     input_species_ids=['S1', 'S2'],
-    ...     range=50,  # ±50% perturbation
+    ...     perturbation_range=50,  # ±50% perturbation
     ...     log_file=log
     ... )
 
     Use with SALib for Sobol sampling:
     >>> from SALib.sample import sobol
-    >>> problem = get_problem_parameters(model, 2, ['S1', 'S2'], range=20)
+    >>> problem = get_problem_parameters(model, 2, ['S1', 'S2'], perturbation_range=20)
     >>> samples = sobol.sample(problem, 1024)
 
     See Also
@@ -149,8 +138,8 @@ def get_problem_parameters(
     for ins in input_species_ids:
         conc = sbml_model.getSpecies(ins).getInitialConcentration()
 
-        lower_bound = conc * (1 - (range / 100))
-        upper_bound = conc * (1 + (range / 100))
+        lower_bound = conc * (1 - (perturbation_range / 100))
+        upper_bound = conc * (1 + (perturbation_range / 100))
 
         tmp.append([lower_bound, upper_bound])
 
@@ -159,9 +148,9 @@ def get_problem_parameters(
     return problem
 
 
-# KEEP
 def run_simulation_with_params(
-    rr: rr.RoadRunner, params: np.ndarray, valid_elements: list, valid_idxs: dict, input_ids:list, log_file=None, n_processes: int=None
+    model: rr.RoadRunner, params: np.ndarray, valid_elements: list, valid_idxs: dict,
+    input_ids: list, log_file=None, n_processes: int = None, sim_end_time: float = 5000
 ) -> np.ndarray:
     """
     Run batch simulations with parameter samples and extract final concentrations.
@@ -172,7 +161,7 @@ def run_simulation_with_params(
 
     Parameters
     ----------
-    rr : roadrunner.RoadRunner
+    model : roadrunner.RoadRunner
         Configured RoadRunner model instance to simulate.
         The model configuration is preserved across simulations.
     params : numpy.ndarray
@@ -193,6 +182,8 @@ def run_simulation_with_params(
     n_processes : int, optional
         Number of parallel processes to use. If None, uses CPU count - 1.
         Default is None.
+    sim_end_time : float, optional
+        End time for each simulation, by default 5000.
 
     Returns
     -------
@@ -204,7 +195,7 @@ def run_simulation_with_params(
     Notes
     -----
     - The function uses multiprocessing to parallelize simulations
-    - Each simulation runs from time 0 to 5000 time units
+    - Each simulation runs from time 0 to sim_end_time time units
     - Progress is displayed as "Processed X/Y samples" to stdout
     - The model is reset before each simulation to ensure independence
     - Only the final time point concentration is extracted from each simulation
@@ -216,7 +207,7 @@ def run_simulation_with_params(
     --------
     Run simulations with Sobol samples:
     >>> from SALib.sample import sobol
-    >>> problem = get_problem_parameters(model, 2, ['Input1', 'Input2'], range=20)
+    >>> problem = get_problem_parameters(model, 2, ['Input1', 'Input2'], perturbation_range=20)
     >>> params = sobol.sample(problem, 1024)
     >>> 
     >>> valid_elements = ['Output1', 'Output2', 'Output3']
@@ -243,10 +234,10 @@ def run_simulation_with_params(
     SALib.sample.sobol : Generate Sobol parameter samples
     SALib.analyze.sobol : Compute Sobol sensitivity indices
     """
-    current_selections = rr.timeCourseSelections.copy()
-    
+    current_selections = model.timeCourseSelections.copy()
+
     # Get SBML string for recreation in worker processes
-    sbml_string = rr.getCurrentSBML()
+    sbml_string = model.getCurrentSBML()
     
     # Determine number of processes
     if n_processes is None:
@@ -256,7 +247,7 @@ def run_simulation_with_params(
     
     # Prepare arguments for worker processes
     args_list = [
-        (i, param, sbml_string, valid_elements, valid_idxs, input_ids, current_selections)
+        (i, param, sbml_string, valid_elements, valid_idxs, input_ids, current_selections, sim_end_time)
         for i, param in enumerate(params)
     ]
     
@@ -281,7 +272,6 @@ def run_simulation_with_params(
     return RES
 
 
-# KEEP
 def check_convergence(
     results: dict,
     internal_nodes: list,
@@ -439,79 +429,7 @@ def check_convergence(
     return convergence
 
 
-def assess_model_linearity(RES, sample_sizes) -> str:
-    """
-    Assess model linearity to help decide on perturbation suitability.
 
-    This function analyzes the coefficient of variation of model outputs across
-    different nodes to determine if the model exhibits linear behavior, which
-    helps decide whether perturbation-based methods are appropriate.
-
-    Parameters
-    ----------
-    RES : numpy.ndarray
-        2D array of simulation results.
-        Shape: (n_samples, n_nodes)
-        Each column represents outputs from one node across all samples.
-    sample_sizes : array-like
-        Array of sample sizes used in the analysis (currently unused in implementation).
-
-    Returns
-    -------
-    str
-        Overall linearity assessment, one of:
-        - "High - perturbations likely sufficient" : >70% of nodes show high linearity
-        - "Medium - test both approaches" : 40-70% of nodes show high linearity
-        - "Low - full sampling recommended" : <40% of nodes show high linearity
-
-    Notes
-    -----
-    Linearity is assessed per node based on coefficient of variation (CV):
-    - High linearity: CV < 0.5
-    - Medium linearity: 0.5 <= CV < 1.5
-    - Low linearity: CV >= 1.5
-
-    The function prints detailed linearity information to stdout during execution.
-    """
-
-    print(f"\nMODEL LINEARITY ASSESSMENT:")
-    print(f"{'=' * 50}")
-
-    # Check if sensitivity indices are stable across different sample sizes
-    # (indicating linear behavior)
-    linearity_scores = {}
-
-    for node_idx in range(RES.shape[1]):
-        node_outputs = RES[:, node_idx]
-
-        # Simple linearity check: coefficient of variation of outputs
-        cv = np.std(node_outputs) / (np.mean(np.abs(node_outputs)) + 1e-10)
-
-        if cv < 0.5:
-            linearity = "High"
-        elif cv < 1.5:
-            linearity = "Medium"
-        else:
-            linearity = "Low"
-
-        linearity_scores[f"node_{node_idx}"] = linearity
-
-    # Overall assessment
-    high_linearity_count = sum(1 for l in linearity_scores.values() if l == "High")
-    total_nodes = len(linearity_scores)
-
-    if high_linearity_count / total_nodes > 0.7:
-        overall_linearity = "High - perturbations likely sufficient"
-    elif high_linearity_count / total_nodes > 0.4:
-        overall_linearity = "Medium - test both approaches"
-    else:
-        overall_linearity = "Low - full sampling recommended"
-
-    print(f"Overall model linearity: {overall_linearity}")
-    return overall_linearity
-
-
-# KEEP
 def report_sensitivity(res_dict: dict, parameters: list, report_file: str) -> None:
     """
     Generate a formatted sensitivity analysis report and write it to a file.
@@ -612,7 +530,6 @@ def report_sensitivity(res_dict: dict, parameters: list, report_file: str) -> No
             f.write("\n")
 
 
-# KEEP
 def convergence_report(convergence_informations, report_file):
     """
     {
@@ -634,12 +551,10 @@ def convergence_report(convergence_informations, report_file):
     """
     # __import__("pprint").pprint(convergence_informations)
 
-    conv_info = []
-
-    for internal_node, convergence_data in convergence_informations.items():
-        conv_info.append((internal_node, convergence_data["converged_at"]))
-
-    __import__("pprint").pprint(conv_info)
+    conv_info = [
+        (node, data["converged_at"])
+        for node, data in convergence_informations.items()
+    ]
 
     not_conv = []
 
@@ -686,7 +601,6 @@ def convergence_report(convergence_informations, report_file):
         f.write(41 * "=")
 
 
-# KEEP
 def plot_convergence_single_plot(
     convergence_informations, tol_change=0.01, tol_ci=0.05, file_name=None
 ):
@@ -759,61 +673,158 @@ def plot_convergence_single_plot(
     plt.close()  # Opzionale: libera la memoria
 
 
-def convergence_analysis(random_samples, fixed_samples, n_inputs):
+def statistical_tests(
+    random_samples, fixed_samples, node_names, alpha=0.05, report_file=None
+):
     """
-    Analyze how random samples converge compared to fixed samples
+    Test whether random perturbations produce significantly different simulation
+    outputs compared to fixed perturbations.
+
+    H0: The output distributions from fixed and random perturbations are identical
+        (random perturbations provide no additional information).
+    H1: The output distributions differ
+        (random perturbations capture behaviour that fixed ones miss).
+
+    Three complementary tests are run per node:
+    - Two-sample t-test (parametric, compares means)
+    - Kolmogorov-Smirnov test (non-parametric, compares full distributions)
+    - Mann-Whitney U test (non-parametric, compares medians/ranks)
+
+    A Bonferroni correction is applied across all nodes to control the
+    family-wise error rate.
+
+    Parameters
+    ----------
+    random_samples : numpy.ndarray
+        2D array of simulation results with random perturbations.
+        Shape: (n_random_samples, n_nodes)
+    fixed_samples : numpy.ndarray
+        2D array of simulation results with fixed perturbations.
+        Shape: (n_fixed_samples, n_nodes)
+    node_names : list of str
+        Names of the output nodes (one per column in the sample arrays).
+    alpha : float, optional
+        Significance level before correction, by default 0.05.
+    report_file : str or None, optional
+        Path to write the report. If None, prints to stdout.
+
+    Returns
+    -------
+    dict
+        Per-node results with structure:
+        { node_name: {
+            'ttest': {'statistic': float, 'pvalue': float, 'reject_h0': bool},
+            'ks':    {'statistic': float, 'pvalue': float, 'reject_h0': bool},
+            'mw':    {'statistic': float, 'pvalue': float, 'reject_h0': bool},
+            'cohen_d': float,
+            'significant': bool   # True if ANY corrected test rejects H0
+          }
+        }
     """
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    num_nodes = len(node_names)
+    corrected_alpha = alpha / num_nodes  # Bonferroni correction
 
-    for node in range(n_inputs):
-        random_node = random_samples[:, node]
-        fixed_node = fixed_samples[:, node]
+    results = {}
+    lines = []
 
-        # Running mean of random samples
-        running_mean = np.cumsum(random_node) / np.arange(1, len(random_node) + 1)
-        fixed_mean = np.mean(fixed_node)
+    lines.append("=" * 60)
+    lines.append("STATISTICAL COMPARISON: RANDOM vs FIXED PERTURBATIONS")
+    lines.append("=" * 60)
+    lines.append(f"H0: No difference between random and fixed perturbation outputs")
+    lines.append(f"H1: Distributions differ (random perturbations are informative)")
+    lines.append(f"Significance level (alpha): {alpha}")
+    lines.append(f"Bonferroni-corrected alpha ({num_nodes} nodes): {corrected_alpha:.2e}")
+    lines.append("")
 
-        # Plot convergence
-        axes[node].plot(running_mean, label="Random (running mean)", alpha=0.8)
-        axes[node].axhline(
-            y=fixed_mean,
-            color="red",
-            linestyle="--",
-            label=f"Fixed mean ({fixed_mean:.4f})",
-        )
-        axes[node].set_title(f"Node {node} - Convergence Analysis")
-        axes[node].set_xlabel("Sample number")
-        axes[node].set_ylabel("Running mean")
-        axes[node].legend()
-        axes[node].grid(True, alpha=0.3)
+    significant_nodes = []
 
-    plt.tight_layout()
+    for idx in range(num_nodes):
+        node = node_names[idx]
+        random_node = random_samples[:, idx]
+        fixed_node = fixed_samples[:, idx]
 
-
-# KEEP
-def statistical_tests(random_samples, fixed_samples, num_nodes):
-    """
-    Perform statistical tests to compare distributions
-    """
-    print("=== STATISTICAL TESTS ===")
-
-    for node in range(num_nodes):
-        random_node = random_samples[:, node]
-        fixed_node = fixed_samples[:, node]
-
-        print(f"--- Node {node} ---")
-
-        # Two-sample t-test
-        t_stat, t_pval = stats.ttest_ind(random_node, fixed_node)
-        print(f"T-test: t-statistic = {t_stat:.4f}, p-value = {t_pval:.2e}")
-
-        # Kolmogorov-Smirnov test
+        # --- Tests ---
+        t_stat, t_pval = stats.ttest_ind(random_node, fixed_node, equal_var=False)
         ks_stat, ks_pval = stats.ks_2samp(random_node, fixed_node)
-        print(f"KS-test: statistic = {ks_stat:.4f}, p-value = {ks_pval:.2e}")
-
-        # Mann-Whitney U test (non-parametric)
         mw_stat, mw_pval = stats.mannwhitneyu(
             random_node, fixed_node, alternative="two-sided"
         )
-        print(f"Mann-Whitney U: statistic = {mw_stat:.0f}, p-value = {mw_pval:.2e}")
-        print()
+
+        # --- Effect size (Cohen's d, pooled std) ---
+        n_r, n_f = len(random_node), len(fixed_node)
+        pooled_std = np.sqrt(
+            ((n_r - 1) * np.var(random_node, ddof=1) + (n_f - 1) * np.var(fixed_node, ddof=1))
+            / (n_r + n_f - 2)
+        )
+        cohen_d = (np.mean(random_node) - np.mean(fixed_node)) / pooled_std if pooled_std > 0 else 0.0
+
+        t_reject = t_pval < corrected_alpha
+        ks_reject = ks_pval < corrected_alpha
+        mw_reject = mw_pval < corrected_alpha
+        any_reject = t_reject or ks_reject or mw_reject
+
+        results[node] = {
+            "ttest": {"statistic": t_stat, "pvalue": t_pval, "reject_h0": t_reject},
+            "ks": {"statistic": ks_stat, "pvalue": ks_pval, "reject_h0": ks_reject},
+            "mw": {"statistic": mw_stat, "pvalue": mw_pval, "reject_h0": mw_reject},
+            "cohen_d": cohen_d,
+            "significant": any_reject,
+        }
+
+        if any_reject:
+            significant_nodes.append(node)
+
+        verdict = "REJECT H0 (significant difference)" if any_reject else "FAIL TO REJECT H0"
+
+        lines.append(f"--- {node} ---")
+        lines.append(f"  Welch t-test  : t = {t_stat:+.4f},  p = {t_pval:.2e}  {'*' if t_reject else ''}")
+        lines.append(f"  KS test       : D = {ks_stat:.4f},   p = {ks_pval:.2e}  {'*' if ks_reject else ''}")
+        lines.append(f"  Mann-Whitney U: U = {mw_stat:.0f},  p = {mw_pval:.2e}  {'*' if mw_reject else ''}")
+        lines.append(f"  Cohen's d     : {cohen_d:+.4f}")
+        lines.append(f"  Verdict       : {verdict}")
+        lines.append("")
+
+    # --- Overall conclusion ---
+    lines.append("=" * 60)
+    lines.append("OVERALL CONCLUSION")
+    lines.append("=" * 60)
+    n_sig = len(significant_nodes)
+
+    if n_sig == 0:
+        lines.append(
+            "No significant differences detected across any node."
+        )
+        lines.append(
+            "=> Fixed perturbations appear sufficient; "
+            "random perturbations do NOT add information."
+        )
+    elif n_sig == num_nodes:
+        lines.append(
+            f"All {num_nodes} nodes show significant differences."
+        )
+        lines.append(
+            "=> Random perturbations capture substantially different behaviour; "
+            "they are recommended over fixed perturbations."
+        )
+    else:
+        lines.append(
+            f"{n_sig}/{num_nodes} nodes show significant differences: "
+            f"{', '.join(significant_nodes)}"
+        )
+        lines.append(
+            "=> Mixed results; random perturbations are informative for some "
+            "outputs. Consider using random perturbations for a more complete analysis."
+        )
+
+    lines.append("")
+
+    report_text = "\n".join(lines)
+
+    if report_file is not None:
+        os.makedirs(os.path.dirname(report_file) or ".", exist_ok=True)
+        with open(report_file, "w") as f:
+            f.write(report_text)
+    else:
+        print(report_text)
+
+    return results

@@ -4,25 +4,7 @@ import re
 from src import exceptions
 from src.utils.utils import print_log
 
-from src.utils.sbml.utils import get_nodes_iterator
-
-
-def get_list_of_reactions(sbml_model: libsbml.Model) -> list:
-    """
-    Get a list of Reaction objects from the SBML model.
-
-    Parameters
-    ----------
-    sbml_model : libsbml.Model
-        SBML model object
-
-
-    Returns
-    -------
-    list
-        List of reaction IDs
-    """
-    return [r.getId() for r in sbml_model.getListOfReactions()]
+from src.utils.sbml.helpers import get_nodes_iterator, get_list_of_reactions
 
 
 def get_kinetic_type(

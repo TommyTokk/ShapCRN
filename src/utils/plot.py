@@ -17,13 +17,13 @@ from plotly.subplots import make_subplots
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 
-from utils.utils import print_log
+from src.utils.utils import print_log
 
 
 # KEEP
 def plot_results(
-    simulation_data: np.ndarray,
-    colnames: list,
+    simulation_data: pd.DataFrame,
+    colnames: list = None,
     img_dir_path: str="./imgs",
     img_name: str="simulation",
     log_file=None,
@@ -38,12 +38,13 @@ def plot_results(
 
     Parameters
     ----------
-    simulation_data : numpy.ndarray
-        Structured array containing simulation results.
-        Expected shape: (n_timepoints, n_species+1) where first column is time.
-    colnames : list of str
-        Column names from the simulation. First element should be 'time',
-        remaining elements are species names that will be plotted.
+    simulation_data : pandas.DataFrame
+        DataFrame containing simulation results.
+        First column should be time; remaining columns are species concentrations.
+    colnames : list of str, optional
+        Column names to use. If *None* (default), ``simulation_data.columns``
+        is used. First element should be 'time', remaining elements are
+        species names that will be plotted.
     img_dir_path : str, optional
         Directory path where the image will be saved, by default "./imgs"
         Will be created if it doesn't exist.
@@ -92,8 +93,10 @@ def plot_results(
     --------
     plot_results_interactive : Create interactive Plotly visualization
     """
+    if colnames is None:
+        colnames = simulation_data.columns.tolist()
+
     species_names = colnames[1:]
-    # print(species_names)
 
     # Create directory if it doesn't exist
     os.makedirs(img_dir_path, exist_ok=True)
@@ -105,15 +108,14 @@ def plot_results(
     # Combine directory path and filename
     img_file_path = os.path.join(img_dir_path, img_name)
 
-    time = simulation_data[:, 0]
+    time = simulation_data.iloc[:, 0]
 
     # Create figure with adjusted size to accommodate legend
     plt.figure(figsize=(12, 8))
 
-    for i, species in enumerate(species_names):
-        column_idx = i + 1
-        if column_idx < simulation_data.shape[1]:
-            plt.plot(time, simulation_data[:, column_idx], label=species)
+    for species in species_names:
+        if species in simulation_data.columns:
+            plt.plot(time, simulation_data[species], label=species)
 
     plt.xlabel("Time")
     plt.ylabel("Concentration")
@@ -161,9 +163,9 @@ def plot_results(
 
 # KEEP
 def plot_results_interactive(
-    simulation_data: np.ndarray,
-    colnames: list,
-    model_name: str,
+    simulation_data: pd.DataFrame,
+    colnames: list = None,
+    model_name: str = "",
     html_dir_path:str="./imgs",
     html_name:str="interactive_model_simulation",
     log_file=None,
@@ -181,12 +183,13 @@ def plot_results_interactive(
 
     Parameters
     ----------
-    simulation_data : numpy.ndarray
-        Structured array containing simulation results.
-        Expected shape: (n_timepoints, n_species+1) where first column is time.
-    colnames : list of str
-        Column names from the simulation. First element should be 'time',
-        remaining elements are species names that will be plotted.
+    simulation_data : pandas.DataFrame
+        DataFrame containing simulation results.
+        First column should be time; remaining columns are species concentrations.
+    colnames : list of str, optional
+        Column names to use. If *None* (default), ``simulation_data.columns``
+        is used. First element should be 'time', remaining elements are
+        species names that will be plotted.
     model_name : str
         Name of the model being visualized. Used to create a subdirectory
         within html_dir_path for organizing output files.
@@ -263,6 +266,9 @@ def plot_results_interactive(
     --------
     plot_results : Create static matplotlib PNG visualization
     """
+    if colnames is None:
+        colnames = simulation_data.columns.tolist()
+
     species_names = colnames[1:]
 
     # Ensure html_name has .html extension
@@ -276,19 +282,18 @@ def plot_results_interactive(
     # Combine directory path and filename
     html_file_path = os.path.join(saving_path, html_name)
 
-    time = simulation_data[:, 0]
+    time = simulation_data.iloc[:, 0]
 
     # Create the interactive figure
     fig = go.Figure()
 
     # Add traces for each species
-    for i, species in enumerate(species_names):
-        column_idx = i + 1
-        if column_idx < simulation_data.shape[1]:
+    for species in species_names:
+        if species in simulation_data.columns:
             fig.add_trace(
                 go.Scatter(
                     x=time,
-                    y=simulation_data[:, column_idx],
+                    y=simulation_data[species],
                     mode="lines",
                     name=species,
                     line=dict(width=2),

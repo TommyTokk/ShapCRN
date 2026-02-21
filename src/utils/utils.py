@@ -11,6 +11,54 @@ import json
 import numpy as np
 
 
+
+
+
+def setup_output_dirs(output_root: str, model_name: str) -> dict:
+    """
+    Create a standardised output directory tree and return the paths.
+
+    Structure::
+
+        <output_root>/
+        └── <model_name>/
+            ├── images/
+            ├── csv/
+            └── reports/
+
+    Parameters
+    ----------
+    output_root : str
+        Root output directory (``args.output``).
+    model_name : str
+        Model name (typically the SBML filename without extension).
+
+    Returns
+    -------
+    dict
+        Keys: ``'root'``, ``'images'``, ``'csv'``, ``'reports'``.
+    """
+    base = os.path.join(output_root, model_name)
+    dirs = {
+        "root": base,
+        "images": os.path.join(base, "images"),
+        "csv": os.path.join(base, "csv"),
+        "reports": os.path.join(base, "reports"),
+    }
+    for d in dirs.values():
+        os.makedirs(d, exist_ok=True)
+    return dirs
+
+def _add_output_arg(parser, default="./results"):
+    """Add the single --output root directory argument to a parser."""
+    parser.add_argument(
+        "-o", "--output", default=default,
+        help=f"Root output directory (default: {default}). "
+             "Sub-folders (images/, csv/, reports/) are created "
+             "automatically under <output>/<model_name>/.",
+    )
+
+
 def _add_simulation_args(parser):
     """Add common simulation arguments (time, integrator) to a parser."""
     parser.add_argument(
@@ -74,10 +122,7 @@ def _build_simulate_parser(subparsers):
     parser = subparsers.add_parser("simulate", help="Simulate an SBML model")
     parser.add_argument("input_path", help="Path to the SBML model file")
     _add_simulation_args(parser)
-    parser.add_argument(
-        "-si", "--save-images", default="./imgs",
-        help="Output directory for plots (default: ./imgs)",
-    )
+    _add_output_arg(parser)
     _add_steady_state_args(parser)
     parser.add_argument(
         "--interactive", action="store_true",
@@ -94,10 +139,14 @@ def _build_importance_assessment_parser(subparsers):
         help="Simulate model with different input species concentrations",
     )
     parser.add_argument("input_path", help="Path to the SBML model file")
+    parser.add_argument(
+        "-op", "--operation", choices=["knockout", "knockin"], default="knockout",
+        help="Type of operation to perform on species (default: knockout)",
+    )
     _add_input_species_args(parser)
     parser.add_argument(
         "-ko", "--knockout", nargs="+", default=None,
-        help="One or more IDs to knockout, if empty all species are used",
+        help="One or more IDs to knockout/knockin, if empty all species are used",
     )
     parser.add_argument(
         "-tn", "--target-nodes", nargs="+", default=None,
@@ -134,14 +183,7 @@ def _build_importance_assessment_parser(subparsers):
         help="Run analysis on the importance of random perturbations for the model",
     )
     _add_steady_state_args(parser)
-    parser.add_argument(
-        "-si", "--save-images", default="./imgs",
-        help="Output directory for plots",
-    )
-    parser.add_argument(
-        "-gr", "--generate-report", default="./report",
-        help="Output directory for reports",
-    )
+    _add_output_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
@@ -173,10 +215,7 @@ def _build_knockout_species_parser(subparsers):
     )
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("species_id", help="ID of the species to inhibit")
-    parser.add_argument(
-        "-o", "--output", default="./models",
-        help="Output directory for plots (default: ./models)",
-    )
+    _add_output_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
@@ -188,10 +227,7 @@ def _build_knockout_reaction_parser(subparsers):
     )
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("reaction_id", help="ID of the reaction to inhibit")
-    parser.add_argument(
-        "-o", "--output", default="./imgs",
-        help="Output directory for plots (default: ./imgs)",
-    )
+    _add_output_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
@@ -203,6 +239,8 @@ def _build_knockin_species_parser(subparsers):
     )
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("target_species_id", help="ID of the species to knockin")
+    _add_output_arg(parser)
+    parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
 
@@ -213,6 +251,8 @@ def _build_knockin_reaction_parser(subparsers):
     )
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("target_reaction_id", help="ID of the reaction to knockin")
+    _add_output_arg(parser)
+    parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
 
@@ -222,13 +262,10 @@ def _build_create_network_parser(subparsers):
         "create_network", help="Create the Network of the given model",
     )
     parser.add_argument("input_path", help="Path to the SBML model")
+    _add_output_arg(parser)
     parser.add_argument(
-        "-o", "--output", default="./imgs/PetriNets",
-        help="Output directory for plots (default: ./imgs/PetriNets)",
-    )
-    parser.add_argument(
-        "-sd", "--save-dot", default=None,
-        help="Directory where to save the dot code for the network",
+        "--save-dot", default=None,
+        help="Directory to save the DOT source code for the network",
     )
     parser.add_argument(
         "-or", "--orientation", choices=["TB", "BT", "LR", "RL"], default="TB",

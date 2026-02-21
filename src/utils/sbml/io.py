@@ -2,7 +2,7 @@ import os
 import libsbml
 
 from src.utils.utils import print_log
-from src.utils.sbml.utils import get_sbml_as_xml
+from src.utils.sbml.helpers import get_sbml_as_xml
 
 
 def load_model(model_file_path: str) -> libsbml.SBMLDocument:

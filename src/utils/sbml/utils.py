@@ -12,27 +12,20 @@ from src.classes.function import Function
 from src.utils.utils import print_log
 import src.utils.sbml.knock as sk
 
-from enum import Enum
+# Re-exports from helpers for backward compatibility
+from src.utils.sbml.helpers import get_nodes_iterator, Op, get_sbml_as_xml, get_list_of_reactions  # noqa: F401
 
 
-class Op(Enum):
-    MINUS = libsbml.AST_MINUS
-    PLUS = libsbml.AST_PLUS
-    PROD = libsbml.AST_TIMES
-
-
-def create_ki_model(
-    target_id: str, new_val: float, sbml_model, sbml_str: str, log_file=None
+def create_ki_models(
+    target_ids: list, sbml_model, sbml_str: str, log_file=None
 ) -> dict:
     """
-    Create the knock-in model for the specified target ID.
+    Create the knock-in models for the specified target IDs.
 
     Parameters
     ----------
-    target_id : str
-        Target ID to knock-in.
-    new_val : float
-        New value to set for the knocked-in species.
+    target_ids : list
+        List of target IDs to knock-in.
     sbml_model : libsbml.Model
         The original SBML model.
     sbml_str : str
@@ -43,16 +36,25 @@ def create_ki_model(
     Returns
     -------
     dict
-        A dictionary with the target ID as key and its corresponding knock-in SBML model as value.
+        A dictionary with target IDs as keys and their corresponding knock-in SBML models as values.
     """
-    doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
-    model_copy = doc_copy.getModel()
+    model_dict = {}
+    for ids in target_ids:
+        doc_copy = libsbml.readSBMLFromString(sbml_str)  
+        model_copy = doc_copy.getModel()
+        if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
+            modified_model = sk.knockin_species(model_copy, ids, log_file)
 
-    modified_model = sk.knockin_species(model_copy, target_id, new_val, log_file)
+        elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
+            modified_model = sk.knockin_reaction(model_copy, ids, log_file)
 
-    doc_copy.setModel(modified_model)
+        else:
+            raise Exception("Id not present in the model")
 
-    return {target_id: libsbml.writeSBMLToString(doc_copy)}
+        doc_copy.setModel(modified_model)
+        model_dict[ids] = libsbml.writeSBMLToString(doc_copy)
+
+    return model_dict
 
 
 def create_ko_models(
@@ -223,31 +225,6 @@ def get_products_dict(reaction_objects: list) -> dict:
     return dict
 
 
-def get_nodes_iterator(node: libsbml.ASTNode) -> Generator[libsbml.ASTNode]:
-    """
-    Generator function to recursively yield all nodes in an AST.
-
-    Parameters
-    ----------
-    node : libsbml.ASTNode
-        The root AST node to start the traversal from.
-    Yields
-    ------
-    libsbml.ASTNode
-        Each node in the AST, traversed in pre-order.
-    """
-    if node is None:
-        return
-
-    # Yield the current node immediately
-    yield node
-
-    # Yield from children
-    for i in range(node.getNumChildren()):
-        # 'yield from' seamlessly streams values from the recursive call
-        yield from get_nodes_iterator(node.getChild(i))
-
-
 def reactions_to_dict(reaction_list: list) -> dict:
     """
     Convert a list of Reaction objects to a JSON-serializable dictionary.
@@ -316,77 +293,6 @@ def get_functions_list(SBML_model: libsbml.Model) -> list:
 # ============
 # FUNCTIONS
 # ============
-
-
-def get_sbml_as_xml(model: str, log_file=None) -> str:
-    """
-    Convert an SBML model to its XML string representation.
-
-    This function accepts an SBML model in various formats and converts it to an XML
-    string. It handles automatic conversion to SBMLDocument when necessary before
-    serialization.
-
-    Parameters
-    ----------
-    model : libsbml.Model, str, or libsbml.SBMLDocument
-        The SBML model to convert. Can be:
-        - libsbml.Model: A model object (will be wrapped in SBMLDocument if needed)
-        - str: An XML string (returned as-is)
-        - libsbml.SBMLDocument: A complete SBML document
-    log_file : file, optional
-        File object for logging operations, by default None
-
-    Returns
-    -------
-    str or None
-        The XML string representation of the SBML model, or None if conversion fails
-
-    Notes
-    -----
-    If the model is a libsbml.Model without an associated SBMLDocument, a new
-    SBMLDocument is created using the model's SBML level and version.
-
-    If the input is already a string, it is returned unchanged without validation.
-
-    Error messages are logged to log_file if provided.
-
-    See Also
-    --------
-    save_sbml_model : Save an SBML model to a file
-
-    Examples
-    --------
-    Convert a model to XML string:
-    >>> xml_string = get_sbml_as_xml(my_model)
-    >>> print(xml_string[:100])  # Print first 100 characters
-
-    Pass through an existing XML string:
-    >>> xml_str = "<sbml>...</sbml>"
-    >>> result = get_sbml_as_xml(xml_str)
-    >>> assert result == xml_str
-    """
-    # Check the type of the model and convert to SBMLDocument if necessary
-    if isinstance(model, libsbml.Model):
-        # If it's a Model, get the associated document
-        doc = model.getSBMLDocument()
-        if doc is None:
-            # If there's no associated document, create a new one
-            doc = libsbml.SBMLDocument(model.getLevel(), model.getVersion())
-            doc.setModel(model)
-        xml_string = libsbml.writeSBMLToString(doc)
-    elif isinstance(model, str):
-        # If it's already an XML string, return it
-        return model
-    else:
-        # Otherwise, try to write it directly to string
-        xml_string = libsbml.writeSBMLToString(model)
-
-    if xml_string:
-        return xml_string
-    else:
-        raise ValueError(
-            "Failed to convert SBML model to XML string. Check log for details."
-        )
 
 
 # KEEP
