@@ -4,7 +4,7 @@ import re
 from src import exceptions
 from src.utils.utils import print_log
 
-from src.utils.sbml_utils import get_nodes_iterator
+from src.utils.sbml.utils import get_nodes_iterator
 
 
 def get_list_of_reactions(sbml_model: libsbml.Model) -> list:

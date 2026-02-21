@@ -10,7 +10,7 @@ from src import exceptions
 from src.classes.species import Species
 from src.classes.function import Function
 from src.utils.utils import print_log
-import src.utils.sbml_utils.sbml_knock as sk
+import src.utils.sbml.knock as sk
 
 from enum import Enum
 

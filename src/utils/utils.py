@@ -11,6 +11,245 @@ import json
 import numpy as np
 
 
+def _add_simulation_args(parser):
+    """Add common simulation arguments (time, integrator) to a parser."""
+    parser.add_argument(
+        "-t", "--time", type=float, default=10,
+        help="Simulation end time (default: 10)",
+    )
+    parser.add_argument(
+        "-i", "--integrator", choices=["cvode", "gillespie", "rk4"],
+        help="Integrator to use",
+    )
+
+
+def _add_steady_state_args(parser):
+    """Add steady-state related arguments to a parser."""
+    parser.add_argument(
+        "--steady-state", action="store_true",
+        help="Simulate until steady state is reached",
+    )
+    parser.add_argument(
+        "--max-time", type=float, default=1000,
+        help="Maximum simulation time when seeking steady state (default: 1000)",
+    )
+    parser.add_argument(
+        "--sim-step", type=float, default=5,
+        help="Time step for steady state check (default: 5)",
+    )
+    parser.add_argument(
+        "--points", type=int, default=1000,
+        help="Number of points in the final profile (default: 1000)",
+    )
+    parser.add_argument(
+        "--threshold", type=float, default=1e-6,
+        help="Threshold for steady state detection (default: 1e-6)",
+    )
+
+
+def _add_perturbation_args(parser):
+    """Add perturbation-related arguments to a parser."""
+    parser.add_argument(
+        "--preserve-inputs", action="store_true", default=False,
+        help="Preserve the input nodes from being analysed",
+    )
+    parser.add_argument(
+        "-fp", "--fixed-perturbations", nargs="+",
+        help="Perturbation percentages to use in fixed samples combination "
+             "(WARNING: The number of samples will be equal to the number of parameters)",
+    )
+
+
+def _add_input_species_args(parser):
+    """Add input species argument to a parser."""
+    parser.add_argument(
+        "-is", "--input_species", nargs="+", default=None,
+        help="One or more species IDs to vary (e.g. -is ACEx GLCx P). "
+             "If None no samples will be generated",
+    )
+
+
+def _build_simulate_parser(subparsers):
+    """Build the 'simulate' subcommand parser."""
+    parser = subparsers.add_parser("simulate", help="Simulate an SBML model")
+    parser.add_argument("input_path", help="Path to the SBML model file")
+    _add_simulation_args(parser)
+    parser.add_argument(
+        "-si", "--save-images", default="./imgs",
+        help="Output directory for plots (default: ./imgs)",
+    )
+    _add_steady_state_args(parser)
+    parser.add_argument(
+        "--interactive", action="store_true",
+        help="Generate an interactive plot instead of a static one",
+    )
+    parser.add_argument("-l", "--log", help="Path to log file")
+    return parser
+
+
+def _build_importance_assessment_parser(subparsers):
+    """Build the 'importance_assessment' subcommand parser."""
+    parser = subparsers.add_parser(
+        "importance_assessment",
+        help="Simulate model with different input species concentrations",
+    )
+    parser.add_argument("input_path", help="Path to the SBML model file")
+    _add_input_species_args(parser)
+    parser.add_argument(
+        "-ko", "--knockout", nargs="+", default=None,
+        help="One or more IDs to knockout, if empty all species are used",
+    )
+    parser.add_argument(
+        "-tn", "--target-nodes", nargs="+", default=None,
+        help="One or more IDs to print on analysis",
+    )
+    parser.add_argument(
+        "-pf", "--payoff-function", choices=["max", "min", "last"], default="last",
+        help="Function to use to calculate the payoff in the Shapley value",
+    )
+    parser.add_argument(
+        "-n", "--num-samples", type=int, default=5,
+        help="Number of samples for each species (default: 5)",
+    )
+    parser.add_argument(
+        "-v", "--variation", type=float, default=20.0,
+        help="Percentage variation around initial value (default: 20.0)",
+    )
+    _add_simulation_args(parser)
+    _add_perturbation_args(parser)
+    parser.add_argument(
+        "--use-perturbations", action="store_true", default=False,
+        help="Run the analysis using inputs' perturbations",
+    )
+    parser.add_argument(
+        "--use-fixed-perturbations", action="store_true", default=False,
+        help="Run the analysis using fixed perturbations",
+    )
+    parser.add_argument(
+        "--perturbations-importance", action="store_true", default=False,
+        help="Run the analysis on the importance of using perturbations for the model",
+    )
+    parser.add_argument(
+        "--random-perturbations-importance", action="store_true", default=False,
+        help="Run analysis on the importance of random perturbations for the model",
+    )
+    _add_steady_state_args(parser)
+    parser.add_argument(
+        "-si", "--save-images", default="./imgs",
+        help="Output directory for plots",
+    )
+    parser.add_argument(
+        "-gr", "--generate-report", default="./report",
+        help="Output directory for reports",
+    )
+    parser.add_argument("-l", "--log", help="Path to log file")
+    return parser
+
+
+def _build_sensitivity_analysis_parser(subparsers):
+    """Build the 'sensitivity_analysis' subcommand parser."""
+    parser = subparsers.add_parser(
+        "sensitivity_analysis",
+        help="Run sensitivity analysis between fixed and random perturbations",
+    )
+    parser.add_argument("input_path", help="Path to the SBML model file")
+    _add_input_species_args(parser)
+    parser.add_argument(
+        "-bs", "--base-samples", type=float, default=4096,
+        help="Base samples size used to run SOBOL analysis with SALib",
+    )
+    _add_perturbation_args(parser)
+    parser.add_argument(
+        "-cc", "--check-convergence", action="store_true", default=False,
+        help="Check convergence with increasing samples (MAX: 4096)",
+    )
+    return parser
+
+
+def _build_knockout_species_parser(subparsers):
+    """Build the 'knockout_species' subcommand parser."""
+    parser = subparsers.add_parser(
+        "knockout_species", help="Knockout a species in the model",
+    )
+    parser.add_argument("input_path", help="Path to the SBML model file")
+    parser.add_argument("species_id", help="ID of the species to inhibit")
+    parser.add_argument(
+        "-o", "--output", default="./models",
+        help="Output directory for plots (default: ./models)",
+    )
+    parser.add_argument("-l", "--log", help="Path to log file")
+    return parser
+
+
+def _build_knockout_reaction_parser(subparsers):
+    """Build the 'knockout_reaction' subcommand parser."""
+    parser = subparsers.add_parser(
+        "knockout_reaction", help="Knockout a reaction in the model",
+    )
+    parser.add_argument("input_path", help="Path to the SBML model file")
+    parser.add_argument("reaction_id", help="ID of the reaction to inhibit")
+    parser.add_argument(
+        "-o", "--output", default="./imgs",
+        help="Output directory for plots (default: ./imgs)",
+    )
+    parser.add_argument("-l", "--log", help="Path to log file")
+    return parser
+
+
+def _build_knockin_species_parser(subparsers):
+    """Build the 'knockin_species' subcommand parser."""
+    parser = subparsers.add_parser(
+        "knockin_species", help="Knockin a species in the model",
+    )
+    parser.add_argument("input_path", help="Path to the SBML model file")
+    parser.add_argument("target_species_id", help="ID of the species to knockin")
+    return parser
+
+
+def _build_knockin_reaction_parser(subparsers):
+    """Build the 'knockin_reaction' subcommand parser."""
+    parser = subparsers.add_parser(
+        "knockin_reaction", help="Knockin a reaction in the model",
+    )
+    parser.add_argument("input_path", help="Path to the SBML model file")
+    parser.add_argument("target_reaction_id", help="ID of the reaction to knockin")
+    return parser
+
+
+def _build_create_network_parser(subparsers):
+    """Build the 'create_network' subcommand parser."""
+    parser = subparsers.add_parser(
+        "create_network", help="Create the Network of the given model",
+    )
+    parser.add_argument("input_path", help="Path to the SBML model")
+    parser.add_argument(
+        "-o", "--output", default="./imgs/PetriNets",
+        help="Output directory for plots (default: ./imgs/PetriNets)",
+    )
+    parser.add_argument(
+        "-sd", "--save-dot", default=None,
+        help="Directory where to save the dot code for the network",
+    )
+    parser.add_argument(
+        "-or", "--orientation", choices=["TB", "BT", "LR", "RL"], default="TB",
+        help="Orientation to use for the network: TB -> Top-Bottom, "
+             "BT -> Bottom-Top, LR -> Left-Right, RL -> Right-Left",
+    )
+    parser.add_argument(
+        "-l", "--layout", choices=["dot", "neato", "fdp", "sfdp"], default="dot",
+        help="Layout used to plot the network",
+    )
+    parser.add_argument(
+        "-vs", "--vertical-spacing", type=float, default=0.5,
+        help="Vertical spacing between ranks",
+    )
+    parser.add_argument(
+        "-hs", "--horizontal-spacing", type=float, default=0.3,
+        help="Horizontal spacing between nodes",
+    )
+    return parser
+
+
 def parse_args():
     """
     Parse command line arguments for SBML model analysis tool.
@@ -26,391 +265,22 @@ def parse_args():
     """
     import argparse
 
-    # Create main parser
     parser = argparse.ArgumentParser(
         description="SBML model analysis and manipulation tool",
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    # Create subparsers for different commands
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
     subparsers.required = True
 
-    # === SIMULATE command ===
-    simulate_parser = subparsers.add_parser("simulate", help="Simulate an SBML model")
-    simulate_parser.add_argument("input_path", help="Path to the SBML model file")
-    simulate_parser.add_argument(
-        "-t", "--time", type=float, default=10, help="Simulation end time (default: 10)"
-    )
-    simulate_parser.add_argument(
-        "-i",
-        "--integrator",
-        choices=["cvode", "gillespie", "rk4"],
-        help="Integrator to use",
-    )
-    simulate_parser.add_argument(
-        "-si",
-        "--save-images",
-        default="./imgs",
-        help="Output directory for plots (default: ./imgs)",
-    )
-    # Steady state options for simulate
-    simulate_parser.add_argument(
-        "--steady-state",
-        action="store_true",
-        help="Simulate until steady state is reached",
-    )
-    simulate_parser.add_argument(
-        "--max-time",
-        type=float,
-        default=1000,
-        help="Maximum simulation time when seeking steady state (default: 1000)",
-    )
-    simulate_parser.add_argument(
-        "--sim-step",
-        type=float,
-        default=5,
-        help="Time step for steady state check (default: 5)",
-    )
-    simulate_parser.add_argument(
-        "--points",
-        type=int,
-        default=1000,
-        help="Number of points in the final profile (default: 1000)",
-    )
-    simulate_parser.add_argument(
-        "--threshold",
-        type=float,
-        default=1e-6,
-        help="Threshold for steady state detection (default: 1e-12)",
-    )
-
-    simulate_parser.add_argument(
-        "--interactive",
-        action="store_true",
-        help="Generate an intereactive plot instead of a static one",
-    )
-
-    # === SIMULATE_SAMPLES command ===
-    simulate_samples_parser = subparsers.add_parser(
-        "importance_assessment",
-        help="Simulate model with different input species concentrations",
-    )
-    simulate_samples_parser.add_argument(
-        "input_path", help="Path to the SBML model file"
-    )
-    simulate_samples_parser.add_argument(
-        "-is",
-        "--input_species",
-        nargs="+",
-        default=None,
-        help="One or more species IDs to vary (e.g. -s ACEx GLCx P). If None no samples will be generated",
-    )
-    simulate_samples_parser.add_argument(
-        "-ko",
-        "--knockout",
-        nargs="+",
-        default=None,
-        help="One or more IDs to knockout, if empty all species are used",
-    )
-
-    simulate_samples_parser.add_argument(
-        "-tn",
-        "--target-nodes",
-        nargs="+",
-        default=None,
-        help="One or more IDs to print on analysis",
-    )
-    # simulate_samples_parser.add_argument(
-    #     "--mko",
-    #     "--multi_ko",
-    #     nargs="+",
-    #     default=None,
-    #     help="Multiple species to Knockout in the same model",
-    # )
-
-    simulate_samples_parser.add_argument(
-        "-pf",
-        "--payoff-function",
-        choices=["max", "min", "last"],
-        default="last",
-        help="Function to use to calculate the payoff in the Shapley value",
-    )
-
-    simulate_samples_parser.add_argument(
-        "-n",
-        "--num-samples",
-        type=int,
-        default=5,
-        help="Number of samples for each species (default: 5)",
-    )
-    simulate_samples_parser.add_argument(
-        "-v",
-        "--variation",
-        type=float,
-        default=20.0,
-        help="Percentage variation around initial value (default: 20.0)",
-    )
-    simulate_samples_parser.add_argument(
-        "-t", "--time", type=float, default=10, help="Simulation end time (default: 10)"
-    )
-    simulate_samples_parser.add_argument(
-        "-i",
-        "--integrator",
-        choices=["cvode", "gillespie", "rk4"],
-        help="Integrator to use",
-    )
-
-    simulate_samples_parser.add_argument(
-        "--preserve-inputs",
-        action="store_true",
-        default=False,
-        help="Preserve the inputs node from been analysed",
-    )
-    simulate_samples_parser.add_argument(
-        "--use-perturbations",
-        action="store_true",
-        default=False,
-        help="Run the analysis using inputs' perturbations",
-    )
-    simulate_samples_parser.add_argument(
-        "--use-fixed-perturbations",
-        action="store_true",
-        default=False,
-        help="Run the analysis using fixed perturbations",
-    )
-    simulate_samples_parser.add_argument(
-        "-fp",
-        "--fixed-perturbations",
-        nargs="+",
-        help="Perturbation percentages to use in fixed samples combination (WARNING: The number of samples will be equal to the number of parameters)",
-    )
-    simulate_samples_parser.add_argument(
-        "--perturbations-importance",
-        action="store_true",
-        default=False,
-        help="Run the analysis on the importance of using perturbations for the model",
-    )
-
-    simulate_samples_parser.add_argument(
-        "--random-perturbations-importance",
-        action="store_true",
-        default=False,
-        help="Run analysis on the importance of random perturbations for the model",
-    )
-
-    # Steady state options for simulate_samples
-    simulate_samples_parser.add_argument(
-        "--steady-state",
-        action="store_true",
-        help="Simulate until steady state is reached",
-    )
-
-    simulate_samples_parser.add_argument(
-        "--max-time",
-        type=float,
-        default=1000,
-        help="Maximum simulation time when seeking steady state (default: 1000)",
-    )
-    simulate_samples_parser.add_argument(
-        "--sim-step",
-        type=float,
-        default=5,
-        help="Time step for steady state check (default: 5)",
-    )
-    simulate_samples_parser.add_argument(
-        "--points",
-        type=int,
-        default=1000,
-        help="Number of points in the final profile (default: 1000)",
-    )
-    simulate_samples_parser.add_argument(
-        "--threshold",
-        type=float,
-        default=1e-6,
-        help="Threshold for steady state detection (default: 1e-6)",
-    )
-
-    simulate_samples_parser.add_argument(
-        "-si",
-        "--save-images",
-        default="./imgs",
-        help="Output directory for plots",
-    )
-
-    simulate_samples_parser.add_argument(
-        "-gr",
-        "--generate-report",
-        default="./report",
-        help="Output directory for reports",
-    )
-
-    # === SENSITIVITY_ANALYSIS command ===
-    sens_parser = subparsers.add_parser(
-        "sensitivity_analysis",
-        help="Run sensitivity analysis between fixed and random perturbations",
-    )
-    sens_parser.add_argument("input_path", help="Path to the SBML model file")
-
-    sens_parser.add_argument(
-        "-is",
-        "--input_species",
-        nargs="+",
-        default=None,
-        help="One or more species IDs to vary (e.g. -s ACEx GLCx P). If None no samples will be generated",
-    )
-
-    sens_parser.add_argument(
-        "-bs",
-        "--base-samples",
-        type=float,
-        default=4096,
-        help="Base samples size used to run SOBOL analysis with SALib",
-    )
-
-    sens_parser.add_argument(
-        "--preserve-inputs",
-        action="store_true",
-        default=False,
-        help="Ignore the input nodes for the analysis",
-    )
-
-    sens_parser.add_argument(
-        "-fp",
-        "--fixed-perturbations",
-        nargs="+",
-        help="Perturbation percentages to use in fixed samples combination (WARNING: The number of samples will be equal to the number of parameters)",
-    )
-
-    sens_parser.add_argument(
-        "-cc",
-        "--check-convergence",
-        action="store_true",
-        default=False,
-        help="Check convergence with increasing samples (MAX: 4096)",
-    )
-
-    # === KNOCKOUT_SPECIES command ===
-    knockout_species_parser = subparsers.add_parser(
-        "knockout_species", help="Knockout a species in the model"
-    )
-    knockout_species_parser.add_argument(
-        "input_path", help="Path to the SBML model file"
-    )
-    knockout_species_parser.add_argument(
-        "species_id", help="ID of the species to inhibit"
-    )
-    knockout_species_parser.add_argument(
-        "-o",
-        "--output",
-        default="./models",
-        help="Output directory for plots (default: ./models)",
-    )
-
-    # === KNOCKOUT_REACTION command ===
-    knockout_reaction_parser = subparsers.add_parser(
-        "knockout_reaction", help="Knockout a reaction in the model"
-    )
-    knockout_reaction_parser.add_argument(
-        "input_path", help="Path to the SBML model file"
-    )
-    knockout_reaction_parser.add_argument(
-        "reaction_id", help="ID of the reaction to inhibit"
-    )
-    knockout_reaction_parser.add_argument(
-        "-o",
-        "--output",
-        default="./imgs",
-        help="Output directory for plots (default: ./imgs)",
-    )
-
-    # === KNOCKIN SPECIES command ===
-
-    knockin_species_parser = subparsers.add_parser(
-        "knockin_species", help="Knockin a species in the model"
-    )
-
-    knockin_species_parser.add_argument(
-        "input_path", help="Path to the SBML model file"
-    )
-    knockin_species_parser.add_argument(
-        "target_species_id", help="ID of the species to knockin"
-    )
-
-    # === KNOCKIN REACTION command ===
-    knockin_reaction_parser = subparsers.add_parser(
-        "knockin_reaction", help="Knockin a reaction in the model"
-    )
-
-    knockin_reaction_parser.add_argument(
-        "input_path", help="Path to the SBML model file"
-    )
-
-    knockin_reaction_parser.add_argument(
-        "target_reaction_id", help="ID of the reaction to knockin"
-    )
-
-    # === CREATE PETRINET command ==
-    create_network_parser = subparsers.add_parser(
-        "create_network", help="Create the Network of the given model"
-    )
-
-    create_network_parser.add_argument("input_path", help="Path to the SBML model")
-
-    create_network_parser.add_argument(
-        "-o",
-        "--output",
-        default="./imgs/PetriNets",
-        help="Output directory for plots (default: ./imgs/PetriNets)",
-    )
-
-    create_network_parser.add_argument(
-        "-sd",
-        "--save-dot",
-        default=None,
-        help="directory where to save the dot code for the network",
-    )
-
-    create_network_parser.add_argument(
-        "-or",
-        "--orientation",
-        choices=["TB", "BT", "LR", "RL"],
-        default="TB",
-        help="Orientation to use for the network: TB -> Top-Bottom, BT -> Bottom-Top, LR -> Left-Right, RL -> Right-Left",
-    )
-
-    create_network_parser.add_argument(
-        "-l",
-        "--layout",
-        choices=["dot", "neato", "fdp", "sfdp"],
-        default="dot",
-        help="Layout used to plot the network",
-    )
-
-    create_network_parser.add_argument(
-        "-vs",
-        "--vertical-spacing",
-        type=float,
-        default=0.5,
-        help="Vertical spacing between ranks",
-    )
-
-    create_network_parser.add_argument(
-        "-hs",
-        "--horizontal-spacing",
-        type=float,
-        default=0.3,
-        help="Horizontal spacing between nodes",
-    )
-
-    # Common arguments for all commands
-    for subparser in [
-        simulate_parser,
-        simulate_samples_parser,
-        knockout_species_parser,
-        knockout_reaction_parser,
-    ]:
-        subparser.add_argument("-l", "--log", help="Path to log file")
+    _build_simulate_parser(subparsers)
+    _build_importance_assessment_parser(subparsers)
+    _build_sensitivity_analysis_parser(subparsers)
+    _build_knockout_species_parser(subparsers)
+    _build_knockout_reaction_parser(subparsers)
+    _build_knockin_species_parser(subparsers)
+    _build_knockin_reaction_parser(subparsers)
+    _build_create_network_parser(subparsers)
 
     return parser.parse_args()
 

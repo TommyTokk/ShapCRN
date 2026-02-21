@@ -1,15 +1,6 @@
-from itertools import product
-from operator import indexOf
 import networkx as nx
 import os
-import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch
-from networkx.algorithms.bipartite import color
-import numpy as np
-from pandas.core.groupby.generic import ScalarResult
-from scipy.special import eval_sh_legendre
 
-from src.utils import sbml_utils
 from src.utils.utils import print_log
 
 
