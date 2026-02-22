@@ -15,6 +15,8 @@ from src.utils import plot as plt_ut
 from src.utils.sbml import reactions as sbml_reactions
 from src.utils import utils as ut
 
+from src.pipelines import importance as imp
+
 
 payoff_functions = {
     'max': ut.payoff_max,
@@ -103,8 +105,9 @@ def main():
                     res_df, img_dir_path=out_dirs['images'],
                     img_name=f"{file_name}.png", log_file=log_file,
                 )
-        elif command == 'importance_assessment':#TODO: Complete the implementation of importance assessment
-            ut.print_log(log_file, "[INFO] Starting importance assessment...")
+        elif command == 'importance_assessment':
+            # Parsing the arguments for importance assessment 
+            imp.importance_assessment(args)
                 
 
     except Exception as e:

@@ -170,12 +170,12 @@ def main():
             # Get the list of species
             species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
 
-            if args.knockout is None:
+            if args.knocked is None:
                 # If no input species are provided all nodes will be used
                 ids_to_ko = [s.getId() for s in sbml_model.getListOfSpecies()]
             else:
                 # Else only the provided ones will be used
-                ids_to_ko = list(set(species_list).intersection(set(args.knockout)))
+                ids_to_ko = list(set(species_list).intersection(set(args.knocked)))
 
             if args.preserve_inputs:
                 # Removing the input species from the species to analyze
@@ -655,7 +655,7 @@ def main():
                         if args.fixed_perturbations is None:
                             ut.print_log(
                                 log_file,
-                                "[ERROR] You need to specify the variations to use setting the -fp parameter",
+                                "[ERROR] You need to specify the variations to use setting the --fixed-perturbations parameter",
                             )
 
                         # env_pert = os.getenv("FIXED_PERTURBATIONS").split(

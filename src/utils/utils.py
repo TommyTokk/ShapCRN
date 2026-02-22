@@ -102,7 +102,7 @@ def _add_perturbation_args(parser):
         help="Preserve the input nodes from being analysed",
     )
     parser.add_argument(
-        "-fp", "--fixed-perturbations", nargs="+",
+        "--fixed-perturbations", nargs="+",
         help="Perturbation percentages to use in fixed samples combination "
              "(WARNING: The number of samples will be equal to the number of parameters)",
     )
@@ -111,8 +111,8 @@ def _add_perturbation_args(parser):
 def _add_input_species_args(parser):
     """Add input species argument to a parser."""
     parser.add_argument(
-        "-is", "--input_species", nargs="+", default=None,
-        help="One or more species IDs to vary (e.g. -is ACEx GLCx P). "
+        "--input-species", nargs="+", default=None,
+        help="One or more species IDs to vary (e.g. --input-species ACEx GLCx P). "
              "If None no samples will be generated",
     )
 
@@ -138,53 +138,79 @@ def _build_importance_assessment_parser(subparsers):
         "importance_assessment",
         help="Simulate model with different input species concentrations",
     )
+
+    # -- Positional / Model --
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument(
-        "-op", "--operation", choices=["knockout", "knockin"], default="knockout",
+        "--operation", choices=["knockout", "knockin"], default="knockout",
         help="Type of operation to perform on species (default: knockout)",
     )
-    _add_input_species_args(parser)
-    parser.add_argument(
-        "-ko", "--knockout", nargs="+", default=None,
-        help="One or more IDs to knockout/knockin, if empty all species are used",
+
+    # -- Species selection --
+    species_group = parser.add_argument_group("Species selection")
+    _add_input_species_args(species_group)
+    species_group.add_argument(
+        "--knocked", nargs="+", default=None,
+        help="One or more species IDs to knock (out or in), if empty all species are used",
     )
-    parser.add_argument(
-        "-tn", "--target-nodes", nargs="+", default=None,
+    species_group.add_argument(
+        "--target-nodes", nargs="+", default=None,
         help="One or more IDs to print on analysis",
     )
-    parser.add_argument(
-        "-pf", "--payoff-function", choices=["max", "min", "last"], default="last",
-        help="Function to use to calculate the payoff in the Shapley value",
+    species_group.add_argument(
+        "--preserve-inputs", action="store_true", default=False,
+        help="Preserve the input nodes from being analysed",
     )
-    parser.add_argument(
+
+    # -- Sampling & perturbation --
+    perturbation_group = parser.add_argument_group("Sampling & perturbation")
+    perturbation_group.add_argument(
         "-n", "--num-samples", type=int, default=5,
         help="Number of samples for each species (default: 5)",
     )
-    parser.add_argument(
+    perturbation_group.add_argument(
         "-v", "--variation", type=float, default=20.0,
         help="Percentage variation around initial value (default: 20.0)",
     )
-    _add_simulation_args(parser)
-    _add_perturbation_args(parser)
-    parser.add_argument(
+    perturbation_group.add_argument(
         "--use-perturbations", action="store_true", default=False,
         help="Run the analysis using inputs' perturbations",
     )
-    parser.add_argument(
+    perturbation_group.add_argument(
         "--use-fixed-perturbations", action="store_true", default=False,
         help="Run the analysis using fixed perturbations",
     )
-    parser.add_argument(
+    perturbation_group.add_argument(
+        "--fixed-perturbations", nargs="+",
+        help="Perturbation percentages to use in fixed samples combination "
+             "(WARNING: The number of samples will be equal to the number of parameters)",
+    )
+    perturbation_group.add_argument(
         "--perturbations-importance", action="store_true", default=False,
         help="Run the analysis on the importance of using perturbations for the model",
     )
-    parser.add_argument(
+    perturbation_group.add_argument(
         "--random-perturbations-importance", action="store_true", default=False,
         help="Run analysis on the importance of random perturbations for the model",
     )
-    _add_steady_state_args(parser)
-    _add_output_arg(parser)
-    parser.add_argument("-l", "--log", help="Path to log file")
+
+    # -- Shapley value --
+    shapley_group = parser.add_argument_group("Shapley value")
+    shapley_group.add_argument(
+        "--payoff-function", choices=["max", "min", "last"], default="last",
+        help="Function to use to calculate the payoff in the Shapley value",
+    )
+
+    # -- Simulation --
+    sim_group = parser.add_argument_group("Simulation")
+    _add_simulation_args(sim_group)
+    _add_steady_state_args(sim_group)
+
+    # -- Output --
+    output_group = parser.add_argument_group("Output")
+    _add_output_arg(output_group)
+    output_group.add_argument("-l", "--log", help="Path to log file")
+
     return parser
 
 
@@ -197,12 +223,12 @@ def _build_sensitivity_analysis_parser(subparsers):
     parser.add_argument("input_path", help="Path to the SBML model file")
     _add_input_species_args(parser)
     parser.add_argument(
-        "-bs", "--base-samples", type=float, default=4096,
+        "--base-samples", type=float, default=4096,
         help="Base samples size used to run SOBOL analysis with SALib",
     )
     _add_perturbation_args(parser)
     parser.add_argument(
-        "-cc", "--check-convergence", action="store_true", default=False,
+        "--check-convergence", action="store_true", default=False,
         help="Check convergence with increasing samples (MAX: 4096)",
     )
     return parser
