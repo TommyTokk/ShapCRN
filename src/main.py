@@ -111,7 +111,8 @@ def main():
 
             else:
                 plt_ut.plot_results(
-                    res_df, img_dir_path=save_path,
+                    res_df,
+                    img_dir_path=save_path,
                     img_name="interactive_model_simulation",
                     log_file=log_file,
                 )
@@ -527,13 +528,9 @@ def main():
                     # SAVING THE VARAITIONS HEATMAPS
                     save_path = out_dirs["reports"]
 
-                    samples_relative_vars.to_csv(
-                        f"{save_path}/relative_variations.csv"
-                    )
+                    samples_relative_vars.to_csv(f"{save_path}/relative_variations.csv")
 
-                    samples_absolute_vars.to_csv(
-                        f"{save_path}/absolute_variations.csv"
-                    )
+                    samples_absolute_vars.to_csv(f"{save_path}/absolute_variations.csv")
 
                     _, ko_ranking_relative = ut.get_ko_species_importance(
                         samples_relative_vars,

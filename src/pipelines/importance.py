@@ -1,5 +1,6 @@
 import libsbml
 import pandas as pd
+import numpy as np
 
 from src.utils import utils as ut
 from src.utils.sbml import io as sbml_io
@@ -221,17 +222,20 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
     # Prepare the final data
     original_data = [original_df]
 
-    for i in range(len(samples_simulations_results)):
-        sim_res_i = samples_simulations_results[i]
-        original_data.append(
-            pd.DataFrame(sim_res_i[:, 1:], columns=colnames[1:])
-        )
+    if args["use_perturbations"]:
+        for i in range(len(samples_simulations_results)):
+            sim_res_i = samples_simulations_results[i]
+            original_data.append(
+                pd.DataFrame(sim_res_i[:, 1:], columns=colnames[1:])
+            )
 
-    return original_data
+    return original_data, selections, min_ss_time
 
-def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, args):
+def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, selections, ss_min_time, args):
     
     operation = args["operation"]
+
+    ut.print_log(args["log_file"], f"Operation: {operation}")
 
     # Create the models
 
@@ -244,11 +248,45 @@ def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, args)
     elif operation == "knockout":
         models_dict = sbml_ut.create_ko_models(knocked_ids, sbml_model, sbml_str, args["log_file"])
 
-    #TODO: Complete the knock operation
+    # TODO: Complete the knockout 
+    knocked_data = sim_ut.process_species_multiprocessing(
+        knocked_ids,
+        models_dict,
+        samples,
+        args["input_species_ids"],
+        selections,
+        args["sim_integrator"],
+        start_time=0,
+        end_time = args["sim_time"],
+        steady_state=args["use_steady_state"],
+        max_end_time=args["ss_max_time"],
+        min_ss_time=ss_min_time,
+        use_perturbations=args["use_perturbations"],
+        preserve_input=args["preserve_inputs"],
+        log_file=args["log_file"]
+    )
+
+    return knocked_data
 
 
+def run_shap_analysis(original_data, knocked_data, n_combinations, n_input_ids, payoff = "last", log_file=None):
+    #Get the dictionary of payoffs
 
+    payoff_dict = sim_ut.get_payoff_vals(
+        original_data,
+        knocked_data,
+        payoff,
+        log_file=log_file
+    )
+
+    shap_values = sim_ut.get_shapley_values(
+        payoff_dict,
+        n_combinations,
+        n_input_ids,
+        log_file=log_file
+    )
     
+
 
 
 def importance_assessment(args):
@@ -267,7 +305,29 @@ def importance_assessment(args):
     # Handle the samples
     samples = generate_samples(sbml_model, parsed_args)
 
-    # Simulate original model
-    original_simulation_data = simulate_original_model(sbml_model, knocked_ids, samples, parsed_args)
+    ut.print_log(parsed_args["log_file"], f"{samples}")
 
-    knocked_data = simulate_knocked_data(sbml_model, knocked_ids, samples, parsed_args)
+    # Simulate original model
+    original_simulation_data, selections, min_ss_time = simulate_original_model(sbml_model, knocked_ids, samples, parsed_args)
+
+
+    knocked_data = simulate_knocked_data(sbml_model, knocked_ids, samples, selections, min_ss_time, parsed_args)
+
+    
+
+    # Analyse the results
+    if parsed_args["use_perturbations"]:
+        # TODO: Calculate the Shapley value
+        n_combinations = np.power(parsed_args["num_samples"], len(parsed_args["input_species_ids"])) + 1
+        shapley_values = run_shap_analysis(
+            original_simulation_data, 
+            knocked_data, 
+            n_combinations, 
+            len(parsed_args["input_species_ids"]),
+            payoff=parsed_args["payoff_function"], 
+            log_file=parsed_args["log_file"]
+            )
+        # TODO: Calculate the variations
+        # TODO: Plot the heatmaps
+        # TODO: Create the report
+        pass
