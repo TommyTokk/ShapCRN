@@ -12,8 +12,6 @@ import numpy as np
 
 
 
-
-
 def setup_output_dirs(output_root: str, model_name: str) -> dict:
     """
     Create a standardised output directory tree and return the paths.
@@ -389,12 +387,6 @@ def dict_pretty_print(dict_obj):
     print(json_formatted_str)
 
 
-# === DEBUG ===
-#
-#
-#
-
-
 # === SHAPLEY VALUE ===
 
 
@@ -435,67 +427,6 @@ def save_shapley_values_to_csv_pivot(shapley_vals, file_path, cols=None, log_fil
 # === ANALYSIS ===
 
 
-# KEEP
-def pearson_correlation(
-    matrix_1, matrix_2, permutations=999, seed=None, alternative="two-sided"
-):
-    if alternative not in {"two-sided", "greater", "less"}:
-        raise ValueError("alternative must be one of 'two-sided', 'greater', 'less'")
-
-    # Align: prendiamo l'intersezione di righe e colonne
-    if not isinstance(matrix_1, pd.DataFrame) or not isinstance(matrix_2, pd.DataFrame):
-        raise TypeError("Both inputs must be pandas.DataFrame")
-
-    common_index = matrix_1.index.intersection(matrix_2.index)
-    common_cols = matrix_1.columns.intersection(matrix_2.columns)
-
-    if len(common_index) == 0 or len(common_cols) == 0:
-        raise ValueError("No overlapping index/columns between the two DataFrames")
-
-    a = matrix_1.loc[common_index, common_cols].to_numpy().ravel()
-    b = matrix_2.loc[common_index, common_cols].to_numpy().ravel()
-
-    # Keep only pairs where neither is NaN
-    valid = ~np.isnan(a) & ~np.isnan(b)
-    a_valid = a[valid]
-    b_valid = b[valid]
-
-    # If not enough data, return NaN
-    if a_valid.size < 2:
-        return np.nan, np.nan
-
-    # compute observed Pearson r (handle caso di input costanti)
-    try:
-        r_obs = pearsonr(a_valid, b_valid)[0]
-    except Exception:
-        # ad es. ConstantInputWarning / errori numerici -> nessuna correlazione definita
-        return np.nan, np.nan
-
-    # Permutation test
-    rng = np.random.RandomState(seed)
-    count = 0
-    for _ in range(permutations):
-        b_perm = rng.permutation(b_valid)
-        try:
-            r_perm = pearsonr(a_valid, b_perm)[0]
-        except Exception:
-            # se la permutazione genera valori costanti, considera r_perm = 0 (o skip)
-            r_perm = 0.0
-
-        if alternative == "two-sided":
-            if abs(r_perm) >= abs(r_obs):
-                count += 1
-        elif alternative == "greater":
-            if r_perm >= r_obs:
-                count += 1
-        else:  # "less"
-            if r_perm <= r_obs:
-                count += 1
-
-    pvalue = (count + 1) / (permutations + 1)
-    return r_obs, pvalue
-
-
 def truncate_small_values(value, threshold=1e-20):
     val = np.float64(value)
     return np.where(np.abs(val) < threshold, 0, val)
@@ -507,22 +438,19 @@ def get_active_cells(matrix, log_file=None):
     return res
 
 
-# KEEP
-def get_ko_species_importance(matrix, ko_species_list, log_file=None):
-    ko_impact = np.nanmean(matrix, axis=1)
-    ko_ranking = np.argsort(ko_impact)[::-1]
-
-    # print_log(log_file, "Top 5 knockouts most sensitive to parameter uncertainty:")
-    # for i in range(min(5, len(ko_ranking))):
-    #     ko_idx = ko_ranking[i]
-    #     ko_name = ko_species_list[ko_idx]
-    #     impact_score = ko_impact[ko_idx]
-    #     print_log(log_file, f"  {i+1}. {ko_name}: {impact_score:.20f}")
-
-    return ko_impact, ko_ranking
-
-
 # === NORMALIZATION ===
+def normalize_asinh(df, scale=None):
+    vals = df.to_numpy(dtype=float)
+    nan_mask = np.isnan(vals)
+    abs_vals = np.abs(vals[np.isfinite(vals)])
+
+    s = np.nanpercentile(abs_vals, 75) if scale is None else float(scale)
+    if not np.isfinite(s) or s <= 0:
+        s = 1.0
+
+    normalized = np.arcsinh(df / s)
+
+    return normalized, s
 
 
 def minMax_normalize(df, epsilon=1e-20, log_file=None):

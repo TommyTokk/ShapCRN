@@ -255,6 +255,8 @@ def knockin_species(
 
     species = sbml_model.getSpecies(species_id)
 
+    print_log(log_file, f"Knocking in species {species_id} with new value {new_val}")
+
     if species is not None:
         # Check if the species has concentration or amounts
         if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
@@ -269,7 +271,7 @@ def knockin_species(
                 species_id, sbml_model.getId(), "Cannot access species initial value"
             )
 
-        species.setId(species_id + "_KI")
+        #species.setId(species_id + "_KI")
 
         # Make the species constant
         species.setBoundaryCondition(True)

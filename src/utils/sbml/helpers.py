@@ -137,3 +137,5 @@ def get_sbml_as_xml(model, log_file=None) -> str:
         raise ValueError(
             "Failed to convert SBML model to XML string. Check log for details."
         )
+    
+

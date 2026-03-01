@@ -17,7 +17,7 @@ from src.utils.sbml.helpers import get_nodes_iterator, Op, get_sbml_as_xml, get_
 
 
 def create_ki_models(
-    target_ids: list, sbml_model, sbml_str: str, log_file=None
+    target_ids: list, sbml_model, sbml_str: str, new_values: list, log_file=None
 ) -> dict:
     """
     Create the knock-in models for the specified target IDs.
@@ -30,6 +30,8 @@ def create_ki_models(
         The original SBML model.
     sbml_str : str
         The SBML model as a string.
+    new_values : list
+        List of new values to set for the knocked-in species/reactions (only for knock-in)
     log_file : file, optional
         File to log information, by default None.
 
@@ -43,7 +45,8 @@ def create_ki_models(
         doc_copy = libsbml.readSBMLFromString(sbml_str)  
         model_copy = doc_copy.getModel()
         if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
-            modified_model = sk.knockin_species(model_copy, ids, log_file)
+            species_new_value = new_values[target_ids.index(ids)] if new_values else None
+            modified_model = sk.knockin_species(model_copy, ids,species_new_value, log_file)
 
         elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
             modified_model = sk.knockin_reaction(model_copy, ids, log_file)
@@ -364,6 +367,8 @@ def generate_species_random_combinations(
     """
     res = []
 
+    rng = np.random.default_rng(42)
+
     for ts in target_species:
         species = sbml_model.getListOfSpecies().getElementBySId(ts)
 
@@ -395,7 +400,7 @@ def generate_species_random_combinations(
                 lower_bound = t0_val * (1 - (variation / 100))
                 upper_bound = t0_val * (1 + (variation / 100))
 
-            rng = np.random.default_rng()
+            
 
             sample = rng.uniform(lower_bound, np.nextafter(upper_bound, np.inf))
             tmp.append(sample)

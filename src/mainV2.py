@@ -18,11 +18,7 @@ from src.utils import utils as ut
 from src.pipelines import importance as imp
 
 
-payoff_functions = {
-    'max': ut.payoff_max,
-    'min': ut.payoff_min,
-    'last': ut.payoff_last,
-}
+
 
 def main():
     # Parsing the arguments
@@ -107,7 +103,7 @@ def main():
                 )
         elif command == 'importance_assessment':
             # Parsing the arguments for importance assessment 
-            imp.importance_assessment(args)
+            imp.importance_assessment(args, out_dirs)
                 
 
     except Exception as e:

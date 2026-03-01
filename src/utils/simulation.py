@@ -19,9 +19,7 @@ import datetime
 
 from src import exceptions
 from src.utils.utils import (
-    get_ko_species_importance,
     print_log,
-    truncate_small_values,
 )
 from src.utils import plot as plt_ut
 from src.utils.sbml.utils import create_combinations
@@ -1453,6 +1451,311 @@ def get_relative_variations_no_samples(
     return res_df
 
 
+def get_relative_variations_log_ratio(
+    final_results_original_model: list[pd.DataFrame],
+    final_results_knocked_model: list[tuple[str, list[pd.DataFrame]]],
+    epsilon: float = 1e-20,
+    log_file=None,
+    aggregation: str = "median",
+    log_base: str = "2",
+    return_signed: bool = False,
+) -> pd.DataFrame:
+    """
+    Calculate relative variations between original and knocked model results
+    using log-ratios, as an alternative to get_relative_variations_samples.
+
+    For each perturbation i:
+        d_i = log2( c_knocked_i / c_original_i )
+
+    Aggregated across perturbations via the chosen method.
+
+    Parameters
+    ----------
+    final_results_original_model : list of pandas.DataFrame
+        List of DataFrames containing original model simulation results for each perturbation.
+        Each DataFrame should have species concentrations as columns.
+        Length must match the number of perturbation combinations.
+    final_results_knocked_model : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked species
+        - ko_data : list of pandas.DataFrame
+            List of DataFrames with knocked simulation results for each perturbation
+    epsilon : float, optional
+        Clip floor to avoid log(0), by default 1e-20.
+        Both knocked and original values are clipped to epsilon before the ratio,
+        so near-zero / near-zero yields log-ratio ≈ 0 (no spurious inf values).
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None.
+    aggregation : str, optional
+        How to aggregate log-ratios across perturbations, by default "median":
+        - "median" : median(|d_i|) — robust to outlier perturbations, recommended
+        - "mean"   : mean(|d_i|)  — L1, interpretable
+        - "rms"    : sqrt(mean(d_i²)) — L2, emphasizes large deviations
+        - "max"    : max(|d_i|)   — worst-case deviation across perturbations
+    log_base : str, optional
+        Logarithm base, by default "2":
+        - "2"  : scores in doublings — |score| = 1.0 means exactly twofold change
+        - "e"  : scores in nats
+        - "10" : scores in decades
+    return_signed : bool, optional
+        If True, returns signed values (median or mean without absolute value),
+        by default False.
+        Positive = knockout increases species concentration.
+        Negative = knockout decreases species concentration.
+        Only valid with aggregation="median" or "mean".
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with shape (n_knocked_species, n_species) where:
+        - Rows: Knockout species IDs
+        - Columns: All species IDs (with brackets removed)
+        - Values: Aggregated log-ratio scores across all perturbations
+
+        NaN values appear where:
+        - knocked species is compared to itself (diagonal)
+        - Infinite values are encountered
+
+    Notes
+    -----
+    Advantages over get_relative_variations_samples (RMS of arithmetic ratios):
+    - Symmetric: log(2x) = -log(0.5x), unlike (knocked - orig) / orig
+    - No spurious inf: clipping avoids division by near-zero values
+    - Natural scale for concentrations spanning orders of magnitude
+    - Median aggregation suppresses influence of outlier perturbations
+
+    Interpretation guide (absolute values; equivalent fold-change anchors):
+        Base 2 (log_base="2"):
+            |score| < 0.15 : negligible  (< ~10% change)
+            |score| ~ 0.5  : moderate    (~41% change)
+            |score| ~ 1.0  : strong      (twofold change)
+            |score| > 2.0  : very strong (fourfold or more)
+
+        Base e (log_base="e"):
+            |score| < 0.095 : negligible  (< ~10% change)
+            |score| ~ 0.347 : moderate    (~41% change)
+            |score| ~ 0.693 : strong      (twofold change)
+            |score| > 1.386 : very strong (fourfold or more)
+
+        Base 10 (log_base="10"):
+            |score| < 0.041 : negligible  (< ~10% change)
+            |score| ~ 0.151 : moderate    (~41% change)
+            |score| ~ 0.301 : strong      (twofold change)
+            |score| > 0.602 : very strong (fourfold or more)
+
+    Examples
+    --------
+    >>> original_results = [df1, df2, df3]  # 3 perturbations
+    >>> ko_results = [('S1', [ko_df1, ko_df2, ko_df3]), ('S2', [...])]
+    >>> rel_variations = get_relative_variations_log_ratio(original_results, ko_results)
+    >>> print(rel_variations.loc['S1', 'S2'])
+    1.0  # S2 changed by approximately twofold across perturbations
+
+    See Also
+    --------
+    get_relative_variations_samples : Original RMS-based relative variations
+    get_relative_variations_ks : KS-test based distributional variations
+    get_absolute_variations_samples : Calculate absolute variations with perturbations
+    """
+    log_fns = {"2": np.log2, "e": np.log, "10": np.log10}
+    if log_base not in log_fns:
+        raise ValueError(f"log_base must be one of {list(log_fns)}. Got: '{log_base}'")
+    if aggregation not in {"median", "mean", "rms", "max"}:
+        raise ValueError(f"aggregation must be one of 'median', 'mean', 'rms', 'max'. Got: '{aggregation}'")
+    if return_signed and aggregation not in {"median", "mean"}:
+        raise ValueError("return_signed=True is only valid with aggregation='median' or 'mean'.")
+    if epsilon <= 0:
+        raise ValueError(f"epsilon must be > 0. Got: {epsilon}")
+    if len(final_results_original_model) == 0:
+        raise ValueError("final_results_original_model must contain at least one DataFrame.")
+
+    log_fn = log_fns[log_base]
+    rows = []
+    expected_n_perturbations = len(final_results_original_model)
+
+    for knocked_species, knocked_data in final_results_knocked_model:
+        if len(knocked_data) != expected_n_perturbations:
+            raise ValueError(
+                f"Length mismatch for knocked species '{knocked_species}': "
+                f"expected {expected_n_perturbations} simulations, got {len(knocked_data)}."
+            )
+
+        log_ratios = []
+
+        # Process each perturbation for the current knocked species
+        for c, (ko_df, orig_df) in enumerate(
+            zip(knocked_data, final_results_original_model)
+        ):
+            # Retrieve the last row
+            ss_ko = ko_df.tail(1)
+            ss_orig = orig_df.tail(1)
+
+            # Ensure columns match and are in the same order
+            if not ss_ko.columns.equals(ss_orig.columns):
+                missing_in_ko = list(ss_orig.columns.difference(ss_ko.columns))
+                missing_in_orig = list(ss_ko.columns.difference(ss_orig.columns))
+                if missing_in_ko or missing_in_orig:
+                    raise ValueError(
+                        f"Column mismatch at perturbation index {c} for knocked species '{knocked_species}'. "
+                        f"Missing in knocked: {missing_in_ko}. Missing in original: {missing_in_orig}."
+                    )
+            # Clip values to epsilon to avoid log(0) issues
+            ss_ko = ss_ko.loc[:, ss_orig.columns].clip(lower=epsilon)
+            ss_orig = ss_orig.loc[:, ss_orig.columns].clip(lower=epsilon)
+
+            # Compute log-ratio for this perturbation
+            lr = log_fn(ss_ko.to_numpy() / ss_orig.to_numpy())
+            log_ratios.append(pd.DataFrame(lr, columns=ss_orig.columns))
+        
+        # Concatenate log-ratios across perturbations for this knocked species
+        lr_df = pd.concat(log_ratios, ignore_index=True)  # (n_perturbations, n_species)
+
+        if return_signed:
+            score = lr_df.median() if aggregation == "median" else lr_df.mean()
+        else:
+            abs_lr = lr_df.abs()
+            if aggregation == "median":
+                score = abs_lr.median()
+            elif aggregation == "mean":
+                score = abs_lr.mean()
+            elif aggregation == "rms":
+                score = np.sqrt((lr_df ** 2).mean())
+            elif aggregation == "max":
+                score = abs_lr.max()
+
+        score.name = knocked_species
+        rows.append(score)
+
+    res_df = pd.DataFrame(rows)
+    res_df = res_df.mask(np.isinf(res_df), np.nan)
+
+    col_names = pd.Index(res_df.columns).astype(str).str.strip("[]")
+    idx = res_df.index.get_indexer(col_names)
+    valid = idx != -1
+    res_df.values[idx[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+
+    return res_df
+
+def get_relative_variations_log_ratio_no_samples(
+    original_data: pd.DataFrame,
+    knocked_data: list[tuple[str, pd.DataFrame]],
+    epsilon: float = 1e-20,
+    return_signed: bool = False,
+    log_base: str = "2",
+    log_file=None,
+) -> pd.DataFrame:
+    """
+    Calculate relative variations between original and knocked model results using log-ratios without perturbations.
+
+    This function computes the log-ratio of final concentrations between the original model and each knocked model
+    at steady state, without input perturbations. It serves as a non-perturbation counterpart to get_relative_variations_log_ratio.
+
+    Parameters
+    ----------
+    original_data : pandas.DataFrame
+        DataFrame containing the original model simulation results.
+        Expected to have species concentrations as columns.
+        Typically excludes the time column.
+    knocked_data : list of tuple
+        List of tuples where each tuple contains:
+        - ko_species : str
+            ID of the knocked species
+        - ko_info : pandas.DataFrame
+            DataFrame with knocked simulation results for that species
+    epsilon : float, optional
+        Clip floor to avoid log(0), by default 1e-20.
+        Both knocked and original values are clipped to epsilon before the ratio,
+        so near-zero / near-zero yields log-ratio ≈ 0 (no spurious inf values).
+    return_signed : bool, optional
+        If True, returns signed log-ratios.
+        If False (default), returns absolute log-ratios.
+        Positive = knockout increases species concentration.
+        Negative = knockout decreases species concentration.
+    log_file : file, optional
+        File object for logging operations (currently unused), by default None.
+    log_base : str, optional
+        Logarithm base, by default "2":
+        - "2"  : scores in doublings — |score| = 1.0 means exactly twofold change
+        - "e"  : scores in nats
+        - "10" : scores in decades
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with shape (n_knocked_species, n_species) where:
+        - Rows: Knockout species IDs
+        - Columns: All species IDs (with brackets removed)
+                - Values: Log-ratio scores at steady state
+                    (signed if return_signed=True, absolute otherwise)
+
+        NaN values appear where:
+        - Knocked species is compared to itself (diagonal)
+        - Infinite values are encountered
+    Notes
+    The function calculates log-ratio variations as:
+    - log_ratio = log(knocked_final_value / original_final_value)
+    Processing steps:
+    1. Extract final time point values using .tail(1)
+    2. Clip values ≤ epsilon to avoid log(0) issues
+    3. Calculate log-ratio (knocked / original)
+    4. Set diagonal (self-comparisons) to NaN
+    5. Mask infinite values (from division by zero) to NaN
+    Examples
+    >>> original_df = pd.DataFrame({'S1': [1.0], 'S2': [2.0], 'S3': [0.5]})
+    >>> ko_data = [
+    ...     ('S1', pd.DataFrame({'S1': [0.0], 'S2': [2.4], 'S3': [0.6]})),
+    ...     ('S2', pd.DataFrame({'S1': [1.1], 'S2': [0.0], 'S3': [0.4]}))
+    ... ]
+    >>> rel_variations = get_relative_variations_log_ratio_no_samples(original_df, ko_data)
+    >>> print(rel_variations.loc['S1', 'S2'])
+    1.263  # S2 changed by approximately 2.4/2.0 = 1.2-fold, log2(1.2) ≈ 1.263
+    See Also
+    get_relative_variations_log_ratio : Log-ratio relative variations with perturbations
+    get_relative_variations_no_samples : Relative variations without perturbations (arithmetic ratio)
+    get_absolute_variations_no_samples : Absolute variations without perturbations
+    """
+    log_fns = {"2": np.log2, "e": np.log, "10": np.log10}
+    if log_base not in log_fns:
+        raise ValueError(f"log_base must be one of {list(log_fns)}. Got: '{log_base}'")
+    if epsilon <= 0:
+        raise ValueError(f"epsilon must be > 0. Got: {epsilon}")
+
+    log_fn = log_fns[log_base]
+    rows = []
+
+    for knocked_species, knocked_info in knocked_data:
+        ss_ko = knocked_info.tail(1)
+        ss_orig = original_data.tail(1)
+
+        if not ss_ko.columns.equals(ss_orig.columns):
+            missing_in_ko = list(ss_orig.columns.difference(ss_ko.columns))
+            missing_in_orig = list(ss_ko.columns.difference(ss_orig.columns))
+            if missing_in_ko or missing_in_orig:
+                raise ValueError(
+                    f"Column mismatch for knocked species '{knocked_species}'. "
+                    f"Missing in knocked: {missing_in_ko}. Missing in original: {missing_in_orig}."
+                )
+
+        ss_ko = ss_ko.loc[:, ss_orig.columns].clip(lower=epsilon)
+        ss_orig = ss_orig.loc[:, ss_orig.columns].clip(lower=epsilon)
+
+        lr = log_fn(ss_ko.to_numpy() / ss_orig.to_numpy())
+        if not return_signed:
+            lr = np.abs(lr)
+        lr_series = pd.Series(lr.flatten(), index=ss_orig.columns, name=knocked_species)
+        rows.append(lr_series)
+
+    res_df = pd.DataFrame(rows)
+    res_df = res_df.mask(np.isinf(res_df), np.nan)
+
+    col_names = pd.Index(res_df.columns).astype(str).str.strip("[]")
+    idx = res_df.index.get_indexer(col_names)
+    valid = idx != -1
+    res_df.values[idx[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+
+    return res_df
+
 # KEEP
 def get_payoff_vals(
     final_results_original_model: pd.DataFrame,
@@ -1658,682 +1961,6 @@ def get_shapley_values(
     shap_df = pd.DataFrame(shap_vals)
 
     return shap_df
-
-
-# KEEP
-def generate_values_distance_report(
-    distance_matrix: pd.DataFrame,
-    correlation_coefficient: float,
-    p_value: float,
-    alternative: str,
-    knocked_species_list: list,
-    model_name: str,
-    saving_path: str,
-    threshold: float = 0.2,
-    alpha: float = 0.05,
-    report_title: str = "VALUES DISTANCE REPORT",
-    log_file=None,
-) -> None:
-    """
-    Generate a comprehensive distance analysis report with Pearson correlation and knocked rankings.
-
-    This function creates a detailed text report analyzing distance matrices between knocked
-    species behaviors, including statistical correlation analysis and species importance rankings.
-    It combines Pearson correlation results with knocked impact assessments to provide insights
-    into parameter uncertainty and species sensitivity.
-
-    Parameters
-    ----------
-    distance_matrix : numpy.ndarray or pandas.DataFrame
-        2D array containing distance values between knocked species.
-        Shape: (n_knocked_species, n_knocked_species) or similar metric matrix.
-    correlation_coefficient : float
-        Pearson correlation coefficient (r) between compared datasets.
-        Range: [-1, 1] where values closer to ±1 indicate stronger correlation.
-    p_value : float
-        P-value from the Pearson correlation test.
-        Indicates statistical significance of the correlation.
-    alternative : str
-        Type of hypothesis test performed. Must be one of:
-        - 'two-sided' : Test for any linear relationship (r ≠ 0)
-        - 'greater' : Test for positive relationship (r > 0)
-        - 'less' : Test for negative relationship (r < 0)
-    knocked_species_list : list of str
-        List of knocked species IDs corresponding to distance matrix rows/columns.
-    model_name : str
-        Name of the model being analyzed (used in report header and filename).
-    saving_path : str
-        Directory path where the report file will be saved.
-        Will be created if it doesn't exist.
-    threshold : float, optional
-        Threshold value for identifying significant differences in the distance matrix,
-        by default 0.2
-    alpha : float, optional
-        Significance level for statistical tests, by default 0.05
-    report_title : str, optional
-        Title to display at the top of the report, by default "VALUES DISTANCE REPORT"
-    log_file : file, optional
-        File object for logging operations, by default None
-
-    Returns
-    -------
-    str
-        Absolute path to the generated report file.
-
-    Raises
-    ------
-    Exception
-        If the alternative parameter is not one of 'two-sided', 'greater', or 'less'.
-        If there are errors writing the report file.
-
-    Notes
-    -----
-    The report includes the following sections:
-    1. Pearson Correlation Analysis
-    - Correlation coefficient and p-value
-    - Strength interpretation (very weak to very strong)
-    - Direction (positive/negative)
-    - Statistical significance assessment
-
-    2. Distance Matrix Statistics
-    - Maximum, minimum, mean, and standard deviation of distances
-
-    3. Knocked Species Ranking
-    - Top 10 species most sensitive to parameter uncertainty
-    - Based on knocked impact scores
-
-    Correlation strength categories:
-    - Very strong: |r| ≥ 0.9
-    - Strong: 0.7 ≤ |r| < 0.9
-    - Moderate: 0.5 ≤ |r| < 0.7
-    - Weak: 0.3 ≤ |r| < 0.5
-    - Very weak: |r| < 0.3
-
-    Examples
-    --------
-    Generate report after distance matrix analysis:
-    >>> from scipy.stats import pearsonr
-    >>> r, p = pearsonr(distances1.flatten(), distances2.flatten())
-    >>> report_path = generate_values_distance_report(
-    ...     distance_matrix=dist_matrix,
-    ...     correlation_coefficient=r,
-    ...     p_value=p,
-    ...     alternative='two-sided',
-    ...     ko_species_list=['S1', 'S2', 'S3'],
-    ...     model_name='BIOMD0000000623',
-    ...     saving_path='reports/model_623/',
-    ...     threshold=0.2,
-    ...     alpha=0.05
-    ... )
-    >>> print(f"Report saved to: {report_path}")
-
-    See Also
-    --------
-    generate_pattern_distance_report : Generate pattern distance report (simpler version)
-    get_ko_species_importance : Calculate knocked species importance scores
-    """
-    # Check if the destinations folder exists otherwise create it
-    if not os.path.exists(saving_path):
-        os.makedirs(saving_path, exist_ok=True)
-        print_log(log_file, f"Created directory: {saving_path}")
-
-    # Determine correlation strength
-    abs_r = abs(correlation_coefficient)
-    if abs_r >= 0.9:
-        strength = "very strong"
-    elif abs_r >= 0.7:
-        strength = "strong"
-    elif abs_r >= 0.5:
-        strength = "moderate"
-    elif abs_r >= 0.3:
-        strength = "weak"
-    else:
-        strength = "very weak"
-
-    # Determine direction
-    if correlation_coefficient > 0:
-        direction = "positive"
-    elif correlation_coefficient < 0:
-        direction = "negative"
-    else:
-        direction = "no"
-
-    # Statistical significance
-    is_significant = p_value < alpha
-    significance_level = (
-        "highly significant"
-        if p_value < 0.001
-        else "significant"
-        if p_value < 0.01
-        else "marginally significant"
-    )
-
-    # Hypothesis description
-    if alternative == "two-sided":
-        null_hyp = "H₀: No linear relationship exists (r = 0)"
-        alt_hyp = "H₁: Linear relationship exists (r ≠ 0)"
-        p_interpretation = f"probability of observing a correlation this extreme (in either direction) by chance"
-    elif alternative == "greater":
-        null_hyp = "H₀: No positive relationship (r ≤ 0)"
-        alt_hyp = "H₁: Positive relationship exists (r > 0)"
-        p_interpretation = (
-            f"probability of observing a correlation this large or larger by chance"
-        )
-    elif alternative == "less":
-        null_hyp = "H₀: No negative relationship (r ≥ 0)"
-        alt_hyp = "H₁: Negative relationship exists (r < 0)"
-        p_interpretation = f"probability of observing a correlation this negative or more negative by chance"
-    else:
-        raise Exception("Alternative not valid")
-
-    # Build report
-    report = f"""CORRELATION RESULTS:
-    -------------------
-    Correlation coefficient (r): {correlation_coefficient:.6f}
-    P-value: {p_value:.6f}
-    Test type: {alternative} 
-    Significance level (α): {alpha}
-
-    STATISTICAL INTERPRETATION:
-    --------------------------
-    • Correlation strength: {strength.title()} {direction} correlation
-    • Statistical significance: {"" if is_significant else "Not "}{significance_level}
-    • Null hypothesis: {null_hyp}
-    • Alternative hypothesis: {alt_hyp}\n\n"""
-
-    # Getting additional metrics
-    max_diff = np.nanmax(distance_matrix)
-    min_diff = np.nanmin(distance_matrix)
-    mean_diff = np.nanmean(distance_matrix)
-    std_diff = np.nanstd(distance_matrix)
-
-    significant_differences = np.sum(distance_matrix > threshold)
-    total_comparisons = distance_matrix.size
-
-    # Calculate knockout importance
-    ko_impact, ko_ranking = get_ko_species_importance(
-        distance_matrix, knocked_species_list, log_file
-    )
-
-    # Generate report filename
-    report_filename = report_title
-    report_path = os.path.join(saving_path, report_filename)
-
-    # Write the report
-    try:
-        with open(report_path, "w") as f:
-            f.write("=" * 80 + "\n")
-            f.write(f"{report_title.upper()}\n")
-            f.write("=" * 80 + "\n\n")
-
-            f.write(f"Model: {model_name}\n")
-            f.write(
-                f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            )
-
-            f.write("=" * 80 + "\n")
-            f.write("PEARSON ANALYSIS REPORT\n")
-            f.write("=" * 80 + "\n\n")
-
-            f.write(report)
-
-            f.write("=" * 80 + "\n")
-            f.write("DISTANCE MATRIX ANALYSIS REPORT\n")
-            f.write("=" * 80 + "\n\n")
-
-            f.write(f"Threshold: {threshold}\n\n")
-
-            f.write("MATRIX STATISTICS:\n")
-            f.write("-" * 40 + "\n")
-            f.write(f"Maximum global Distance: {max_diff}\n")
-            f.write(f"Minimum global Distance: {min_diff}\n")
-            f.write(f"Mean gloabl Distance: {mean_diff}\n")
-            f.write(f"Gloabl standard Deviation: {std_diff}\n")
-            # f.write(
-            #     f"Significant Differences: {significant_differences}/{total_comparisons}\n"
-            # )
-            # f.write(
-            #     f"Significance Rate: {(significant_differences/total_comparisons)*100:.20f}%\n\n"
-            # )
-
-            if ko_impact is not None and ko_ranking is not None:
-                f.write("KNOCKOUT SPECIES RANKING:\n")
-                f.write("-" * 40 + "\n")
-                f.write("Top 10 knockouts most sensitive to parameter uncertainty:\n")
-                for i in range(min(10, len(ko_ranking))):
-                    ko_idx = ko_ranking[i]
-                    ko_name = knocked_species_list[ko_idx]
-                    impact_score = ko_impact[ko_idx]
-                    if np.isnan(impact_score):
-                        f.write(f"  {i + 1:2d}. {ko_name:<20} NaN (no valid data)\n")
-                    else:
-                        f.write(f"  {i + 1:2d}. {ko_name:<20} {impact_score:.20f}\n")
-            else:
-                f.write("KNOCKOUT SPECIES RANKING: Unable to calculate\n")
-
-            f.write("\n" + "=" * 80 + "\n")
-
-        print_log(log_file, f"Distance report saved to: {report_path}")
-
-    except Exception as e:
-        raise IOError(f"Error writing report file: {e}")
-
-    return report_path
-
-
-def generate_pattern_distance_report(
-    distance_matrix: pd.DataFrame,
-    correlation_coefficient: float,
-    p_value: float,
-    alternative: str,
-    ko_species_list: list,
-    model_name: str,
-    saving_path: str,
-    threshold: float = 0.2,
-    alpha: float = 0.05,
-    report_title: str = "PATTERN DISTANCE REPORT",
-    log_file=None,
-) -> None:
-    """
-    Generate a simplified pattern distance analysis report with Pearson correlation.
-
-    This function creates a text report focused on Pearson correlation analysis for pattern
-    distance comparisons between knockout species. Unlike generate_values_distance_report,
-    this version does not include detailed matrix statistics or knockout rankings, making it
-    suitable for temporal pattern or similarity analyses.
-
-    Parameters
-    ----------
-    distance_matrix : numpy.ndarray or pandas.DataFrame
-        2D array containing distance values between knockout species patterns.
-        Typically measures similarity/dissimilarity in temporal dynamics or behavioral patterns.
-    correlation_coefficient : float
-        Pearson correlation coefficient (r) between compared datasets.
-        Range: [-1, 1] where values closer to ±1 indicate stronger correlation.
-    p_value : float
-        P-value from the Pearson correlation test.
-        Indicates statistical significance of the correlation.
-    alternative : str
-        Type of hypothesis test performed. Must be one of:
-        - 'two-sided' : Test for any linear relationship (r ≠ 0)
-        - 'greater' : Test for positive relationship (r > 0)
-        - 'less' : Test for negative relationship (r < 0)
-    ko_species_list : list of str
-        List of knockout species IDs corresponding to distance matrix rows/columns.
-    model_name : str
-        Name of the model being analyzed (used in report header and filename).
-    saving_path : str
-        Directory path where the report file will be saved.
-        Will be created if it doesn't exist.
-    threshold : float, optional
-        Threshold value for identifying significant differences (currently unused in report),
-        by default 0.2
-    alpha : float, optional
-        Significance level for statistical tests, by default 0.05
-    report_title : str, optional
-        Title to display at the top of the report, by default "PATTERN DISTANCE REPORT"
-    log_file : file, optional
-        File object for logging operations, by default None
-
-    Returns
-    -------
-    str
-        Absolute path to the generated report file.
-        Filename format: "{model_name}_pattern_distance_report.txt"
-
-    Raises
-    ------
-    Exception
-        If the alternative parameter is not one of 'two-sided', 'greater', or 'less'.
-        If there are errors writing the report file.
-
-    Notes
-    -----
-    The report includes only Pearson Correlation Analysis:
-    - Correlation coefficient and p-value
-    - Strength interpretation (very weak to very strong)
-    - Direction (positive/negative)
-    - Statistical significance assessment
-    - Null and alternative hypotheses
-
-    Correlation strength categories:
-    - Very strong: |r| ≥ 0.9
-    - Strong: 0.7 ≤ |r| < 0.9
-    - Moderate: 0.5 ≤ |r| < 0.7
-    - Weak: 0.3 ≤ |r| < 0.5
-    - Very weak: |r| < 0.3
-
-    This function is designed for comparing temporal patterns, dynamic behaviors, or
-    trajectory similarities rather than absolute value differences.
-
-    Examples
-    --------
-    Generate pattern distance report:
-    >>> from scipy.stats import pearsonr
-    >>> r, p = pearsonr(pattern_distances1.flatten(), pattern_distances2.flatten())
-    >>> report_path = generate_pattern_distance_report(
-    ...     distance_matrix=pattern_dist_matrix,
-    ...     correlation_coefficient=r,
-    ...     p_value=p,
-    ...     alternative='two-sided',
-    ...     ko_species_list=['S1', 'S2', 'S3'],
-    ...     model_name='BIOMD0000000623',
-    ...     saving_path='reports/model_623/patterns/',
-    ...     alpha=0.05
-    ... )
-    >>> print(f"Pattern report saved to: {report_path}")
-
-    See Also
-    --------
-    generate_values_distance_report : Generate comprehensive distance report with statistics and rankings
-    """
-    # Check if the destinations folder exists otherwise create it
-    if not os.path.exists(saving_path):
-        os.makedirs(saving_path, exist_ok=True)
-        print_log(log_file, f"Created directory: {saving_path}")
-
-    # Determine correlation strength
-    abs_r = abs(correlation_coefficient)
-    if abs_r >= 0.9:
-        strength = "very strong"
-    elif abs_r >= 0.7:
-        strength = "strong"
-    elif abs_r >= 0.5:
-        strength = "moderate"
-    elif abs_r >= 0.3:
-        strength = "weak"
-    else:
-        strength = "very weak"
-
-    # Determine direction
-    if correlation_coefficient > 0:
-        direction = "positive"
-    elif correlation_coefficient < 0:
-        direction = "negative"
-    else:
-        direction = "no"
-
-    # Statistical significance
-    is_significant = p_value < alpha
-    significance_level = (
-        "highly significant"
-        if p_value < 0.001
-        else "significant"
-        if p_value < 0.01
-        else "marginally significant"
-    )
-
-    # Hypothesis description
-    if alternative == "two-sided":
-        null_hyp = "H₀: No linear relationship exists (r = 0)"
-        alt_hyp = "H₁: Linear relationship exists (r ≠ 0)"
-        p_interpretation = f"probability of observing a correlation this extreme (in either direction) by chance"
-    elif alternative == "greater":
-        null_hyp = "H₀: No positive relationship (r ≤ 0)"
-        alt_hyp = "H₁: Positive relationship exists (r > 0)"
-        p_interpretation = (
-            f"probability of observing a correlation this large or larger by chance"
-        )
-    elif alternative == "less":
-        null_hyp = "H₀: No negative relationship (r ≥ 0)"
-        alt_hyp = "H₁: Negative relationship exists (r < 0)"
-        p_interpretation = f"probability of observing a correlation this negative or more negative by chance"
-    else:
-        raise Exception("Alternative not valid")
-
-    # Build report
-    report = f"""CORRELATION RESULTS:
-    -------------------
-    Correlation coefficient (r): {correlation_coefficient:.6f}
-    P-value: {p_value:.6f}
-    Test type: {alternative} 
-    Significance level (α): {alpha}
-
-    STATISTICAL INTERPRETATION:
-    --------------------------
-    • Correlation strength: {strength.title()} {direction} correlation
-    • Statistical significance: {"" if is_significant else "Not "}{significance_level}
-    • Null hypothesis: {null_hyp}
-    • Alternative hypothesis: {alt_hyp}\n\n"""
-
-    # Generate report filename
-    report_filename = f"{model_name}_pattern_distance_report.txt"
-    report_path = os.path.join(saving_path, report_filename)
-
-    # Write the report
-    try:
-        with open(report_path, "w") as f:
-            f.write("=" * 80 + "\n")
-            f.write(f"{report_title.upper()}\n")
-            f.write("=" * 80 + "\n\n")
-
-            f.write(f"Model: {model_name}\n")
-            f.write(
-                f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            )
-
-            f.write("=" * 80 + "\n")
-            f.write("PEARSON ANALYSIS REPORT\n")
-            f.write("=" * 80 + "\n\n")
-
-            f.write(report)
-
-            f.write("\n" + "=" * 80 + "\n")
-
-        print_log(log_file, f"Distance report saved to: {report_path}")
-
-    except Exception as e:
-        raise IOError(f"Error writing report file: {e}")
-
-    return report_path
-
-
-def get_simulations_informations(
-    samples_simulations_results,
-    original_results,
-    combinations,
-    colnames,
-    log_file=None,
-):
-    """
-    Returns a dictionary with original and perturbation results for each target species.
-
-    Args:
-        - samples_simulations_results: Dictionary containing, for each combination, the results of the simulation
-        - original_results: Structured array containing the results from the original model
-        - combinations: List of combinations
-        - colnames: List of colnames of the model
-        - log_file: File used to print log informations
-    """
-
-    target_indices = {}
-    target_ids = []
-    missing_species = []
-
-    exp = r"[\[\]]"  # Expression to filter the colnames
-
-    # Pre-compute column indices for all target species
-    for cn in colnames:
-        s_id = re.sub(exp, "", cn)
-        target_indices[s_id] = colnames.index(cn)
-        try:
-            target_indices[s_id] = colnames.index(cn)
-            target_ids.append(s_id)
-        except Exception as e:
-            print_log(log_file, f"Error finding column for species {s_id}: {e}")
-            missing_species.append(s_id)
-
-    # Remove time
-    try:
-        _ = target_indices.pop("time")
-    except Exception as e:
-        print_log(log_file, f"Time not present: {e}")
-
-    # Initialize results structure
-    table_results = {}
-
-    # Add original results (vectorized)
-    table_results["original"] = {}
-    for ts in target_ids:
-        if ts == "time":  # Skipping time column
-            continue
-        ts_index = target_indices[ts]
-
-        table_results["original"][ts] = truncate_small_values(
-            original_results[-1, ts_index]
-        )  # Final concentration
-
-    # Process simulations in batch
-    if not combinations or not samples_simulations_results:
-        print_log(log_file, "No simulation data to process")
-        return table_results
-
-    # Pre-compute combination keys
-    combination_keys = ["_".join([f"{val}" for val in combo]) for combo in combinations]
-
-    # Process all simulations at once
-    processed_count = 0
-    for i, combo_key in enumerate(combination_keys):
-        # print_log(log_file, f"Progress: {(counter/len(combination_keys))*100}%")
-        # counter += 1
-
-        if i >= len(samples_simulations_results):
-            print_log(
-                log_file,
-                f"MISSING: Simulation {i} missing results data (total available: {len(samples_simulations_results)})",
-            )
-            continue
-
-        table_results[combo_key] = {}
-        simulation_results = samples_simulations_results[i]
-
-        # Extract final concentrations for all target species at once
-        for ts in target_ids:
-            if ts == "time":
-                continue
-
-            ts_index = target_indices[ts]
-            try:
-                table_results[combo_key][ts] = truncate_small_values(
-                    simulation_results[-1, ts_index]
-                )
-            except (IndexError, TypeError) as e:
-                print_log(
-                    log_file, f"Error extracting results for sim {i}, species {ts}: {e}"
-                )
-                table_results[combo_key][ts] = np.nan
-
-        processed_count += 1
-
-    print_log(
-        log_file,
-        f"Processed {processed_count} simulations for {len(target_indices)} species",
-    )
-
-    return table_results
-
-
-def get_simulations_informations_with_detailed_data(
-    samples_simulations_results,
-    original_results,
-    combinations,
-    input_species_ids,
-    target_ids,
-    colnames,
-    log_file=None,
-):
-    """
-    Alternative version that keeps the detailed simulation data structure
-    while still being more efficient than the original.
-    """
-
-    # Pre-compute column indices
-    target_indices = {}
-    for ts in target_ids:
-        try:
-            for col_format in [f"[{ts}]", f"{ts}"]:
-                if col_format in colnames:
-                    target_indices[ts] = colnames.index(col_format)
-                    break
-            else:
-                continue
-        except Exception as e:
-            print_log(log_file, f"Species {ts} not present in the results: {e}")
-            continue
-
-    if not target_indices:
-        return {}
-
-    # Build detailed data structure more efficiently
-    target_species_data = {}
-
-    for ts, ts_index in target_indices.items():
-        target_species_data[ts] = {
-            "original": original_results[:, ts_index],
-            "simulations": [],
-        }
-
-        # Process all simulations for this species
-        for i, combination_values in enumerate(combinations):
-            if i >= len(samples_simulations_results):
-                continue
-
-            try:
-                combination_str = "-".join(
-                    [
-                        f"{species}:{value:.4f}"
-                        for species, value in zip(input_species_ids, combination_values)
-                    ]
-                )
-
-                simulation_data = {
-                    "id": f"sim_{i}_{combination_str}",
-                    "combination": combination_values,
-                    "results": samples_simulations_results[i][:, ts_index],
-                }
-
-                target_species_data[ts]["simulations"].append(simulation_data)
-
-            except Exception as e:
-                print_log(
-                    log_file,
-                    f"Error extracting data for simulation {i}, species {ts}: {e}",
-                )
-
-        print_log(
-            log_file,
-            f"Processed {len(target_species_data[ts]['simulations'])} simulations for species {ts}",
-        )
-
-    # Build table structure efficiently
-    table_results = {"original": {}}
-
-    # Add original concentrations
-    for ts in target_indices:
-        table_results["original"][ts] = target_species_data[ts]["original"][-1]
-
-    # Create lookup for faster simulation data access
-    sim_lookup = defaultdict(dict)
-    for ts, data in target_species_data.items():
-        for sim_data in data["simulations"]:
-            combo_tuple = tuple(sim_data["combination"])
-            sim_lookup[combo_tuple][ts] = sim_data["results"][-1]
-
-    # Add perturbation rows
-    for combination_values in combinations:
-        combo_key = "_".join([f"{val:.3f}" for val in combination_values])
-        combo_tuple = tuple(combination_values)
-
-        table_results[combo_key] = {}
-        for ts in target_indices:
-            table_results[combo_key][ts] = sim_lookup[combo_tuple].get(ts, np.nan)
-
-    print_log(
-        log_file,
-        f"Created table structure with {len(table_results)} rows and {len(target_indices)} columns",
-    )
-
-    return table_results
 
 
 def get_no_samples_variations(
