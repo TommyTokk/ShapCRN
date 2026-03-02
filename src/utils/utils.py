@@ -440,15 +440,24 @@ def get_active_cells(matrix, log_file=None):
 
 # === NORMALIZATION ===
 def normalize_asinh(df, scale=None):
-    vals = df.to_numpy(dtype=float)
-    nan_mask = np.isnan(vals)
+    is_dataframe = isinstance(df, pd.DataFrame)
+    vals = df.to_numpy(dtype=float) if is_dataframe else np.asarray(df, dtype=float)
+    nan_mask = ~np.isfinite(vals)
     abs_vals = np.abs(vals[np.isfinite(vals)])
 
-    s = np.nanpercentile(abs_vals, 75) if scale is None else float(scale)
+    if scale is None:
+        s = np.nanpercentile(abs_vals, 75) if abs_vals.size > 0 else 1.0
+    else:
+        s = float(scale)
+
     if not np.isfinite(s) or s <= 0:
         s = 1.0
 
-    normalized = np.arcsinh(df / s)
+    normalized = np.arcsinh(vals / s)
+    normalized[nan_mask] = np.nan
+
+    if is_dataframe:
+        normalized = pd.DataFrame(normalized, index=df.index, columns=df.columns)
 
     return normalized, s
 

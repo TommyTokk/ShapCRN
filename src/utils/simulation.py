@@ -1960,6 +1960,12 @@ def get_shapley_values(
 
     shap_df = pd.DataFrame(shap_vals)
 
+    # Set self-comparison entries (knocked species vs itself) to NaN
+    col_names = pd.Index(shap_df.columns).astype(str).str.strip("[]")
+    idx = shap_df.index.get_indexer(col_names)
+    valid = idx != -1
+    shap_df.values[idx[valid], np.arange(len(shap_df.columns))[valid]] = np.nan
+
     return shap_df
 
 

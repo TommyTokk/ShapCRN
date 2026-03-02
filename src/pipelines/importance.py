@@ -1,6 +1,7 @@
 import libsbml
 import pandas as pd
 import numpy as np
+import os
 
 from src.utils import utils as ut
 from src.utils.sbml import io as sbml_io
@@ -604,6 +605,8 @@ def assess_perturbation_importance(
 
     n_tests = len(raw_pvals_list)
 
+    ut.print_log(log_file, f"[INFO] Wilcoxon tests performed: {n_tests}")
+
     # Second pass: BH correction across all tests
     bh_pval_matrix = pd.DataFrame(
         np.nan, index=baseline_effects.index, columns=columns
@@ -679,7 +682,122 @@ def _mask_diagonal(df: pd.DataFrame) -> None:
     df.values[idx[valid], np.arange(len(df.columns))[valid]] = np.nan
 
 
-    
+def generate_importance_report(
+        importance_results: dict, 
+        variations_df: pd.DataFrame, 
+        shapley_values_df: pd.DataFrame, 
+        out_dirs: dict, 
+        log_file=None):
+    """
+    Generate a plain-text report summarising the perturbation-importance
+    assessment, Shapley values and variation statistics.
+
+    The report is written to ``<out_dirs['reports']>/importance_report.txt``.
+
+    Parameters
+    ----------
+    importance_results : dict
+        Output of :func:`assess_perturbation_importance`.
+    variations_df : pd.DataFrame
+        Log-ratio variation matrix (knocked × species).
+    shapley_values_df : pd.DataFrame
+        Shapley-value matrix (knocked × species).
+    out_dirs : dict
+        Directory map with at least a ``'reports'`` key.
+    log_file : file-like or None
+        Optional log handle.
+    """
+
+    report_path = os.path.join(out_dirs["reports"], "importance_report.txt")
+
+    sep = "=" * 60
+    sub_sep = "-" * 60
+
+    lines: list[str] = []
+    w = lines.append  # shorthand
+
+    # ── Header ──────────────────────────────────────────────────────
+    w(sep)
+    w("  PERTURBATION IMPORTANCE ASSESSMENT REPORT")
+    w(sep)
+    w("")
+
+    # ── 1. Overall agreement ────────────────────────────────────────
+    w("1. Overall agreement (baseline vs perturbation-median effects)")
+    w(sub_sep)
+    ccc = importance_results["lins_ccc"]
+    w(f"   Lin's CCC            : {ccc:.4f}")
+    w(f"   Necessity level      : {importance_results['necessity_level']}")
+    w(f"   Median CV            : {importance_results['median_cv']:.4f}")
+    w("")
+
+    # ── 2. Wilcoxon signed-rank tests ───────────────────────────────
+    w("2. Wilcoxon signed-rank tests")
+    w(sub_sep)
+    n_tests = importance_results["n_tests"]
+    w(f"   Tests performed      : {n_tests}")
+    frac_bh = importance_results["fraction_significant_bh"]
+    frac_raw = importance_results["fraction_significant_raw"]
+    if np.isnan(frac_bh):
+        w("   Significant (BH)     : N/A (no tests run)")
+        w("   Significant (raw)    : N/A")
+    else:
+        w(f"   Significant (BH)     : {frac_bh:.2%}  ({int(round(frac_bh * n_tests))}/{n_tests})")
+        w(f"   Significant (raw)    : {frac_raw:.2%}  ({int(round(frac_raw * n_tests))}/{n_tests})")
+    w("")
+
+    # ── 3. Ranking stability ────────────────────────────────────────
+    w("3. Ranking stability")
+    w(sub_sep)
+    rho = importance_results["ranking_spearman"]
+    rho_p = importance_results["ranking_spearman_pvalue"]
+    if np.isnan(rho):
+        w("   Spearman rho         : N/A (too few species)")
+    else:
+        w(f"   Spearman rho         : {rho:.4f}")
+        w(f"   Spearman p-value     : {rho_p:.4e}")
+    w("")
+
+    # ── 4. Top-5 most variable knocked species (by median CV) ──────
+    w("4. Per-species variability (top-5 by median CV)")
+    w(sub_sep)
+    per_sp_cv = importance_results["per_species_cv"].dropna().sort_values(ascending=False)
+    for i, (sp, cv_val) in enumerate(per_sp_cv.head(5).items()):
+        w(f"   {i+1}. {sp:30s}  CV = {cv_val:.4f}")
+    w("")
+
+    # ── 5. Shapley-value summary ────────────────────────────────────
+    w("5. Shapley-value summary")
+    w(sub_sep)
+    abs_shap = shapley_values_df.abs()
+    median_shap = abs_shap.median(axis=1, skipna=True).sort_values(ascending=False)
+    w("   Top-5 knocked species by median |Shapley|:")
+    for i, (sp, val) in enumerate(median_shap.head(5).items()):
+        w(f"   {i+1}. {sp:30s}  median |SV| = {val:.6f}")
+    w("")
+
+    # ── 6. Variation summary ────────────────────────────────────────
+    w("6. Variation summary (log-ratio)")
+    w(sub_sep)
+    abs_var = variations_df.abs()
+    median_var = abs_var.median(axis=1, skipna=True).sort_values(ascending=False)
+    w("   Top-5 knocked species by median |variation|:")
+    for i, (sp, val) in enumerate(median_var.head(5).items()):
+        w(f"   {i+1}. {sp:30s}  median |var| = {val:.6f}")
+    w("")
+
+    w(sep)
+    w("  END OF REPORT")
+    w(sep)
+
+    report_text = "\n".join(lines) + "\n"
+
+    os.makedirs(out_dirs["reports"], exist_ok=True)
+    with open(report_path, "w") as f:
+        f.write(report_text)
+
+    ut.print_log(log_file, f"[INFO] Importance report saved to {report_path}")
+
 
 
 
@@ -740,22 +858,7 @@ def importance_assessment(args, out_dirs):
             return_signed=False
         )
 
-
-
-
-        # TODO: Complete the importance analysis with perturbations
-        if parsed_args["perturbations_importance"]:
-            importance_assessment_results = assess_perturbation_importance(
-                original_simulation_data,
-                knocked_data,                
-                alpha=0.05,
-                min_wilcoxon_n=15,
-                log_file=parsed_args["log_file"]
-            )
-
-            # TODO: Create the report for the importance assessment with perturbations
-
-        # TODO: Plot the heatmaps for the variations and the Shapley values
+        
         # Plot the variations heatmap
         colnames_to_index = {}
         for i, el in enumerate(original_simulation_data[0].columns):
@@ -764,6 +867,56 @@ def importance_assessment(args, out_dirs):
             colnames_to_index[el] = i
 
         variations_df = pd.DataFrame(samples_relative_vars, columns=selections[1:], index=knocked_ids)
+        
+
+        # Plot the Shapley values heatmap
+        shapley_df = pd.DataFrame(shapley_values, columns=selections[1:], index=knocked_ids)
+
+        if parsed_args["target_ids"] is not None:
+            target_ids = parsed_args["target_ids"]
+
+            # Resolve target IDs to actual column names (may be bracketed)
+            resolved_cols = []
+            for tid in target_ids:
+                if tid in variations_df.columns:
+                    resolved_cols.append(tid)
+                elif f"[{tid}]" in variations_df.columns:
+                    resolved_cols.append(f"[{tid}]")
+
+            # focus only on the target ids columns
+            variations_df = variations_df[resolved_cols]
+            shapley_df = shapley_df[resolved_cols]
+
+
+        # TODO: Complete the importance analysis with perturbations
+        if parsed_args["perturbations_importance"]:
+            importance_assessment_results = assess_perturbation_importance(
+                original_simulation_data,
+                knocked_data,                
+                alpha=0.05,
+                log_file=parsed_args["log_file"]
+            )
+
+            generate_importance_report(
+                importance_assessment_results,
+                variations_df,
+                shapley_df,
+                out_dirs,
+                log_file=parsed_args["log_file"]
+            )
+
+
+
+        # Normalize with asinh to better visualize the differences
+        shapley_df_normal, s = ut.normalize_asinh(shapley_df)
+
+        
+
+        # Save the CSVs
+        variations_df.to_csv(os.path.join(out_dirs['csv'], "variations_across_perturbations.csv"))
+        shapley_df.to_csv(os.path.join(out_dirs['csv'], "shapley_values.csv"))
+
+        # Plots the heamaps
         plt_ut.plot_heatmap(
             variations_df,
             colnames_to_index=colnames_to_index,
@@ -775,23 +928,17 @@ def importance_assessment(args, out_dirs):
             log_file=parsed_args["log_file"]
         )
 
-        # Plot the Shapley values heatmap
-        shapley_df = pd.DataFrame(shapley_values, columns=selections[1:], index=knocked_ids)
-
-        # Normalize with asinh to better visualize the differences
-        # TODO: Fix the colormap
-        shapley_df, s = ut.normalize_asinh(shapley_df)
-
         plt_ut.plot_heatmap(
-            shapley_df,
+            shapley_df_normal,
             colnames_to_index=colnames_to_index,
             x_labels=shapley_df.columns,
             y_labels=shapley_df.index,
-            title="Shapley values across perturbations",
-            img_name="shapley_values_heatmap.png",
+            title="Shapley values across perturbations (asinh normalized)",
+            img_name="shapley_values_heatmap_normal.png",
             save_path=out_dirs['images'],
             log_file=parsed_args["log_file"]
-        ) 
+        )
+
 
         pass
     else:# No perturbations required

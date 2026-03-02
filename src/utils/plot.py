@@ -531,14 +531,17 @@ def plot_heatmap(data: pd.DataFrame, y_labels:list, x_labels:list, colnames_to_i
     fig, ax = plt.subplots(figsize=params["figsize"])
 
     # Create heatmap
+    nan_mask = data.isna() if isinstance(data, pd.DataFrame) else np.isnan(data)
     sns.heatmap(
         data,
         xticklabels=x_labels,
         yticklabels=y_labels,
         annot=params["annot"],
         cmap=cmap,
+        mask=nan_mask,
         ax=ax,
     )
+    ax.set_facecolor("black")
 
     # Set title and labels
     ax.set_title(params["title"], fontsize=14, pad=20)
