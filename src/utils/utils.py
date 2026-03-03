@@ -57,6 +57,14 @@ def _add_output_arg(parser, default="./results"):
     )
 
 
+def _add_model_dir_arg(parser, default="./models"):
+    """Add the --model-dir argument for knock operations."""
+    parser.add_argument(
+        "--model-dir", default=default,
+        help=f"Directory where the modified model will be saved (default: {default})",
+    )
+
+
 def _add_simulation_args(parser):
     """Add common simulation arguments (time, integrator) to a parser."""
     parser.add_argument(
@@ -240,6 +248,7 @@ def _build_knockout_species_parser(subparsers):
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("species_id", help="ID of the species to inhibit")
     _add_output_arg(parser)
+    _add_model_dir_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
@@ -252,6 +261,7 @@ def _build_knockout_reaction_parser(subparsers):
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("reaction_id", help="ID of the reaction to inhibit")
     _add_output_arg(parser)
+    _add_model_dir_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
@@ -264,6 +274,7 @@ def _build_knockin_species_parser(subparsers):
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("target_species_id", help="ID of the species to knockin")
     _add_output_arg(parser)
+    _add_model_dir_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
@@ -276,6 +287,7 @@ def _build_knockin_reaction_parser(subparsers):
     parser.add_argument("input_path", help="Path to the SBML model file")
     parser.add_argument("target_reaction_id", help="ID of the reaction to knockin")
     _add_output_arg(parser)
+    _add_model_dir_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 

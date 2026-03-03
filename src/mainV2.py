@@ -16,6 +16,10 @@ from src.utils.sbml import reactions as sbml_reactions
 from src.utils import utils as ut
 
 from src.pipelines import importance as imp
+from src.pipelines.knockout import knockout_species as ko_species
+from src.pipelines.knockout import knockout_reaction as ko_reaction
+from src.pipelines.knockin import knockin_species as ki_species
+from src.pipelines.knockin import knockin_reaction as ki_reaction
 
 
 
@@ -104,8 +108,14 @@ def main():
         elif command == 'importance_assessment':
             # Parsing the arguments for importance assessment 
             imp.importance_assessment(args, out_dirs)
-                
-
+        elif command == "knockout_species":
+            ko_species.knockout_species(args, out_dirs)
+        elif command == "knockout_reaction":
+            ko_reaction.knockout_reaction(args, out_dirs)
+        elif command == "knockin_species":
+            ki_species.knockin_species(args, out_dirs)
+        else:
+            ki_reaction.knockin_reaction(args, out_dirs)
     except Exception as e:
         raise ex.ModelNotFoundError(f"Failed to load the model from '{file_path}': {str(e)}") from e
 
