@@ -113,9 +113,13 @@ def main():
         elif command == "knockout_reaction":
             ko_reaction.knockout_reaction(args, out_dirs)
         elif command == "knockin_species":
+            # TODO: Implement the knockin_species function in src/pipelines/knockin/knockin_species.py
             ki_species.knockin_species(args, out_dirs)
+            pass
         else:
+            # TODO: Implement the knockin_reaction function in src/pipelines/knockin/knockin_reaction.py
             ki_reaction.knockin_reaction(args, out_dirs)
+            pass
     except Exception as e:
         raise ex.ModelNotFoundError(f"Failed to load the model from '{file_path}': {str(e)}") from e
 
