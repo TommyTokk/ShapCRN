@@ -9,6 +9,7 @@ from src.utils.sbml import utils as sbml_ut
 from src.utils.sbml import reactions as sbml_react
 from src.utils import simulation as sim_ut
 from src.utils import plot as plt_ut
+from src.utils import species as species_ut
 
 
 payoff_functions = {
@@ -110,7 +111,7 @@ def model_preparation(args):
     sbml_doc = sbml_io.load_model(args["input_path"])
     sbml_model = sbml_react.split_all_reversible_reactions(sbml_doc.getModel(), args['log_file'])
 
-    species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+    species_list = [s.getId() for s in species_ut.get_list_of_species(sbml_model)]
 
     # Validate the knocked list
     if args["knocked_species_ids"] is None:# If no knocked species are provided, all will be used
@@ -835,13 +836,11 @@ def importance_assessment(args, out_dirs):
 
     # Analyse the results
     if parsed_args["use_perturbations"]:
-        if parsed_args["random_perturbations_importance"]:
-            ut.print_log(parsed_args["log_file"], "[WARNING] Sorry random perturbations importance analysis is still in development :(")
 
 
         # Calculate the Shapley value
         n_combinations = np.power(parsed_args["num_samples"], len(parsed_args["input_species_ids"])) + 1
-        shapley_values = run_shap_analysis(
+        shapley_df = run_shap_analysis(
             original_simulation_data, 
             knocked_data, 
             n_combinations, 
@@ -851,7 +850,7 @@ def importance_assessment(args, out_dirs):
             )
         
         # Calculate the variations
-        samples_relative_vars = sim_ut.get_relative_variations_log_ratio(
+        variations_df = sim_ut.get_relative_variations_log_ratio(
             original_simulation_data,
             knocked_data,
             aggregation="median",
@@ -866,11 +865,9 @@ def importance_assessment(args, out_dirs):
                 continue
             colnames_to_index[el] = i
 
-        variations_df = pd.DataFrame(samples_relative_vars, columns=selections[1:], index=knocked_ids)
         
 
         # Plot the Shapley values heatmap
-        shapley_df = pd.DataFrame(shapley_values, columns=selections[1:], index=knocked_ids)
 
         if parsed_args["target_ids"] is not None:
             target_ids = parsed_args["target_ids"]
@@ -888,7 +885,6 @@ def importance_assessment(args, out_dirs):
             shapley_df = shapley_df[resolved_cols]
 
 
-        # TODO: Complete the importance analysis with perturbations
         if parsed_args["perturbations_importance"]:
             importance_assessment_results = assess_perturbation_importance(
                 original_simulation_data,
@@ -907,7 +903,10 @@ def importance_assessment(args, out_dirs):
                 log_file=parsed_args["log_file"]
             )
 
-
+        if parsed_args["random_perturbations_importance"]:
+            fixed_simulation_data = sim_ut.sim
+            ut.print_log(parsed_args["log_file"], "[WARNING] Random perturbations importance analysis is not implemented yet.")
+            
 
         # Normalize with asinh to better visualize the differences
         shapley_df_normal, s = ut.normalize_asinh(shapley_df)

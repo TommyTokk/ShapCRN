@@ -20,6 +20,7 @@ from src.pipelines.knockout import knockout_species as ko_species
 from src.pipelines.knockout import knockout_reaction as ko_reaction
 from src.pipelines.knockin import knockin_species as ki_species
 from src.pipelines.knockin import knockin_reaction as ki_reaction
+from src.pipelines import sensitivity_analysis as sens
 
 
 
@@ -113,13 +114,15 @@ def main():
         elif command == "knockout_reaction":
             ko_reaction.knockout_reaction(args, out_dirs)
         elif command == "knockin_species":
-            # TODO: Implement the knockin_species function in src/pipelines/knockin/knockin_species.py
             ki_species.knockin_species(args, out_dirs)
+        elif command == "knockin_reaction":
+            ki_reaction.knockin_reaction(args, out_dirs)
+        elif command == "sensitivity_analysis":
+            sens.sensitivity_analysis(args, out_dirs)
+        elif command == "create_network":
             pass
         else:
-            # TODO: Implement the knockin_reaction function in src/pipelines/knockin/knockin_reaction.py
-            ki_reaction.knockin_reaction(args, out_dirs)
-            pass
+            raise ex.InvalidCommandError(f"Invalid command: '{command}'. Please choose a valid command.")
     except Exception as e:
         raise ex.ModelNotFoundError(f"Failed to load the model from '{file_path}': {str(e)}") from e
 

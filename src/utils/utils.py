@@ -196,8 +196,10 @@ def _build_importance_assessment_parser(subparsers):
         help="Run the analysis on the importance of using perturbations for the model",
     )
     perturbation_group.add_argument(
-        "--random-perturbations-importance", action="store_true", default=False,
-        help="Run analysis on the importance of random perturbations for the model",
+        "--random-perturbations-importance", nargs="+", default="-20 -15 -10 10 15 20",
+        help="Variation percentages for fixed-vs-random perturbation comparison "
+             "(e.g. --random-perturbations-importance -20 -15 -10 10 15 20). "
+             "If omitted, the analysis is skipped.",
     )
 
     # -- Shapley value --
@@ -234,9 +236,23 @@ def _build_sensitivity_analysis_parser(subparsers):
     )
     _add_perturbation_args(parser)
     parser.add_argument(
+        "--perturbation-range", type=float, default=20,
+        help="Percentage perturbation range around the nominal value (default: 20)",
+    )
+    parser.add_argument(
+        "--target-species", nargs="+", default=None,
+        help="Subset of species IDs to analyse (if None, all species are used)",
+    )
+    parser.add_argument(
+        "--operation", choices=["knockout", "knockin"], default="knockout",
+        help="Type of operation to perform on species (default: knockout)",
+    )
+    parser.add_argument(
         "--check-convergence", action="store_true", default=False,
         help="Check convergence with increasing samples (MAX: 4096)",
     )
+    _add_output_arg(parser)
+    parser.add_argument("-l", "--log", help="Path to log file")
     return parser
 
 

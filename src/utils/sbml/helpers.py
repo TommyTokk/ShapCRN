@@ -67,7 +67,7 @@ def get_list_of_reactions(sbml_model: libsbml.Model) -> list:
     list
         List of reaction IDs
     """
-    return [r.getId() for r in sbml_model.getListOfReactions()]
+    return sbml_model.getListOfReactions()
 
 
 # ---------------------------------------------------------------------------

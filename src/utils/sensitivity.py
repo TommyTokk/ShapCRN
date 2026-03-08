@@ -138,10 +138,14 @@ def get_problem_parameters(
     for ins in input_species_ids:
         conc = sbml_model.getSpecies(ins).getInitialConcentration()
 
-        lower_bound = conc * (1 - (perturbation_range / 100))
-        upper_bound = conc * (1 + (perturbation_range / 100))
-
-        tmp.append([lower_bound, upper_bound])
+        # Check for consistency of the initial concentration value
+        if conc == 0.0:
+            # Provide a tiny functional bound if naturally zero
+            tmp.append([0.0, 1e-6]) 
+        else:
+            lower_bound = conc * (1 - (perturbation_range / 100))
+            upper_bound = conc * (1 + (perturbation_range / 100))
+            tmp.append([lower_bound, upper_bound])
 
     problem["bounds"] = tmp
 
@@ -272,14 +276,18 @@ def run_simulation_with_params(
     return RES
 
 
+import numpy as np
+
+
 def check_convergence(
     results: dict,
     internal_nodes: list,
-    min_consecutive: int=2,
-    tol_change: float=0.01,
-    tol_ci:float=0.05,
-    eps_small:float=1e-3,
-    relative:bool=False,
+    min_consecutive: int = 2,
+    tol_change: float = 0.01,
+    tol_ci: float = 0.05,
+    eps_small: float = 1e-3,
+    relative: bool = False,
+    log_file=None
 ) -> dict:
     """
     Determine convergence per node and report error metrics.
@@ -295,50 +303,73 @@ def check_convergence(
         Names of output nodes to analyze for convergence.
     min_consecutive : int, optional
         Minimum number of consecutive sample sizes that must meet convergence
-        criteria before declaring convergence, by default 2
+        criteria before declaring convergence, by default 2.
     tol_change : float, optional
-        Maximum allowed change (absolute or relative) between consecutive sample sizes,
-        by default 0.01
+        Maximum allowed change (absolute or relative) between consecutive
+        sample sizes, by default 0.01.
     tol_ci : float, optional
-        Maximum allowed confidence interval half-width (absolute), by default 0.05
+        Maximum allowed confidence interval half-width (absolute), by default 0.05.
+        Note: this is an absolute threshold. For nodes where all Sobol indices
+        are near zero, consider whether a relative CI check is also needed.
     eps_small : float, optional
-        Cutoff value for determining small/negligible elements, by default 1e-3
+        Cutoff below which an index is considered negligible and excluded from
+        the change calculation, by default 1e-3.
     relative : bool, optional
-        Flag for calculation type. If False, uses absolute changes.
-        If True, uses relative changes, by default False
+        If False, uses absolute changes between consecutive sample sizes.
+        If True, uses symmetric relative changes (normalised by the mean of the
+        two values), by default False.
 
     Returns
     -------
     dict
-        Convergence information per node with structure:
-        { node: { 'converged_at': N or None,
-                'max_change': {N: value, ...},
-                'ci_half_width': {N: value, ...} } }
-        where 'converged_at' is the first sample size where convergence is achieved,
-        or None if not converged.
-    """
+        Convergence information per node with structure::
 
-    def nanmax_or(arr, fallback):
+            {
+              node: {
+                'converged_at':  N (first N of the passing streak) or None,
+                'diverged_after': N (first N after which convergence broke) or None,
+                'max_change':    {N: float or np.nan, ...},
+                'ci_half_width': {N: float or np.nan, ...},
+              }
+            }
+
+        ``max_change[N]`` is ``np.inf`` for the very first sample size (no
+        previous result to compare against) and ``np.nan`` when the node is
+        absent from ``results[N]`` or an error occurred.
+
+    Raises
+    ------
+    TypeError
+        If ``results`` is not a dict, or ``internal_nodes`` is not a list.
+    """
+    if not isinstance(results, dict):
+        raise TypeError(f"'results' must be a dict, got {type(results)}")
+    if not isinstance(internal_nodes, list):
+        raise TypeError(f"'internal_nodes' must be a list, got {type(internal_nodes)}")
+
+    def _nanmax_or(arr: np.ndarray, fallback: float) -> float:
+        """Return nanmax of *arr*, or *fallback* when arr is empty or all-NaN."""
         try:
             v = np.nanmax(arr)
-            if np.isnan(v):
-                return fallback
-            return v
+            return fallback if np.isnan(v) else float(v)
         except ValueError:
-            # all-NaN slice
             return fallback
+        
+    print_log(log_file, f"Confidence interval half-widths: {tol_ci}")
 
-    convergence = {}
     Ns = sorted(results.keys())
+    convergence: dict = {}
 
     for node in internal_nodes:
-        prev = None
-        converged_at = None
-        consecutive_count = 0
-        max_change = {}
-        ci_half_width = {}
+        prev: dict | None = None
+        converged_at: int | None = None
+        diverged_after: int | None = None
+        consecutive_count: int = 0
+        max_change: dict = {}
+        ci_half_width: dict = {}
 
         for N in Ns:
+            # --- node absent at this sample size ---
             if node not in results[N]:
                 max_change[N] = np.nan
                 ci_half_width[N] = np.nan
@@ -349,79 +380,109 @@ def check_convergence(
             curr = results[N][node]
 
             try:
-                # CI: Takes the max ignoring Nan values
+                # ------------------------------------------------------------------
+                # 1. Confidence-interval width (absolute, max over S1 and ST)
+                # ------------------------------------------------------------------
                 max_ci = max(
-                    nanmax_or(curr.get("S1_conf", np.array([np.nan])), np.inf),
-                    nanmax_or(curr.get("ST_conf", np.array([np.nan])), np.inf),
+                    _nanmax_or(
+                        np.asarray(curr.get("S1_conf", [np.nan]), dtype=float),
+                        np.inf,
+                    ),
+                    _nanmax_or(
+                        np.asarray(curr.get("ST_conf", [np.nan]), dtype=float),
+                        np.inf,
+                    ),
                 )
                 ci_half_width[N] = max_ci
 
-                if prev is not None:
-                    curr_S1 = np.asarray(curr.get("S1", np.array([np.nan])))
-                    curr_ST = np.asarray(curr.get("ST", np.array([np.nan])))
-                    prev_S1 = np.asarray(prev.get("S1", np.array([np.nan])))
-                    prev_ST = np.asarray(prev.get("ST", np.array([np.nan])))
-
-                    # Maks the relevant values
-                    mask_relevant = (
-                        np.fmax(np.abs(curr_S1), np.abs(prev_S1)) >= eps_small
-                    ) | (np.fmax(np.abs(curr_ST), np.abs(prev_ST)) >= eps_small)
-
-                    if relative:
-                        denom_S1 = (np.abs(prev_S1) + np.abs(curr_S1)) / 2
-                        denom_ST = (np.abs(prev_ST) + np.abs(curr_ST)) / 2
-
-                        denom_S1 = np.where(denom_S1 < eps_small, eps_small, denom_S1)
-                        denom_ST = np.where(denom_ST < eps_small, eps_small, denom_ST)
-
-                        diff_S1 = np.abs(curr_S1 - prev_S1) / denom_S1
-                        diff_ST = np.abs(curr_ST - prev_ST) / denom_ST
-                    else:
-                        diff_S1 = np.abs(curr_S1 - prev_S1)
-                        diff_ST = np.abs(curr_ST - prev_ST)
-
-                    # Apply the mask, if no relevant values delta = 0
-                    if np.any(mask_relevant):
-                        delta_s1 = nanmax_or(diff_S1[mask_relevant], 0.0)
-                        delta_st = nanmax_or(diff_ST[mask_relevant], 0.0)
-                        max_delta = np.fmax(delta_s1, delta_st)
-                    else:
-                        max_delta = 0.0
+                # ------------------------------------------------------------------
+                # 2. Change relative to previous sample size
+                # ------------------------------------------------------------------
+                if prev is None:
+                    # First sample size — no predecessor to compare against.
+                    # Record inf explicitly so callers know no comparison was made.
+                    max_delta: float = np.inf
                 else:
-                    max_delta = np.inf
+                    curr_S1 = np.asarray(curr.get("S1", [np.nan]), dtype=float)
+                    curr_ST = np.asarray(curr.get("ST", [np.nan]), dtype=float)
+                    prev_S1 = np.asarray(prev.get("S1", [np.nan]), dtype=float)
+                    prev_ST = np.asarray(prev.get("ST", [np.nan]), dtype=float)
+
+                    # Mask: keep only indices that are non-negligible in at least
+                    # one of the two consecutive results.
+                    mask = (
+                        np.fmax(np.abs(curr_S1), np.abs(prev_S1)) >= eps_small
+                    ) | (
+                        np.fmax(np.abs(curr_ST), np.abs(prev_ST)) >= eps_small
+                    )
+
+                    if not np.any(mask):
+                        # All indices negligible — treat as perfectly converged.
+                        max_delta = 0.0
+                    else:
+                        if relative:
+                            # Symmetric relative change: avoids instability when
+                            # the denominator (prev) is near zero.
+                            denom_S1 = np.where(
+                                (np.abs(prev_S1) + np.abs(curr_S1)) / 2 < eps_small,
+                                eps_small,
+                                (np.abs(prev_S1) + np.abs(curr_S1)) / 2,
+                            )
+                            denom_ST = np.where(
+                                (np.abs(prev_ST) + np.abs(curr_ST)) / 2 < eps_small,
+                                eps_small,
+                                (np.abs(prev_ST) + np.abs(curr_ST)) / 2,
+                            )
+                            diff_S1 = np.abs(curr_S1 - prev_S1) / denom_S1
+                            diff_ST = np.abs(curr_ST - prev_ST) / denom_ST
+                        else:
+                            diff_S1 = np.abs(curr_S1 - prev_S1)
+                            diff_ST = np.abs(curr_ST - prev_ST)
+
+                        delta_s1 = _nanmax_or(diff_S1[mask], 0.0)
+                        delta_st = _nanmax_or(diff_ST[mask], 0.0)
+                        max_delta = float(np.fmax(delta_s1, delta_st))
 
                 max_change[N] = max_delta
 
+                # ------------------------------------------------------------------
+                # 3. Convergence check
+                # ------------------------------------------------------------------
                 passed = (max_delta < tol_change) and (max_ci < tol_ci)
-
-                # print_log(
-                #     "debug",
-                #     f"[DEBUG] {node} - {(max_delta < tol_change)} - {(max_ci < tol_ci)} - {passed}",
-                # )
 
                 if passed:
                     consecutive_count += 1
+                    # Record the *start* of the passing streak on first hit.
                     if consecutive_count >= min_consecutive and converged_at is None:
-                        streak_start_idx = max(0, Ns.index(N) - consecutive_count + 1)
+                        streak_start_idx = max(
+                            0, Ns.index(N) - consecutive_count + 1
+                        )
                         converged_at = Ns[streak_start_idx]
-                        # print_log(
-                        #     "debug",
-                        #     f"[DEBUG] {node} - {converged_at} - {consecutive_count}",
-                        # )
                 else:
+                    # A failing result after a previously declared convergence
+                    # means the series has diverged again.
+                    if converged_at is not None and diverged_after is None:
+                        diverged_after = N
                     consecutive_count = 0
 
+                # Always advance prev so consecutive Ns are always compared.
                 prev = curr
 
-            except Exception:
+            except (TypeError, ValueError, KeyError) as exc:
+                # Narrow exception catch: real bugs in unrelated code will still
+                # surface.  Record the failure for this N and reset state.
+                print_log(log_file, f"[DEBUG CONVERGENCE ERROR] Node {node} at N={N} failed because: {repr(exc)}")
+
                 max_change[N] = np.nan
                 ci_half_width[N] = np.nan
                 consecutive_count = 0
                 prev = None
+                # Optionally log: warnings.warn(f"[{node}@{N}] skipped: {exc}")
                 continue
 
         convergence[node] = {
             "converged_at": converged_at,
+            "diverged_after": diverged_after,
             "max_change": max_change,
             "ci_half_width": ci_half_width,
         }
