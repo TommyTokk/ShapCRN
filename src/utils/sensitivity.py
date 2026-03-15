@@ -31,10 +31,12 @@ def _simulation_worker(args):
 
     rr_local = rr.RoadRunner(sbml_string)
     rr_local.timeCourseSelections = current_selections
-
     rr_local.reset()
+
     for j, sp_id in enumerate(input_ids):
         rr_local.setInitConcentration(sp_id, param[j])
+
+    rr_local.timeCourseSelections = current_selections
 
     sim_res = rr_local.simulate(0, sim_end_time)
 
@@ -238,7 +240,14 @@ def run_simulation_with_params(
     SALib.sample.sobol : Generate Sobol parameter samples
     SALib.analyze.sobol : Compute Sobol sensitivity indices
     """
-    current_selections = model.timeCourseSelections.copy()
+    current_selections = model.timeCourseSelections
+    model.timeCourseSelections = current_selections
+    actual_selections = model.timeCourseSelections
+    print(f"Requested: {len(current_selections)} | Accepted: {len(actual_selections)}")
+
+    missing = set(current_selections) - set(actual_selections)
+    if missing:
+        print(f"Model ignored these selections: {missing}")
 
     # Get SBML string for recreation in worker processes
     sbml_string = model.getCurrentSBML()
@@ -663,7 +672,7 @@ def convergence_report(convergence_informations, report_file):
 
 
 def plot_convergence_single_plot(
-    convergence_informations, tol_change=0.01, tol_ci=0.05, file_name=None
+    convergence_informations, tol_change=0.01, tol_ci=0.05, file_name=None, output_dir="./results"
 ):
     """
     Plot both metrics on a single plot with different line styles and colors.
@@ -726,12 +735,13 @@ def plot_convergence_single_plot(
     plt.tight_layout()
 
     if file_name is None:
-        plt.savefig("./imgs/Convergence_analysis.png", dpi=300, bbox_inches="tight")
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "Convergence_analysis.png"), dpi=300, bbox_inches="tight")
     else:
-        path = f"./imgs/{file_name}"
+        path = os.path.join(output_dir, file_name)
         os.makedirs(path, exist_ok=True)
-        plt.savefig(f"{path}/Convergence_analysis.png", dpi=300, bbox_inches="tight")
-    plt.close()  # Opzionale: libera la memoria
+        plt.savefig(os.path.join(path, "Convergence_analysis.png"), dpi=300, bbox_inches="tight")
+    plt.close()
 
 
 def statistical_tests(

@@ -886,6 +886,7 @@ def importance_assessment(args, out_dirs):
 
 
         if parsed_args["perturbations_importance"]:
+            ut.print_log(parsed_args["log_file"], "[INFO] Assessing perturbation importance")
             importance_assessment_results = assess_perturbation_importance(
                 original_simulation_data,
                 knocked_data,                
@@ -904,7 +905,6 @@ def importance_assessment(args, out_dirs):
             )
 
         if parsed_args["random_perturbations_importance"]:
-            fixed_simulation_data = sim_ut.sim
             ut.print_log(parsed_args["log_file"], "[WARNING] Random perturbations importance analysis is not implemented yet.")
             
 
