@@ -65,6 +65,7 @@ def parse_args(args):
     ss_sim_steps = args.sim_step
     ss_sim_points = args.points
     ss_threshold = args.threshold
+    n_jobs = args.n_jobs
 
     # Output arguments
     output_dir = args.output
@@ -93,6 +94,7 @@ def parse_args(args):
         "ss_sim_steps": ss_sim_steps,
         "ss_sim_points": ss_sim_points,
         "ss_threshold": ss_threshold,
+        "n_jobs": n_jobs,
         "output_dir": output_dir,
         "log_file": log_file
     }
@@ -226,7 +228,8 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
             args["sim_time"],
             args["ss_max_time"],
             args["use_steady_state"],
-            args["log_file"]
+            args["log_file"],
+            n_processes=args["n_jobs"],
         )
 
     # Prepare the final data
@@ -273,7 +276,8 @@ def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, selec
         min_ss_time=ss_min_time,
         use_perturbations=args["use_perturbations"],
         preserve_input=args["preserve_inputs"],
-        log_file=args["log_file"]
+        log_file=args["log_file"],
+        max_workers=args["n_jobs"],
     )
 
     return knocked_data
@@ -956,4 +960,3 @@ def importance_assessment(args, out_dirs):
         )
 
         ut.print_log(parsed_args["log_file"], f"Variations: \n{variations}")
-

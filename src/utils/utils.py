@@ -213,6 +213,13 @@ def _build_importance_assessment_parser(subparsers):
     sim_group = parser.add_argument_group("Simulation")
     _add_simulation_args(sim_group)
     _add_steady_state_args(sim_group)
+    sim_group.add_argument(
+        "--n_jobs", type=int, default=-1,
+        help=(
+            "Number of parallel jobs for sample simulations. "
+            "Use -1 to use all available CPU cores (default: -1)."
+        ),
+    )
 
     # -- Output --
     output_group = parser.add_argument_group("Output")

@@ -476,6 +476,56 @@ def simulate_samples(
     return res
 
 
+def _resolve_n_processes(n_processes: int | None) -> int:
+    """
+    Resolve requested process count to a concrete positive worker count.
+
+    Rules:
+    - None or 0: use cpu_count - 1
+    - -1: use all available cores
+    - > 0: use that exact number
+    """
+    cpu_count = mp.cpu_count()
+    if n_processes == -1:
+        return max(1, cpu_count)
+    if n_processes is None or n_processes == 0:
+        return max(1, cpu_count - 1)
+    return max(1, int(n_processes))
+
+
+def _simulate_combination_worker(args: tuple) -> tuple:
+    """
+    Worker for simulating one input combination in parallel.
+    """
+    (
+        index,
+        combination,
+        sbml_string,
+        input_species_ids,
+        selections,
+        integrator,
+        end_time,
+        max_end_time,
+        steady_state,
+    ) = args
+
+    rr_local = rr.RoadRunner(sbml_string)
+    rr_local.setIntegrator(integrator)
+    rr_local.timeCourseSelections = selections
+
+    sim_res, ss_time, colnames = simulate_samples(
+        rr_local,
+        combination,
+        input_species_ids,
+        start_time=0,
+        end_time=end_time,
+        steady_state=steady_state,
+        max_end_time=max_end_time,
+    )
+
+    return index, sim_res, ss_time, colnames
+
+
 # KEEP
 def process_species_samples(args: tuple) -> tuple:
     """
@@ -772,8 +822,8 @@ def process_species_multiprocessing(
     log_file : file, optional
         File object for logging, by default None
     max_workers : int, optional
-        Maximum number of worker processes. If None, uses 40% of available CPU cores
-        (capped at 8), by default None
+        Number of parallel worker processes.
+        -1 uses all available CPU cores, 0/None uses cpu_count-1, by default None.
     use_perturbations : bool, optional
         If True, use process_species_samples (with perturbations);
         if False, use process_species_no_samples, by default False
@@ -794,7 +844,8 @@ def process_species_multiprocessing(
 
     Notes
     -----
-    - Worker allocation: Uses 75% of available CPU cores by default, capped at 8 workers
+    - Worker allocation:
+      -1 => all cores, 0/None => cpu_count-1, N>0 => exactly N (capped by number of targets)
     - Missing models: Species in target_ids without corresponding entries in
       modified_models_dict are skipped with a warning
     - Thread safety: Each worker loads models independently to avoid shared state issues
@@ -830,12 +881,11 @@ def process_species_multiprocessing(
     process_species_samples : Worker function for simulations with perturbations
     process_species_no_samples : Worker function for simulations without perturbations
     """
-    # Determine number of workers
-    # Use 75% of the available cores
-    n_core = int((mp.cpu_count() * 75) / 100)
-    print_log(log_file, f" N core: {n_core}")
-    if max_workers is None:
-        max_workers = min(len(target_ids), n_core, 8)  # Don't use all CPUs
+    # Determine number of workers with same logic used by sample simulations
+    requested_workers = _resolve_n_processes(max_workers)
+    max_workers = min(len(target_ids), requested_workers)
+    if max_workers == 0:
+        return []
 
     print_log(
         log_file,
@@ -2168,6 +2218,7 @@ def simulate_combinations(
     max_end_time: float = 1000,
     steady_state: bool = False,
     log_file=None,
+    n_processes: int = None,
 ) -> tuple:
     """
     Simulate a RoadRunner model across multiple input perturbation combinations.
@@ -2200,6 +2251,9 @@ def simulate_combinations(
         by default False
     log_file : file, optional
         File object for logging progress and steady-state times, by default None
+    n_processes : int, optional
+        Number of parallel worker processes.
+        -1 uses all available CPU cores, 0/None uses cpu_count-1, by default None.
 
     Returns
     -------
@@ -2256,32 +2310,73 @@ def simulate_combinations(
     process_species_samples : Uses this function for knockout analysis with perturbations
     """
 
-    samples_simulations_results = []
-    i = 1
-    for comb in combinations:
-        # rr.reset()
+    combinations = list(combinations)
+    n_combinations = len(combinations)
+    if n_combinations == 0:
+        return [], rr.timeCourseSelections
 
-        # __import__("pprint").pprint(f"comb:{comb}")
+    requested_processes = _resolve_n_processes(n_processes)
+    n_workers = min(requested_processes, n_combinations)
+    if mp.current_process().daemon and n_workers > 1:
+        n_workers = 1
 
-        sim_res, ss_time, colnames = simulate_samples(
-            rr,
-            comb,
-            input_species_ids,
-            start_time=0,
-            end_time=end_time,
-            steady_state=steady_state,
-            max_end_time=max_end_time,
+    # Fall back to serial for single-worker runs.
+    if n_workers == 1:
+        samples_simulations_results = []
+        for comb in combinations:
+            sim_res, ss_time, colnames = simulate_samples(
+                rr,
+                comb,
+                input_species_ids,
+                start_time=0,
+                end_time=end_time,
+                steady_state=steady_state,
+                max_end_time=max_end_time,
+            )
+
+            min_ss_time = (
+                ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
+            )
+            if steady_state:
+                print_log(log_file, f"Min time {min_ss_time}")
+
+            samples_simulations_results.append(sim_res)
+    else:
+        print_log(
+            log_file,
+            f"[INFO] Running {n_combinations} combinations with {n_workers} parallel jobs",
         )
+        sbml_string = rr.getCurrentSBML()
+        selections = rr.timeCourseSelections
+        integrator = rr.getIntegrator().getName()
+        process_args = [
+            (
+                i,
+                comb,
+                sbml_string,
+                input_species_ids,
+                selections,
+                integrator,
+                end_time,
+                max_end_time,
+                steady_state,
+            )
+            for i, comb in enumerate(combinations)
+        ]
 
-        # __import__("pprint").pprint(sim_res[:, :])
+        samples_simulations_results = [None] * n_combinations
+        chunk_size = max(1, n_combinations // (n_workers * 4))
+        with Pool(processes=n_workers) as pool:
+            for index, sim_res, ss_time, colnames in pool.imap_unordered(
+                _simulate_combination_worker, process_args, chunksize=chunk_size
+            ):
+                samples_simulations_results[index] = sim_res
+                min_ss_time = (
+                    ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
+                )
+                if steady_state:
+                    print_log(log_file, f"Min time {min_ss_time}")
 
-        min_ss_time = (
-            ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
-        )
-        if steady_state:
-            print_log(log_file, f"Min time {min_ss_time}")
-
-        samples_simulations_results.append(sim_res)
     if steady_state:
         print_log(log_file, f"Min ss_time: {min_ss_time}")
 
