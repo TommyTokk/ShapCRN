@@ -596,7 +596,9 @@ def process_species_samples(args: tuple) -> tuple:
             log_file,
         )
 
-        knocked_data = [pd.DataFrame(modified_model_results[:, 1:], columns=colnames[1:])]
+        knocked_data = [
+            pd.DataFrame(modified_model_results[:, 1:], columns=colnames[1:])
+        ]
 
         for i in range(len(combinations_knocked_model_results)):
             ko_res_i = combinations_knocked_model_results[i]
@@ -687,7 +689,6 @@ def process_species_no_samples(args: tuple) -> tuple:
             log_file,
         ) = args
 
-
         print_log(log_file, f"Starting processing: {knocked_species}")
 
         modified_rr = load_roadrunner_model(
@@ -700,7 +701,7 @@ def process_species_no_samples(args: tuple) -> tuple:
 
         knocked_model_results, ss_time, colnames = simulate(
             modified_rr,
-            start_time= 0 if start_time is None else start_time,
+            start_time=0 if start_time is None else start_time,
             end_time=end_time,
             steady_state=steady_state,
             max_end_time=max_end_time,
@@ -883,7 +884,9 @@ def process_species_multiprocessing(
             # Running the workers
             result = pool.map(operation, process_args)
     except Exception as e:
-        raise exceptions.SimulationError(f"Error during multiprocessing execution: {str(e)}")   
+        raise exceptions.SimulationError(
+            f"Error during multiprocessing execution: {str(e)}"
+        )
 
     return result
 
@@ -1101,7 +1104,9 @@ def get_absolute_variations_samples(
             last_original_values = original_sim_i.tail(1)
 
             # Masking
-            last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
+            last_knocked_values = last_knocked_values.mask(
+                last_knocked_values <= epsilon, 0
+            )
             last_original_values = last_original_values.mask(
                 last_original_values <= epsilon, 0
             )
@@ -1206,7 +1211,9 @@ def get_absolute_variations_no_samples(
         last_original_values = original_data.tail(1)
 
         # Masking
-        last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
+        last_knocked_values = last_knocked_values.mask(
+            last_knocked_values <= epsilon, 0
+        )
         last_original_values = last_original_values.mask(
             last_original_values <= epsilon, 0
         )
@@ -1316,7 +1323,9 @@ def get_relative_variations_samples(
             last_original_values = original_sim_i.tail(1)
 
             # Masking
-            last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
+            last_knocked_values = last_knocked_values.mask(
+                last_knocked_values <= epsilon, 0
+            )
             last_original_values = last_original_values.mask(
                 last_original_values <= epsilon, 0
             )
@@ -1427,7 +1436,9 @@ def get_relative_variations_no_samples(
         last_original_values = original_data.tail(1)
 
         # Masking
-        last_knocked_values = last_knocked_values.mask(last_knocked_values <= epsilon, 0)
+        last_knocked_values = last_knocked_values.mask(
+            last_knocked_values <= epsilon, 0
+        )
         last_original_values = last_original_values.mask(
             last_original_values <= epsilon, 0
         )
@@ -1450,7 +1461,11 @@ def get_relative_variations_no_samples(
 
     return res_df
 
-
+"""
+# TODO: Create other metrics for the variation
+A quantitative score (log-ratio or sensitivity coefficient) for species that are present in both conditions
+A qualitative score or binary flag for species that switch between zero and non-zero
+"""
 def get_relative_variations_log_ratio(
     final_results_original_model: list[pd.DataFrame],
     final_results_knocked_model: list[tuple[str, list[pd.DataFrame]]],
@@ -1562,13 +1577,19 @@ def get_relative_variations_log_ratio(
     if log_base not in log_fns:
         raise ValueError(f"log_base must be one of {list(log_fns)}. Got: '{log_base}'")
     if aggregation not in {"median", "mean", "rms", "max"}:
-        raise ValueError(f"aggregation must be one of 'median', 'mean', 'rms', 'max'. Got: '{aggregation}'")
+        raise ValueError(
+            f"aggregation must be one of 'median', 'mean', 'rms', 'max'. Got: '{aggregation}'"
+        )
     if return_signed and aggregation not in {"median", "mean"}:
-        raise ValueError("return_signed=True is only valid with aggregation='median' or 'mean'.")
+        raise ValueError(
+            "return_signed=True is only valid with aggregation='median' or 'mean'."
+        )
     if epsilon <= 0:
         raise ValueError(f"epsilon must be > 0. Got: {epsilon}")
     if len(final_results_original_model) == 0:
-        raise ValueError("final_results_original_model must contain at least one DataFrame.")
+        raise ValueError(
+            "final_results_original_model must contain at least one DataFrame."
+        )
 
     log_fn = log_fns[log_base]
     rows = []
@@ -1607,7 +1628,7 @@ def get_relative_variations_log_ratio(
             # Compute log-ratio for this perturbation
             lr = log_fn(ss_ko.to_numpy() / ss_orig.to_numpy())
             log_ratios.append(pd.DataFrame(lr, columns=ss_orig.columns))
-        
+
         # Concatenate log-ratios across perturbations for this knocked species
         lr_df = pd.concat(log_ratios, ignore_index=True)  # (n_perturbations, n_species)
 
@@ -1620,10 +1641,14 @@ def get_relative_variations_log_ratio(
             elif aggregation == "mean":
                 score = abs_lr.mean()
             elif aggregation == "rms":
-                score = np.sqrt((lr_df ** 2).mean())
+                score = np.sqrt((lr_df**2).mean())
             elif aggregation == "max":
                 score = abs_lr.max()
+            else:
+                # Fallback to median by default
+                score = abs_lr.median()
 
+        print_log(log_file, f"[DEBUG] score type: {type(score)} | score: {score}")
         score.name = knocked_species
         rows.append(score)
 
@@ -1636,6 +1661,7 @@ def get_relative_variations_log_ratio(
     res_df.values[idx[valid], np.arange(len(res_df.columns))[valid]] = np.nan
 
     return res_df
+
 
 def get_relative_variations_log_ratio_no_samples(
     original_data: pd.DataFrame,
@@ -1755,6 +1781,7 @@ def get_relative_variations_log_ratio_no_samples(
     res_df.values[idx[valid], np.arange(len(res_df.columns))[valid]] = np.nan
 
     return res_df
+
 
 # KEEP
 def get_payoff_vals(
@@ -1948,6 +1975,11 @@ def get_shapley_values(
     left_factor = (
         factorial(n_inputs) * factorial(n_combinations - n_inputs)
     ) / factorial(n_combinations)
+
+    print_log(
+        log_file,
+        f"[DEBUG] n_inputs: {n_inputs} | n_combinations: {n_combinations} | lf: {left_factor}",
+    )
 
     # __import__("pprint").pprint(left_factor)
 

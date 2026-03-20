@@ -17,6 +17,13 @@ class KOShapleyError(Exception):
 # ============================================================================
 
 
+class InvalidCommandError(KOShapleyError):
+    def __init__(self, message=None):
+        if message is None:
+            message = f"Command not found"
+        super().__init__(message)
+
+
 class ModelError(KOShapleyError):
     """Base exception for SBML model-related errors."""
 

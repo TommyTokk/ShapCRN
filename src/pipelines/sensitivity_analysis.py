@@ -346,7 +346,6 @@ def sensitivity_analysis(args, out_dirs):
         })
         results_df.to_csv(os.path.join(out_dirs["csv"], "sensitivity_comparison.csv"), index=False)
         ut.print_log(parsed_args["log_file"], f"[INFO] Sensitivity comparison results saved to: {out_dirs['csv']}")
-        
             
 
 

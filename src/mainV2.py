@@ -23,8 +23,6 @@ from src.pipelines.knockin import knockin_reaction as ki_reaction
 from src.pipelines import sensitivity_analysis as sens
 
 
-
-
 def main():
     # Parsing the arguments
     args = ut.parse_args()
@@ -37,7 +35,6 @@ def main():
     # Check if the file exists
     if not os.path.isfile(file_path):
         raise ex.FileNotFoundError(f"The file '{file_path}' does not exist.")
-    
 
     # Extract the file name and extension
     file_name = os.path.basename(file_path)
@@ -51,7 +48,7 @@ def main():
     ut.print_log(log_file, out_dirs)
 
     try:
-        if command == 'simulate':
+        if command == "simulate":
             # Parsing the arguments for simulation
             simulation_time = args.time
             integrator = args.integrator
@@ -66,7 +63,9 @@ def main():
             sbml_doc = sbml_io.load_model(file_path)
 
             # Get the model
-            sbml_model = sbml_reactions.split_all_reversible_reactions(sbml_doc.getModel())
+            sbml_model = sbml_reactions.split_all_reversible_reactions(
+                sbml_doc.getModel()
+            )
 
             # Check the integrator
             if integrator:
@@ -91,23 +90,32 @@ def main():
 
             res_df = pd.DataFrame(res, columns=colnames)
             # Saving the results
-            res_df.to_csv(os.path.join(out_dirs['csv'], f"{file_name}_simulation.csv"), index=False)
-            ut.print_log(log_file, f"[INFO] Simulation results saved to: {out_dirs['csv']}")
+            res_df.to_csv(
+                os.path.join(out_dirs["csv"], f"{file_name}_simulation.csv"),
+                index=False,
+            )
+            ut.print_log(
+                log_file, f"[INFO] Simulation results saved to: {out_dirs['csv']}"
+            )
 
             # Plotting the results
             if interactive:
                 plt_ut.plot_results_interactive(
-                    res_df, model_name=file_name,
-                    html_dir_path=out_dirs['images'], log_file=log_file,
+                    res_df,
+                    model_name=file_name,
+                    html_dir_path=out_dirs["images"],
+                    log_file=log_file,
                 )
 
             else:
                 plt_ut.plot_results(
-                    res_df, img_dir_path=out_dirs['images'],
-                    img_name=f"{file_name}.png", log_file=log_file,
+                    res_df,
+                    img_dir_path=out_dirs["images"],
+                    img_name=f"{file_name}.png",
+                    log_file=log_file,
                 )
-        elif command == 'importance_assessment':
-            # Parsing the arguments for importance assessment 
+        elif command == "importance_assessment":
+            # Parsing the arguments for importance assessment
             imp.importance_assessment(args, out_dirs)
         elif command == "knockout_species":
             ko_species.knockout_species(args, out_dirs)
@@ -122,10 +130,13 @@ def main():
         elif command == "create_network":
             pass
         else:
-            raise ex.InvalidCommandError(f"Invalid command: '{command}'. Please choose a valid command.")
+            raise ex.InvalidCommandError(
+                f"Invalid command: '{command}'. Please choose a valid command."
+            )
     except Exception as e:
-        raise ex.ModelNotFoundError(f"Failed to load the model from '{file_path}': {str(e)}") from e
-
+        raise ex.ModelNotFoundError(
+            f"Failed to load the model from '{file_path}': {str(e)}"
+        ) from e
 
 
 if __name__ == "__main__":
