@@ -7,8 +7,6 @@ import numpy as np
 import itertools
 
 from src import exceptions
-from src.classes.species import Species
-from src.classes.function import Function
 from src.utils.utils import print_log
 import src.utils.sbml.knock as sk
 
@@ -251,51 +249,6 @@ def reactions_to_dict(reaction_list: list) -> dict:
         reactions_dict[reaction_id] = reaction.to_dict()
 
     return reactions_dict
-
-
-# ============
-# FUNCTIONS
-# ============
-def get_functions_list(SBML_model: libsbml.Model) -> list:
-    """
-    Extract function definitions from an SBML model as Function objects.
-
-    This function retrieves all function definitions from the SBML model and converts
-    them into Function objects using the Function class's from_sbml() method.
-
-    Parameters
-    ----------
-    SBML_model : libsbml.Model
-        The SBML model containing function definitions to extract
-
-    Returns
-    -------
-    list of Function
-        List of Function objects created from SBML function definitions.
-        Returns empty list if no function definitions exist in the model
-
-    Notes
-    -----
-    Function definitions in SBML are typically lambda expressions that define
-    reusable mathematical functions for kinetic laws or other model components.
-
-    See Also
-    --------
-    create_sbml_function : Create a new SBML function definition
-    split_kinetic_function : Split kinetic function into forward/reverse components
-    """
-    functions_list = []
-
-    for sbml_func in SBML_model.getListOfFunctionDefinitions():
-        function = Function.from_sbml(sbml_func)
-        functions_list.append(function)
-
-    return functions_list
-
-
-# ============
-# FUNCTIONS
-# ============
 
 
 # KEEP

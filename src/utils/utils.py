@@ -183,6 +183,13 @@ def _build_importance_assessment_parser(subparsers):
         help="Run the analysis using inputs' perturbations",
     )
     perturbation_group.add_argument(
+        "--max-combinations", type=int, default=None,
+        help=(
+            "Optional cap on the number of perturbation combinations to simulate. "
+            "Useful to avoid combinatorial explosion when the Cartesian product is very large."
+        ),
+    )
+    perturbation_group.add_argument(
         "--use-fixed-perturbations", action="store_true", default=False,
         help="Run the analysis using fixed perturbations",
     )

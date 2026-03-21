@@ -605,6 +605,7 @@ def process_species_samples(args: tuple) -> tuple:
             steady_state,
             max_end_time,
             min_ss_time,
+            max_combinations,
             log_file,
         ) = args
 
@@ -644,6 +645,7 @@ def process_species_samples(args: tuple) -> tuple:
             max_end_time,
             steady_state,
             log_file,
+            max_combinations=max_combinations,
         )
 
         knocked_data = [
@@ -736,6 +738,7 @@ def process_species_no_samples(args: tuple) -> tuple:
             steady_state,
             max_end_time,
             min_ss_time,
+            max_combinations,
             log_file,
         ) = args
 
@@ -786,6 +789,7 @@ def process_species_multiprocessing(
     max_workers: int = None,
     use_perturbations: bool = False,
     preserve_input: bool = False,
+    max_combinations: int | None = None,
 ) -> list:
     """
     Orchestrate parallel simulation of multiple knocked models using multiprocessing.
@@ -910,6 +914,7 @@ def process_species_multiprocessing(
                 steady_state,
                 max_end_time,
                 min_ss_time,
+                max_combinations,
                 log_file,
             )
 
@@ -2211,7 +2216,7 @@ def get_variations_hm_no_samples(
 # KEEP
 def simulate_combinations(
     rr: rr.RoadRunner,
-    combinations: list,
+    combinations,
     input_species_ids: list,
     min_ss_time: float,
     end_time: float = 1000,
@@ -2219,6 +2224,7 @@ def simulate_combinations(
     steady_state: bool = False,
     log_file=None,
     n_processes: int = None,
+    max_combinations: int | None = None,
 ) -> tuple:
     """
     Simulate a RoadRunner model across multiple input perturbation combinations.
@@ -2310,20 +2316,22 @@ def simulate_combinations(
     process_species_samples : Uses this function for knockout analysis with perturbations
     """
 
-    combinations = list(combinations)
-    n_combinations = len(combinations)
-    if n_combinations == 0:
-        return [], rr.timeCourseSelections
-
     requested_processes = _resolve_n_processes(n_processes)
-    n_workers = min(requested_processes, n_combinations)
+    n_workers = requested_processes
     if mp.current_process().daemon and n_workers > 1:
         n_workers = 1
+
+    if max_combinations is not None and max_combinations <= 0:
+        return [], rr.timeCourseSelections
 
     # Fall back to serial for single-worker runs.
     if n_workers == 1:
         samples_simulations_results = []
-        for comb in combinations:
+        n_processed = 0
+        colnames = rr.timeCourseSelections
+        for n_processed, comb in enumerate(combinations, start=1):
+            if max_combinations is not None and n_processed > max_combinations:
+                break
             sim_res, ss_time, colnames = simulate_samples(
                 rr,
                 comb,
@@ -2341,41 +2349,66 @@ def simulate_combinations(
                 print_log(log_file, f"Min time {min_ss_time}")
 
             samples_simulations_results.append(sim_res)
+
+        if n_processed == 0:
+            return [], rr.timeCourseSelections
+
+        if max_combinations is not None and n_processed > max_combinations:
+            print_log(
+                log_file,
+                f"[INFO] Simulated first {max_combinations} combinations (cap enabled)",
+            )
     else:
-        print_log(
-            log_file,
-            f"[INFO] Running {n_combinations} combinations with {n_workers} parallel jobs",
-        )
         sbml_string = rr.getCurrentSBML()
         selections = rr.timeCourseSelections
         integrator = rr.getIntegrator().getName()
-        process_args = [
-            (
-                i,
-                comb,
-                sbml_string,
-                input_species_ids,
-                selections,
-                integrator,
-                end_time,
-                max_end_time,
-                steady_state,
-            )
-            for i, comb in enumerate(combinations)
-        ]
 
-        samples_simulations_results = [None] * n_combinations
-        chunk_size = max(1, n_combinations // (n_workers * 4))
+        def _iter_process_args():
+            for i, comb in enumerate(combinations):
+                if max_combinations is not None and i >= max_combinations:
+                    break
+                yield (
+                    i,
+                    comb,
+                    sbml_string,
+                    input_species_ids,
+                    selections,
+                    integrator,
+                    end_time,
+                    max_end_time,
+                    steady_state,
+                )
+
+        print_log(
+            log_file,
+            f"[INFO] Running perturbation combinations with up to {n_workers} parallel jobs",
+        )
+
+        unordered_results = []
+        colnames = rr.timeCourseSelections
+        chunk_size = 16
         with Pool(processes=n_workers) as pool:
             for index, sim_res, ss_time, colnames in pool.imap_unordered(
-                _simulate_combination_worker, process_args, chunksize=chunk_size
+                _simulate_combination_worker, _iter_process_args(), chunksize=chunk_size
             ):
-                samples_simulations_results[index] = sim_res
+                unordered_results.append((index, sim_res))
                 min_ss_time = (
                     ss_time if ss_time is not None and ss_time <= min_ss_time else min_ss_time
                 )
                 if steady_state:
                     print_log(log_file, f"Min time {min_ss_time}")
+
+        if len(unordered_results) == 0:
+            return [], rr.timeCourseSelections
+
+        unordered_results.sort(key=lambda x: x[0])
+        samples_simulations_results = [res for _, res in unordered_results]
+
+        if max_combinations is not None and len(samples_simulations_results) >= max_combinations:
+            print_log(
+                log_file,
+                f"[INFO] Simulated first {max_combinations} combinations (cap enabled)",
+            )
 
     if steady_state:
         print_log(log_file, f"Min ss_time: {min_ss_time}")

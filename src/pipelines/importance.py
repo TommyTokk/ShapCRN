@@ -37,6 +37,7 @@ def parse_args(args):
 
     # Sampling and perturbations
     use_perturbations = args.use_perturbations
+    max_combinations = args.max_combinations
     use_fixed_perturbations = args.use_fixed_perturbations
 
     fixed_perturbations = None
@@ -80,6 +81,7 @@ def parse_args(args):
         "target_ids": target_ids,
         "preserve_inputs": preserve_inputs,
         "use_perturbations": use_perturbations,
+        "max_combinations": max_combinations,
         "use_fixed_perturbations": use_fixed_perturbations,
         "fixed_perturbations": fixed_perturbations,
         "num_samples": num_samples,
@@ -230,6 +232,7 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
             args["use_steady_state"],
             args["log_file"],
             n_processes=args["n_jobs"],
+            max_combinations=args["max_combinations"],
         )
 
     # Prepare the final data
@@ -278,6 +281,7 @@ def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, selec
         preserve_input=args["preserve_inputs"],
         log_file=args["log_file"],
         max_workers=args["n_jobs"],
+        max_combinations=args["max_combinations"],
     )
 
     return knocked_data
@@ -843,7 +847,7 @@ def importance_assessment(args, out_dirs):
 
 
         # Calculate the Shapley value
-        n_combinations = np.power(parsed_args["num_samples"], len(parsed_args["input_species_ids"])) + 1
+        n_combinations = len(original_simulation_data)
         shapley_df = run_shap_analysis(
             original_simulation_data, 
             knocked_data, 
