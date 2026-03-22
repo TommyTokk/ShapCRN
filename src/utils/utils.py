@@ -22,7 +22,8 @@ def setup_output_dirs(output_root: str, model_name: str) -> dict:
         └── <model_name>/
             ├── images/
             ├── csv/
-            └── reports/
+            ├── reports/
+            └── dot/
 
     Parameters
     ----------
@@ -34,7 +35,7 @@ def setup_output_dirs(output_root: str, model_name: str) -> dict:
     Returns
     -------
     dict
-        Keys: ``'root'``, ``'images'``, ``'csv'``, ``'reports'``.
+        Keys: ``'root'``, ``'images'``, ``'csv'``, ``'reports'``, ``'dot'``.
     """
     base = os.path.join(output_root, model_name)
     dirs = {
@@ -42,6 +43,7 @@ def setup_output_dirs(output_root: str, model_name: str) -> dict:
         "images": os.path.join(base, "images"),
         "csv": os.path.join(base, "csv"),
         "reports": os.path.join(base, "reports"),
+        "dot": os.path.join(base, "dot"),
     }
     for d in dirs.values():
         os.makedirs(d, exist_ok=True)
@@ -52,7 +54,7 @@ def _add_output_arg(parser, default="./results"):
     parser.add_argument(
         "-o", "--output", default=default,
         help=f"Root output directory (default: {default}). "
-             "Sub-folders (images/, csv/, reports/) are created "
+               "Sub-folders (images/, csv/, reports/, dot/) are created "
              "automatically under <output>/<model_name>/.",
     )
 
@@ -330,10 +332,6 @@ def _build_create_network_parser(subparsers):
     parser.add_argument("input_path", help="Path to the SBML model")
     _add_output_arg(parser)
     parser.add_argument(
-        "--save-dot", default=None,
-        help="Directory to save the DOT source code for the network",
-    )
-    parser.add_argument(
         "-or", "--orientation", choices=["TB", "BT", "LR", "RL"], default="TB",
         help="Orientation to use for the network: TB -> Top-Bottom, "
              "BT -> Bottom-Top, LR -> Left-Right, RL -> Right-Left",
@@ -350,6 +348,7 @@ def _build_create_network_parser(subparsers):
         "-hs", "--horizontal-spacing", type=float, default=0.3,
         help="Horizontal spacing between nodes",
     )
+    parser.add_argument("--log", help="Path to log file")
     return parser
 
 

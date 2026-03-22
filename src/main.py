@@ -1242,7 +1242,6 @@ def main():
             nodesep = args.horizontal_spacing
             layout = args.layout
             orientation = args.orientation
-            save_dot = args.save_dot
 
             species_list = sbml_ut.get_list_of_species(sbml_model)
             reactions_list = sbml_ut.get_list_of_reactions(
@@ -1260,8 +1259,9 @@ def main():
                 orientation=orientation,  # vertical
                 ranksep=ranksep,  # more vertical spacing
                 nodesep=nodesep,  # more horizontal spacing
+                img_dir_path=out_dirs["images"],
                 img_name=file_name,
-                save_dot_dir=save_dot,
+                save_dot_dir=out_dirs["dot"],
             )
 
     except Exception as e:

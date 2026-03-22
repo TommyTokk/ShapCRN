@@ -21,6 +21,7 @@ from src.pipelines.knockout import knockout_reaction as ko_reaction
 from src.pipelines.knockin import knockin_species as ki_species
 from src.pipelines.knockin import knockin_reaction as ki_reaction
 from src.pipelines import sensitivity_analysis as sens
+from src.pipelines import network as net
 
 
 def main():
@@ -128,7 +129,7 @@ def main():
         elif command == "sensitivity_analysis":
             sens.sensitivity_analysis(args, out_dirs)
         elif command == "create_network":
-            pass
+            net.create_model_netwrok(args, out_dirs)
         else:
             raise ex.InvalidCommandError(
                 f"Invalid command: '{command}'. Please choose a valid command."
