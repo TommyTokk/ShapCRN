@@ -1243,11 +1243,6 @@ def main():
             layout = args.layout
             orientation = args.orientation
 
-            species_list = sbml_ut.get_list_of_species(sbml_model)
-            reactions_list = sbml_ut.get_list_of_reactions(
-                sbml_model, sbml_ut.get_species_dict(species_list)
-            )
-
             ut.print_log(log_file, f"Simulating model: {file_name}")
 
             rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
