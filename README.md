@@ -110,7 +110,7 @@ By default, outputs are written under `./results` in a model-specific folder:
 ### 1) Simulate a model (static plot + CSV)
 
 ```bash
-python -m src.mainV2 simulate models/test.xml \
+python -m src.mainV2 simulate models/KnockinModelV2.xml \
   -t 120 \
   -i cvode \
   -o results
@@ -119,7 +119,7 @@ python -m src.mainV2 simulate models/test.xml \
 ### 2) Simulate until steady state (interactive HTML plot)
 
 ```bash
-python -m src.mainV2 simulate models/test.xml \
+python -m src.mainV2 simulate models/KnockinModelV2.xml \
   --steady-state \
   --max-time 2000 \
   --sim-step 10 \
@@ -131,7 +131,7 @@ python -m src.mainV2 simulate models/test.xml \
 ### 3) Importance assessment (knockout, no perturbations)
 
 ```bash
-python -m src.mainV2 importance_assessment models/test.xml \
+python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
   --operation knockout \
   --payoff-function last \
   -t 120 \
@@ -141,7 +141,7 @@ python -m src.mainV2 importance_assessment models/test.xml \
 ### 4) Importance assessment with random perturbations
 
 ```bash
-python -m src.mainV2 importance_assessment models/test.xml \
+python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
   --operation knockout \
   --input-species S1 S2 \
   --use-perturbations \
@@ -156,7 +156,7 @@ python -m src.mainV2 importance_assessment models/test.xml \
 ### 5) Importance assessment with fixed perturbations
 
 ```bash
-python -m src.mainV2 importance_assessment models/test.xml \
+python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
   --operation knockin \
   --input-species S1 S2 \
   --use-perturbations \
@@ -170,7 +170,7 @@ python -m src.mainV2 importance_assessment models/test.xml \
 ### 6) Sensitivity analysis (Sobol)
 
 ```bash
-python -m src.mainV2 sensitivity_analysis models/test.xml \
+python -m src.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
   --input-species S1 S2 \
   --base-samples 1024 \
   --perturbation-range 20 \
@@ -181,7 +181,7 @@ python -m src.mainV2 sensitivity_analysis models/test.xml \
 ### 7) Sensitivity analysis with convergence check
 
 ```bash
-python -m src.mainV2 sensitivity_analysis models/test.xml \
+python -m src.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
   --input-species S1 S2 \
   --check-convergence \
   -o results
@@ -190,7 +190,7 @@ python -m src.mainV2 sensitivity_analysis models/test.xml \
 ### 8) Knock out one species and save edited model
 
 ```bash
-python -m src.mainV2 knockout_species models/test.xml S1 \
+python -m src.mainV2 knockout_species models/KnockinModelV2.xml S1 \
   --model-dir models \
   -o results
 ```
@@ -198,7 +198,7 @@ python -m src.mainV2 knockout_species models/test.xml S1 \
 ### 9) Knock out one reaction and save edited model
 
 ```bash
-python -m src.mainV2 knockout_reaction models/test.xml R1_MassAction_Explicit \
+python -m src.mainV2 knockout_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
   --model-dir models \
   -o results
 ```
@@ -206,7 +206,7 @@ python -m src.mainV2 knockout_reaction models/test.xml R1_MassAction_Explicit \
 ### 10) Knock in one species and save edited model
 
 ```bash
-python -m src.mainV2 knockin_species models/test.xml S1 \
+python -m src.mainV2 knockin_species models/KnockinModelV2.xml S1 \
   --model-dir models \
   -o results
 ```
@@ -214,14 +214,14 @@ python -m src.mainV2 knockin_species models/test.xml S1 \
 ### 11) Knock in one reaction and save edited model
 
 ```bash
-python -m src.mainV2 knockin_reaction models/test.xml R1_MassAction_Explicit \
+python -m src.mainV2 knockin_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
   --model-dir models \
   -o results
 ```
 
 ## Tips and troubleshooting
 
-- `models/test.xml` works with the IDs used in these examples (`S1`, `S2`, `R1_MassAction_Explicit`).
+- `models/KnockinModelV2.xml` works with the IDs used in these examples (`S1`, `S2`, `R1_MassAction_Explicit`).
 - Start with models in `models/` to validate your setup.
 - Add logging to any command with `-l <log_file_path>`.
 - For large perturbation spaces, use `--max-combinations` to cap Cartesian-product runs and avoid RAM saturation.
