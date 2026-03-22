@@ -19,6 +19,27 @@ payoff_functions = {
 }
 
 
+def _parse_float_list(value):
+    """
+    Normalize argparse values that may arrive as list[str], str, float, or None.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        tokens = value.split()
+        if len(tokens) == 0:
+            return None
+        return [float(v) for v in tokens]
+
+    if isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return None
+        return [float(v) for v in value]
+
+    return [float(value)]
+
+
 
 def parse_args(args):
     """
@@ -40,14 +61,13 @@ def parse_args(args):
     max_combinations = args.max_combinations
     use_fixed_perturbations = args.use_fixed_perturbations
 
-    fixed_perturbations = None
+    fixed_perturbations = _parse_float_list(args.fixed_perturbations)
 
     if use_fixed_perturbations:
-        if args.fixed_perturbations is None:
+        if fixed_perturbations is None:
             raise ValueError(
                 "You need to specify the variations to use setting the --fixed-perturbations parameter"
             )
-        fixed_perturbations = args.fixed_perturbations
 
     num_samples = args.num_samples
     variation_percentage = args.variation
@@ -808,6 +828,95 @@ def generate_importance_report(
     ut.print_log(log_file, f"[INFO] Importance report saved to {report_path}")
 
 
+def run_random_vs_fixed_perturbations_importance(
+    sbml_model: libsbml.Model,
+    knocked_ids: list[str],
+    selections: list[str],
+    min_ss_time: float,
+    random_variations_df: pd.DataFrame,
+    args: dict,
+    out_dirs: dict,
+) -> dict:
+    """
+    Compare log-ratio variations from random perturbations against a fixed-perturbation run.
+
+    This function:
+    1) builds fixed perturbation samples from args["fixed_perturbations"],
+    2) runs original and knocked simulations under those fixed perturbations,
+    3) computes fixed log-ratio variations,
+    4) returns and saves the random-vs-fixed difference matrix.
+    """
+    if args["fixed_perturbations"] is None:
+        raise ValueError(
+            "Random-vs-fixed perturbation analysis requires --fixed-perturbations values."
+        )
+
+    fixed_args = dict(args)
+    fixed_args["use_perturbations"] = True
+    fixed_args["use_fixed_perturbations"] = True
+
+    ut.print_log(
+        args["log_file"],
+        f"[INFO] Running fixed perturbations simulation with values: {fixed_args['fixed_perturbations']}",
+    )
+
+    fixed_samples = generate_samples(sbml_model, fixed_args)
+
+    fixed_original_data, _, _ = simulate_original_model(
+        sbml_model,
+        knocked_ids,
+        fixed_samples,
+        fixed_args,
+    )
+
+    if fixed_args["operation"] == "knockin":
+        max_values = list(fixed_original_data[0][selections[1:]].max())
+        fixed_knocked_data = simulate_knocked_data(
+            sbml_model,
+            knocked_ids,
+            fixed_samples,
+            selections,
+            min_ss_time,
+            fixed_args,
+            new_values=max_values,
+        )
+    else:
+        fixed_knocked_data = simulate_knocked_data(
+            sbml_model,
+            knocked_ids,
+            fixed_samples,
+            selections,
+            min_ss_time,
+            fixed_args,
+        )
+
+    fixed_variations_df = sim_ut.get_relative_variations_log_ratio(
+        fixed_original_data,
+        fixed_knocked_data,
+        aggregation="median",
+        return_signed=False,
+    )
+
+    random_aligned, fixed_aligned = random_variations_df.align(
+        fixed_variations_df, join="inner", axis=None
+    )
+    random_vs_fixed_diff_df = random_aligned - fixed_aligned
+
+    fixed_variations_path = os.path.join(out_dirs["csv"], "variations_fixed_perturbations.csv")
+    diff_path = os.path.join(out_dirs["csv"], "variations_random_vs_fixed_difference.csv")
+
+    fixed_variations_df.to_csv(fixed_variations_path)
+    random_vs_fixed_diff_df.to_csv(diff_path)
+
+    ut.print_log(args["log_file"], f"[INFO] Saved fixed perturbations variations to {fixed_variations_path}")
+    ut.print_log(args["log_file"], f"[INFO] Saved random-vs-fixed difference to {diff_path}")
+
+    return {
+        "fixed_variations_df": fixed_variations_df,
+        "random_vs_fixed_diff_df": random_vs_fixed_diff_df,
+    }
+
+
 
 
 def importance_assessment(args, out_dirs):
@@ -902,8 +1011,6 @@ def importance_assessment(args, out_dirs):
                 log_file=parsed_args["log_file"]
             )
 
-            # TODO: Add the random perturbations importance analysis
-
             generate_importance_report(
                 importance_assessment_results,
                 variations_df,
@@ -913,7 +1020,16 @@ def importance_assessment(args, out_dirs):
             )
 
         if parsed_args["random_perturbations_importance"]:
-            ut.print_log(parsed_args["log_file"], "[WARNING] Random perturbations importance analysis is not implemented yet.")
+            ut.print_log(parsed_args["log_file"], "[INFO] Running random-vs-fixed perturbations importance analysis")
+            _ = run_random_vs_fixed_perturbations_importance(
+                sbml_model=sbml_model,
+                knocked_ids=knocked_ids,
+                selections=selections,
+                min_ss_time=min_ss_time,
+                random_variations_df=variations_df,
+                args=parsed_args,
+                out_dirs=out_dirs,
+            )
             
 
         # Normalize with asinh to better visualize the differences
@@ -963,4 +1079,23 @@ def importance_assessment(args, out_dirs):
             return_signed=True
         )
 
-        ut.print_log(parsed_args["log_file"], f"Variations: \n{variations}")
+        # Save the CSV
+        variations.to_csv(os.path.join(out_dirs['csv'], "variations_no_perturbations.csv"))
+
+        # Plot the heatmap
+        colnames_to_index = {}
+        for i, el in enumerate(original_simulation_data[0].columns):
+            if el == "time":
+                continue
+            colnames_to_index[el] = i
+
+        plt_ut.plot_heatmap(
+            variations,
+            colnames_to_index=colnames_to_index,
+            x_labels=variations.columns,
+            y_labels=variations.index,
+            title="Relative variations (log ratio) without perturbations",
+            img_name="log_ratio_variations_no_perturbations_heatmap.png",
+            save_path=out_dirs['images'],
+            log_file=parsed_args["log_file"]
+        )

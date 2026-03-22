@@ -1676,12 +1676,10 @@ def get_relative_variations_log_ratio(
                         f"Column mismatch at perturbation index {c} for knocked species '{knocked_species}'. "
                         f"Missing in knocked: {missing_in_ko}. Missing in original: {missing_in_orig}."
                     )
-            # Clip values to epsilon to avoid log(0) issues
-            ss_ko = ss_ko.loc[:, ss_orig.columns].clip(lower=epsilon)
-            ss_orig = ss_orig.loc[:, ss_orig.columns].clip(lower=epsilon)
 
             # Compute log-ratio for this perturbation
-            lr = log_fn(ss_ko.to_numpy() / ss_orig.to_numpy())
+            lr = log_fn(ss_ko.to_numpy() + epsilon) - log_fn(ss_orig.to_numpy() + epsilon)
+            
             log_ratios.append(pd.DataFrame(lr, columns=ss_orig.columns))
 
         # Concatenate log-ratios across perturbations for this knocked species

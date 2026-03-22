@@ -110,7 +110,7 @@ def _add_perturbation_args(parser):
         help="Preserve the input nodes from being analysed",
     )
     parser.add_argument(
-        "--fixed-perturbations", nargs="+",
+        "--fixed-perturbations", nargs="+", type=float,
         help="Perturbation percentages to use in fixed samples combination "
              "(WARNING: The number of samples will be equal to the number of parameters)",
     )
@@ -196,7 +196,7 @@ def _build_importance_assessment_parser(subparsers):
         help="Run the analysis using fixed perturbations",
     )
     perturbation_group.add_argument(
-        "--fixed-perturbations", nargs="+",
+        "--fixed-perturbations", nargs="+", type=float,
         help="Perturbation percentages to use in fixed samples combination "
              "(WARNING: The number of samples will be equal to the number of parameters)",
     )
@@ -205,10 +205,9 @@ def _build_importance_assessment_parser(subparsers):
         help="Run the analysis on the importance of using perturbations for the model",
     )
     perturbation_group.add_argument(
-        "--random-perturbations-importance", nargs="+", default="-20 -15 -10 10 15 20",
-        help="Variation percentages for fixed-vs-random perturbation comparison "
-             "(e.g. --random-perturbations-importance -20 -15 -10 10 15 20). "
-             "If omitted, the analysis is skipped.",
+        "--random-perturbations-importance", action="store_true", default=False,
+        help="Run fixed-vs-random perturbation comparison. "
+             "Uses values passed in --fixed-perturbations.",
     )
 
     # -- Shapley value --
