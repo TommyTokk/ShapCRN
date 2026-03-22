@@ -89,7 +89,7 @@ def knockin_reaction(args, out_dirs):
 
     # Save the modified model
     model_dir = parsed_args["model_dir"]
-    input_file = os.path.basename(parsed_args["input_path"])
+    input_file = os.path.basename(parsed_args["model_path"])
     operation_name = f"ki_{parsed_args['target_reaction']}"
 
     ut.print_log(parsed_args["log_file"], operation_name)

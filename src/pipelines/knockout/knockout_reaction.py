@@ -14,7 +14,7 @@ def parse_args(args):
 
     model_dir = args.model_dir
 
-    log_file = args.log_file
+    log_file = args.log
 
     parsed_args = {
         "input_path": input_path,
