@@ -1,5 +1,18 @@
 # KOShapleyValueForCRNs
 
+<p align="right">
+  <br><br>
+  <br><br>
+  There is no learning without having to pose a question.<br>
+  And a question requires doubt.<br>
+  — <b>Richard Feynman</b>
+  <br><br>
+  <br><br>
+</p>
+
+
+## Introduction
+
 KOShapleyValueForCRNs is a command-line application for studying SBML biochemical reaction-network models through simulation and controlled perturbations. It is designed to support both exploratory analysis and reproducible experiments: you can run model dynamics over time, inspect behavior near steady state, generate publication-friendly outputs (CSV and plots), and compare how system behavior changes when species or reactions are altered.
 
 Beyond plain simulation, the project provides analysis pipelines to quantify influence and robustness at network level. In practice, this includes knockout/knockin workflows, Shapley-style importance assessment (with optional random or fixed perturbation scenarios), and Sobol-based global sensitivity analysis for selected targets. The file `src/mainV2.py` serves as the reference CLI example that orchestrates these capabilities end to end.
@@ -232,3 +245,15 @@ python -m src.mainV2 knockin_reaction models/KnockinModelV2.xml R1_MassAction_Ex
 - `src/mainV2.py`: reference CLI example and pipeline orchestration
 - `models/`: sample SBML models
 - `results/`: default output directory
+
+## Acknowledgments
+<p align="right">
+  <br><br>
+  <br><br>
+  To Aurora<br>
+  Thank you for your constant support, encouragement, and guidance.<br>
+  This work wouldn't be what it is without you.
+  <br><br>
+  <br><br>
+</p>
+<hr>
