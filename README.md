@@ -15,7 +15,7 @@
 
 ShapCRN is a command-line application for studying SBML biochemical reaction-network models through simulation and controlled perturbations. It is designed to support both exploratory analysis and reproducible experiments: you can run model dynamics over time, inspect behavior near steady state, generate publication-friendly outputs (CSV and plots), and compare how system behavior changes when species or reactions are altered.
 
-Beyond plain simulation, the project provides analysis pipelines to quantify influence and robustness at network level. In practice, this includes knockout/knockin workflows, Shapley-style importance assessment (with optional random or fixed perturbation scenarios), and Sobol-based global sensitivity analysis for selected targets. The file `src/shapcrn/examples/mainV2.py` is an example runner that shows how to orchestrate these capabilities end to end; it is not the project entry point.
+Beyond plain simulation, the project provides analysis pipelines to quantify influence and robustness at network level. In practice, this includes knockout/knockin workflows, Shapley-style importance assessment (with optional random or fixed perturbation scenarios), and Sobol-based global sensitivity analysis for selected targets. The file `src/shapcrn/examples/mainV2.py` is the CLI runner used by both module execution and the `shapcrn` console command.
 
 ## Table of contents
 
@@ -26,6 +26,7 @@ Beyond plain simulation, the project provides analysis pipelines to quantify inf
 - [Requirements](#requirements)
 - [Quickstart](#quickstart)
 - [Commands](#commands)
+- [Python API](#python-api)
 - [Output structure](#output-structure)
 - [Examples](#examples)
 - [Tips and troubleshooting](#tips-and-troubleshooting)
@@ -59,7 +60,7 @@ The codebase follows a layered structure:
 
 - Example runner layer:
   `src/shapcrn/examples/mainV2.py` demonstrates how to wire commands to pipelines.
-  It is intentionally an example launcher, not a canonical package entry point.
+  It is also the CLI entry implementation used by `python -m ...` and by the `shapcrn` console script.
 - Pipeline layer:
   `src/shapcrn/pipelines/*` contains command-oriented orchestration.
   Each pipeline parses command-specific arguments, coordinates utilities, and writes outputs.
@@ -197,7 +198,7 @@ What it produces:
 
 Python 3.9+ is recommended.
 
-Install dependencies:
+Core runtime dependencies:
 
 - `numpy`
 - `pandas`
@@ -210,7 +211,7 @@ Install dependencies:
 - `seaborn`
 - `plotly`
 
-Example install:
+Install dependencies:
 
 ```bash
 python -m pip install \
@@ -218,19 +219,25 @@ python -m pip install \
   SALib matplotlib seaborn plotly
 ```
 
+Install the package in editable mode from repo root:
+
+```bash
+python -m pip install -e .
+```
+
 ## Quickstart
 
-From the repository root (example runner):
+From the repository root, install the package and check CLI help:
+
+```bash
+python -m pip install -e .
+shapcrn -h
+```
+
+You can also run the module entrypoint directly:
 
 ```bash
 python -m shapcrn.examples.mainV2 -h
-```
-
-After installing the package, you can also use the console entrypoint:
-
-```bash
-shapcrn -h
-```
 
 Run a simulation:
 
@@ -256,6 +263,12 @@ General form:
 python -m shapcrn.examples.mainV2 <command> [options]
 ```
 
+Equivalent console-script form after install:
+
+```bash
+shapcrn <command> [options]
+```
+
 Available commands:
 
 - `simulate`
@@ -274,6 +287,22 @@ Available commands:
   Build and save a model where one reaction is reinforced via reactant replacement strategy.
 - `create_network`
   Build and save a reaction-network graph from the SBML model.
+
+## Python API
+
+Basic imports from the curated top-level API:
+
+```python
+from shapcrn import load_model, load_roadrunner_model, simulate
+from shapcrn import importance_assessment, sensitivity_analysis
+from shapcrn import sbml_io, simulation
+```
+
+For CLI argument parsing and standard output directories:
+
+```python
+from shapcrn import parse_args, setup_output_dirs
+```
 
 ## Output structure
 
@@ -408,10 +437,13 @@ python -m shapcrn.examples.mainV2 knockin_reaction models/KnockinModelV2.xml R1_
 - Add logging to any command with `-l <log_file_path>`.
 - For large perturbation spaces, use `--max-combinations` to cap Cartesian-product runs and avoid RAM saturation.
 - If simulation fails immediately, first run `simulate -h` and verify required options and valid integrator/model values.
+- If you see `ModuleNotFoundError: No module named 'shapcrn'`, run `python -m pip install -e .` from repo root or run commands with `PYTHONPATH=src`.
 
 ## Project layout
 
-- `src/shapcrn/examples/mainV2.py`: example CLI runner and pipeline orchestration (not an entry point)
+- `pyproject.toml`: package metadata and console-script definition
+- `src/shapcrn/`: Python package root
+- `src/shapcrn/examples/mainV2.py`: CLI runner and pipeline orchestration
 - `models/`: sample SBML models
 - `results/`: default output directory
 
