@@ -118,6 +118,78 @@ def load_roadrunner_model(
     return rr_model
 
 
+def _ensure_species_selections(rr_model: rr.RoadRunner, species_ids: list[str]) -> None:
+    """Ensure all species concentrations are present in RoadRunner selections."""
+    selections = rr_model.timeCourseSelections
+    for species_id in species_ids:
+        selection = f"[{species_id}]"
+        if selection not in selections:
+            selections.append(selection)
+    rr_model.timeCourseSelections = selections
+
+
+def get_species_peak_value(
+    sbml_model: libsbml.Model,
+    species_id: str,
+    sim_end_time: float = 60.0,
+    log_file=None,
+) -> float:
+    """
+    Simulate a model and return the maximum simulated value of a species.
+    """
+    if sbml_model.getSpecies(species_id) is None:
+        raise exceptions.InvalidSpeciesError(species_id, sbml_model.getId())
+
+    species_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+
+    rr_model = load_roadrunner_model(sbml_model, log_file=log_file)
+    _ensure_species_selections(rr_model, species_ids)
+
+    results, _, colnames = simulate(rr_model, end_time=sim_end_time, log_file=log_file)
+    results_df = pd.DataFrame(results, columns=colnames)
+
+    species_col = f"[{species_id}]"
+    if species_col not in results_df.columns:
+        raise exceptions.ModelError(
+            f"Species selection '{species_col}' not found in simulation results."
+        )
+
+    return float(results_df[species_col].max())
+
+
+def get_reactants_peak_values(
+    sbml_model: libsbml.Model,
+    reaction: libsbml.Reaction,
+    sim_end_time: float = 60.0,
+    log_file=None,
+) -> list[float]:
+    """
+    Simulate a model and return the maximum simulated values of reaction reactants.
+    """
+    if reaction is None:
+        raise exceptions.InvalidReactionError("None", sbml_model.getId())
+
+    reactants = [r.getSpecies() for r in reaction.getListOfReactants()]
+    species_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+
+    rr_model = load_roadrunner_model(sbml_model, log_file=log_file)
+    _ensure_species_selections(rr_model, species_ids)
+
+    results, _, colnames = simulate(rr_model, end_time=sim_end_time, log_file=log_file)
+    results_df = pd.DataFrame(results, columns=colnames)
+
+    reactant_values = []
+    for reactant_id in reactants:
+        reactant_col = f"[{reactant_id}]"
+        if reactant_col not in results_df.columns:
+            raise exceptions.ModelError(
+                f"Reactant selection '{reactant_col}' not found in simulation results."
+            )
+        reactant_values.append(float(results_df[reactant_col].max()))
+
+    return reactant_values
+
+
 # KEEP
 def simulate(
     rr_model: rr.RoadRunner,

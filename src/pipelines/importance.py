@@ -6,10 +6,10 @@ import os
 from src.utils import utils as ut
 from src.utils.sbml import io as sbml_io
 from src.utils.sbml import utils as sbml_ut
-from src.utils.sbml import reactions as sbml_react
 from src.utils import simulation as sim_ut
 from src.utils import plot as plt_ut
 from src.utils import species as species_ut
+import src.utils.sensitivity as sens_ut
 
 
 payoff_functions = {
@@ -132,8 +132,9 @@ def model_preparation(args):
 
     log_file = args["log_file"]
 
-    sbml_doc = sbml_io.load_model(args["input_path"])
-    sbml_model = sbml_react.split_all_reversible_reactions(sbml_doc.getModel(), args['log_file'])
+    _, sbml_model = sbml_io.load_and_prepare_model(
+        args["input_path"], log_file=args["log_file"]
+    )
 
     species_list = [s.getId() for s in species_ut.get_list_of_species(sbml_model)]
 
@@ -329,80 +330,6 @@ def run_shap_analysis(original_data, knocked_data, n_combinations, n_input_ids, 
     return shap_values
 
 
-def _lins_ccc(x: np.ndarray, y: np.ndarray) -> float:
-    """
-    Lin's Concordance Correlation Coefficient (CCC).
-
-    Measures agreement between two sets of measurements of the same quantity,
-    combining precision (Pearson ρ) and accuracy (bias correction).
-
-        CCC = 2 · Cov(x, y) / (Var(x) + Var(y) + (μ_x − μ_y)²)
-
-    Returns NaN when either vector has fewer than 2 valid observations.
-
-    References
-    ----------
-    Lin, L. I-K. (1989). "A Concordance Correlation Coefficient to Evaluate
-    Reproducibility." *Biometrics*, 45(1), 255–268.
-    """
-    if len(x) < 2 or len(y) < 2:
-        return np.nan
-    mx, my = np.mean(x), np.mean(y)
-    sx2 = np.var(x, ddof=1)
-    sy2 = np.var(y, ddof=1)
-    if sx2 == 0.0 and sy2 == 0.0:
-        return 1.0 if np.isclose(mx, my) else 0.0
-    sxy = np.cov(x, y, ddof=1)[0, 1]
-    return float(2.0 * sxy / (sx2 + sy2 + (mx - my) ** 2))
-
-
-def _benjamini_hochberg(pvals: np.ndarray, alpha: float = 0.05):
-    """
-    Benjamini–Hochberg procedure for controlling the False Discovery Rate.
-
-    Parameters
-    ----------
-    pvals : np.ndarray
-        1-D array of raw p-values.
-    alpha : float
-        Target FDR level (default 0.05).
-
-    Returns
-    -------
-    rejected : np.ndarray[bool]
-        Boolean mask — True where the null hypothesis is rejected after
-        BH correction.
-    adjusted : np.ndarray[float]
-        BH-adjusted p-values (capped at 1.0).
-
-    References
-    ----------
-    Benjamini, Y. & Hochberg, Y. (1995). "Controlling the False Discovery
-    Rate: A Practical and Powerful Approach to Multiple Testing."
-    *Journal of the Royal Statistical Society B*, 57(1), 289–300.
-    """
-    m = len(pvals)
-    if m == 0:
-        return np.array([], dtype=bool), np.array([], dtype=float)
-
-    order = np.argsort(pvals)
-    sorted_p = pvals[order]
-
-    # BH-adjusted p-values: p_adj_i = min(p_i * m / rank_i, 1.0)
-    # enforced to be monotonically non-decreasing from the bottom up
-    adjusted = np.minimum(sorted_p * m / np.arange(1, m + 1), 1.0)
-    # enforce monotonicity (cumulative minimum from the right)
-    for i in range(m - 2, -1, -1):
-        adjusted[i] = min(adjusted[i], adjusted[i + 1])
-
-    # un-sort
-    adjusted_unsorted = np.empty(m)
-    adjusted_unsorted[order] = adjusted
-
-    rejected = adjusted_unsorted <= alpha
-    return rejected, adjusted_unsorted
-
-
 def assess_perturbation_importance(
     original_data, knocked_data, alpha=0.05, min_wilcoxon_n=6, log_file=None
 ):
@@ -581,7 +508,7 @@ def assess_perturbation_importance(
     b_flat = baseline_effects.to_numpy().flatten()
     p_flat = perturbation_median_effects.to_numpy().flatten()
     valid = ~(np.isnan(b_flat) | np.isnan(p_flat))
-    lins_ccc = _lins_ccc(b_flat[valid], p_flat[valid])
+    lins_ccc = sens_ut.lins_ccc(b_flat[valid], p_flat[valid])
 
     # ── 5. CV across perturbations ──────────────────────────────────────
     cv_rows = []
@@ -643,7 +570,7 @@ def assess_perturbation_importance(
 
     if n_tests > 0:
         raw_pvals_arr = np.array(raw_pvals_list)
-        bh_rejected, bh_adjusted = _benjamini_hochberg(raw_pvals_arr, alpha)
+        bh_rejected, bh_adjusted = sens_ut.benjamini_hochberg(raw_pvals_arr, alpha)
 
         for idx, (sp, col) in enumerate(pval_coords):
             bh_pval_matrix.loc[sp, col] = bh_adjusted[idx]

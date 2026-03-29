@@ -1,9 +1,7 @@
 import os
-import pandas as pd
 
 from src.utils import utils as ut
 from src.utils.sbml import io as sbml_io
-from src.utils.sbml import reactions as sbml_react
 from src.utils.sbml import knock as sbml_knock
 import src.utils.simulation as sim_ut
 
@@ -24,65 +22,30 @@ def parse_args(args):
     }
     return parsed_args
 
-def model_preparation(args):
-    sbml_doc = sbml_io.load_model(args["model_path"])
-    sbml_model = sbml_react.split_all_reversible_reactions(sbml_doc.getModel(), args["log_file"])
-
-    ut.print_log(args["log_file"], f"Model loaded and prepared: {args['model_path']}")
-
-    return sbml_doc, sbml_model
-
-def prepare_model_name(sbml_model, target_reaction=None):
-    model_name = sbml_model.getName() if sbml_model.isSetName() else sbml_model.getId()
-
-    complete_name = f"{model_name}_ki_{target_reaction}" if target_reaction is not None else f"{model_name}_edited"
-
-    return complete_name
-
-def create_new_vals(sbml_model, model_reaction, log_file = None):
-    
-    reactants = [r.getId() for r in model_reaction.getListOfReactants()]
-    species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
-
-    # Simulate the model to get the fluxes
-    rr = sim_ut.load_roadrunner_model(sbml_model, log_file=log_file)
-
-    # Setting the selections
-    selections = rr.timeCourseSelections
-    for s in species_list:
-        if f"[{s}]" not in selections:
-            selections.append(f"[{s}]")
-
-    rr.timeCourseSelections = selections
-
-    res, _, colnames = sim_ut.simulate(rr, end_time=60, log_file=log_file)
-
-    # Convert to dataframe
-    res_df = pd.DataFrame(res, columns=colnames)
-
-    # Retrieve the max values for the reactans
-    reactants_new_vals = [res_df[f"[{r}]"].max() for r in reactants]
-
-    return reactants_new_vals
-
-
 def knockin_reaction(args, out_dirs):
     parsed_args = parse_args(args)
 
-    sbml_doc, sbml_model = model_preparation(parsed_args)
+    _, sbml_model = sbml_io.load_and_prepare_model(
+        parsed_args["model_path"], log_file=parsed_args["log_file"]
+    )
+    ut.print_log(parsed_args["log_file"], f"Model loaded and prepared: {parsed_args['model_path']}")
 
     if sbml_model.getReaction(parsed_args["target_reaction"]) is None:
         ut.print_log(parsed_args["log_file"], f"[WARNING]Target reaction '{parsed_args['target_reaction']}' not found in the model. \nNo changes will be made.")
         return sbml_model
 
-    complete_name = prepare_model_name(sbml_model, parsed_args["target_reaction"])
-
-    new_vals = create_new_vals(sbml_model, sbml_model.getReaction(parsed_args["target_reaction"]), log_file=parsed_args["log_file"])
+    target_reaction = sbml_model.getReaction(parsed_args["target_reaction"])
+    new_vals = sim_ut.get_reactants_peak_values(
+        sbml_model,
+        target_reaction,
+        sim_end_time=60,
+        log_file=parsed_args["log_file"],
+    )
 
     # Apply the knockin
     modified_model = sbml_knock.knockin_reaction(
         sbml_model,
-        parsed_args["target_reaction"],
+        target_reaction,
         new_vals,
         parsed_args["log_file"]
     )

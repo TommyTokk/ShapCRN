@@ -9,7 +9,6 @@ import src.utils.sensitivity as sens_ut
 from src.utils import utils as ut
 from src import exceptions as ex
 from src.utils.sbml import io as sbml_io
-from src.utils.sbml import reactions as sbml_react
 from src.utils.sbml import utils as sbml_ut
 from src.utils import species as sbml_species
 from src.utils import simulation as sim_ut
@@ -49,12 +48,8 @@ def model_preparation(args):
     model_path = args["model_path"]
     input_species_ids = args["input_species_ids"]
 
-    # Load the model
-    sbml_doc = sbml_io.load_model(model_path)
-
-    # Get the model from the document
-    model = sbml_react.split_all_reversible_reactions(
-        sbml_doc.getModel(), args["log_file"]
+    sbml_doc, model = sbml_io.load_and_prepare_model(
+        model_path, log_file=args["log_file"]
     )
 
     # Check if the input species exist in the model
@@ -347,5 +342,4 @@ def sensitivity_analysis(args, out_dirs):
         results_df.to_csv(os.path.join(out_dirs["csv"], "sensitivity_comparison.csv"), index=False)
         ut.print_log(parsed_args["log_file"], f"[INFO] Sensitivity comparison results saved to: {out_dirs['csv']}")
             
-
 

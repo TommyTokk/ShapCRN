@@ -3,6 +3,7 @@ import libsbml
 
 from src.utils.utils import print_log
 from src.utils.sbml.helpers import get_sbml_as_xml
+from src.utils.sbml import reactions as sbml_react
 
 
 def load_model(model_file_path: str) -> libsbml.SBMLDocument:
@@ -24,6 +25,35 @@ def load_model(model_file_path: str) -> libsbml.SBMLDocument:
     document = reader.readSBMLFromFile(model_file_path)
 
     return document
+
+
+def load_and_prepare_model(
+    model_file_path: str, split_reversible: bool = True, log_file=None
+) -> tuple[libsbml.SBMLDocument, libsbml.Model]:
+    """
+    Load an SBML model and optionally split reversible reactions.
+
+    Parameters
+    ----------
+    model_file_path : str
+        Path to the SBML model file.
+    split_reversible : bool, optional
+        If True, split all reversible reactions into forward/reverse reactions.
+    log_file : file-like, optional
+        Optional log handle.
+
+    Returns
+    -------
+    tuple
+        (sbml_document, prepared_model)
+    """
+    sbml_doc = load_model(model_file_path)
+    sbml_model = sbml_doc.getModel()
+
+    if split_reversible:
+        sbml_model = sbml_react.split_all_reversible_reactions(sbml_model, log_file)
+
+    return sbml_doc, sbml_model
 
 
 def save_file(

@@ -47,6 +47,51 @@ def _simulation_worker(args):
     return (i, result)
 
 
+def lins_ccc(x: np.ndarray, y: np.ndarray) -> float:
+    """
+    Lin's Concordance Correlation Coefficient.
+    """
+    if len(x) < 2 or len(y) < 2:
+        return np.nan
+
+    mx, my = np.mean(x), np.mean(y)
+    sx2 = np.var(x, ddof=1)
+    sy2 = np.var(y, ddof=1)
+
+    if sx2 == 0.0 and sy2 == 0.0:
+        return 1.0 if np.isclose(mx, my) else 0.0
+
+    sxy = np.cov(x, y, ddof=1)[0, 1]
+    return float(2.0 * sxy / (sx2 + sy2 + (mx - my) ** 2))
+
+
+def benjamini_hochberg(pvals: np.ndarray, alpha: float = 0.05):
+    """
+    Benjamini-Hochberg FDR correction.
+
+    Returns
+    -------
+    tuple
+        (rejected_mask, adjusted_pvalues)
+    """
+    m = len(pvals)
+    if m == 0:
+        return np.array([], dtype=bool), np.array([], dtype=float)
+
+    order = np.argsort(pvals)
+    sorted_p = pvals[order]
+
+    adjusted = np.minimum(sorted_p * m / np.arange(1, m + 1), 1.0)
+    for i in range(m - 2, -1, -1):
+        adjusted[i] = min(adjusted[i], adjusted[i + 1])
+
+    adjusted_unsorted = np.empty(m)
+    adjusted_unsorted[order] = adjusted
+
+    rejected = adjusted_unsorted <= alpha
+    return rejected, adjusted_unsorted
+
+
 def get_problem_parameters(
     sbml_model, n_input_species: int, input_species_ids: list, perturbation_range: int = 20, log_file=None
 ) -> dict:
