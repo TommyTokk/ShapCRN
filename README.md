@@ -15,13 +15,14 @@
 
 KOShapleyValueForCRNs is a command-line application for studying SBML biochemical reaction-network models through simulation and controlled perturbations. It is designed to support both exploratory analysis and reproducible experiments: you can run model dynamics over time, inspect behavior near steady state, generate publication-friendly outputs (CSV and plots), and compare how system behavior changes when species or reactions are altered.
 
-Beyond plain simulation, the project provides analysis pipelines to quantify influence and robustness at network level. In practice, this includes knockout/knockin workflows, Shapley-style importance assessment (with optional random or fixed perturbation scenarios), and Sobol-based global sensitivity analysis for selected targets. The file `src/mainV2.py` serves as the reference CLI example that orchestrates these capabilities end to end.
+Beyond plain simulation, the project provides analysis pipelines to quantify influence and robustness at network level. In practice, this includes knockout/knockin workflows, Shapley-style importance assessment (with optional random or fixed perturbation scenarios), and Sobol-based global sensitivity analysis for selected targets. The file `src/examples/mainV2.py` is an example runner that shows how to orchestrate these capabilities end to end; it is not the project entry point.
 
 ## Table of contents
 
 - [Overview](#overview)
+- [Architecture and code map](#architecture-and-code-map)
 - [Main functionalities](#main-functionalities)
-- [Secondary functionalities (brief)](#secondary-functionalities-brief)
+- [Additional functionalities](#additional-functionalities)
 - [Requirements](#requirements)
 - [Quickstart](#quickstart)
 - [Commands](#commands)
@@ -43,17 +44,50 @@ This project lets you load an SBML model and run one of several workflows:
 - `knockin_species`: create and save a modified SBML model where one species is reinforced/activated.
 - `knockin_reaction`: create and save a modified SBML model where one reaction is reinforced/activated.
 
+In a typical run, the flow is:
+
+1. Parse command-line arguments (`src/utils/utils.py`).
+2. Load and prepare SBML (`src/utils/sbml/io.py` + `src/utils/sbml/reactions.py`).
+3. Dispatch to a pipeline (`src/pipelines/...`).
+4. Run simulations/analysis (`src/utils/simulation.py`, `src/utils/sensitivity.py`).
+5. Save artifacts (CSV, plots, reports, edited SBML).
+6. Return logs and outputs under the selected output folder.
+
+## Architecture and code map
+
+The codebase follows a layered structure:
+
+- Example runner layer:
+  `src/examples/mainV2.py` demonstrates how to wire commands to pipelines.
+  It is intentionally an example launcher, not a canonical package entry point.
+- Pipeline layer:
+  `src/pipelines/*` contains command-oriented orchestration.
+  Each pipeline parses command-specific arguments, coordinates utilities, and writes outputs.
+- Utility layer:
+  `src/utils/*` contains reusable logic split by domain:
+  - `src/utils/sbml/`: SBML I/O, reaction preprocessing, and knock operations.
+  - `src/utils/simulation.py`: RoadRunner setup, simulation, perturbation sampling and aggregation helpers.
+  - `src/utils/sensitivity.py`: Sobol setup/execution, convergence checks, and statistics.
+  - `src/utils/plot.py`: static and interactive plotting utilities.
+  - `src/utils/graph.py`: model-to-network conversion and graph rendering.
+  - `src/utils/utils.py`: CLI parser construction, normalization helpers, logging, and shared helpers.
+
+Design intent:
+
+- Keep pipelines thin and scenario-focused.
+- Keep model/math/plot logic reusable in `utils`.
+- Keep output organization consistent across commands (`images/`, `csv/`, `reports/`, `dot/`).
+
 ## Main functionalities
 
-This section focuses on the three core capabilities you requested and maps each one to the main functions in the codebase.
+This section describes the core capabilities and maps them to the main functions in the codebase.
 
 ### 1) Simulate
 
 Main execution path:
 
-- CLI entry: `src/examples/mainV2.py` (command `simulate`)
-- Model loading: `src/utils/sbml/io.py::load_model`
-- Reaction normalization: `src/utils/sbml/reactions.py::split_all_reversible_reactions`
+- Example runner: `src/examples/mainV2.py` (command `simulate`)
+- Model loading and normalization: `src/utils/sbml/io.py::load_and_prepare_model`
 - RoadRunner setup: `src/utils/simulation.py::load_roadrunner_model`
 - Simulation engine: `src/utils/simulation.py::simulate`
 - Steady-state mode (if enabled): `src/utils/simulation.py::simulate_with_steady_state`
@@ -99,21 +133,65 @@ Main execution path:
 
 How species knockin works:
 
-- `create_new_vals(...)` runs a short simulation (`end_time=60`) and uses the target species maximum simulated value as the knock-in value.
+- `get_species_peak_value(...)` runs a short simulation (`end_time=60`) and uses the target species maximum simulated value as the knock-in value.
 - `knockin_species(...)` then sets that value as initial concentration/amount (depending on species representation) and marks the species as fixed (`boundaryCondition=True`, `constant=True`).
 
 How reaction knockin works:
 
-- `create_new_vals(...)` collects max simulated values for each reactant of the target reaction.
+- `get_reactants_peak_values(...)` collects max simulated values for each reactant of the target reaction.
 - `knockin_reaction(...)` creates constant reactant copies with `_KI` suffix, one per original reactant.
 - The target reaction is cloned, its reactants are replaced with these new constant species, and the kinetic law expression is rewritten to reference `_KI` species.
 - The original reaction is removed and the modified cloned reaction is added back to the model.
 
-## Secondary functionalities (brief)
+## Additional functionalities
 
-- Network generation: `src/pipelines/network.py::create_model_netwrok` loads the model, builds a species/reaction graph with `src/utils/graph.py::get_network_from_sbml`, and renders PNG/DOT files via `plot_network`.
-- Importance assessment: `src/pipelines/importance.py` runs Shapley-style influence analysis for species under knockout/knockin scenarios, with optional perturbation sampling.
-- Sensitivity analysis: `src/pipelines/sensitivity_analysis.py` computes Sobol-based global sensitivity metrics for selected species/targets.
+### Importance assessment
+
+Main path:
+
+- Pipeline: `src/pipelines/importance.py::importance_assessment`
+- Model setup: `model_preparation(...)`
+- Sampling setup: `generate_samples(...)`
+- Baseline simulation: `simulate_original_model(...)`
+- KO/KI simulation batch: `simulate_knocked_data(...)`
+- Payoff/Shapley: `run_shap_analysis(...)`
+- Perturbation diagnostics: `assess_perturbation_importance(...)` and report generation
+
+What it produces:
+
+- Variation matrices (log-ratio based)
+- Shapley matrices (raw and normalized for plotting)
+- Heatmaps and optional text reports
+- Optional fixed-vs-random perturbation comparison outputs
+
+### Sensitivity analysis
+
+Main path:
+
+- Pipeline: `src/pipelines/sensitivity_analysis.py::sensitivity_analysis`
+- Problem specification: `src/utils/sensitivity.py::get_problem_parameters`
+- Sobol sampling/analysis: SALib (`saltelli.sample`, `sobol.analyze`)
+- Batch simulation backend: `src/utils/sensitivity.py::run_simulation_with_params`
+- Optional convergence workflow: `run_convergence_analysis(...)` + convergence plots
+
+What it produces:
+
+- Sobol indices per target species
+- Optional convergence diagnostics and plots
+- Fixed-vs-sampled perturbation comparison CSV (when requested)
+
+### Network generation
+
+Main path:
+
+- Pipeline: `src/pipelines/network.py::create_model_netwrok`
+- Graph extraction: `src/utils/graph.py::get_network_from_sbml`
+- Rendering: `src/utils/graph.py::plot_network`
+
+What it produces:
+
+- Network image (PNG)
+- DOT graph source (`.gv`) for external graph tooling
 
 ## Requirements
 
@@ -142,44 +220,54 @@ python -m pip install \
 
 ## Quickstart
 
-From the repository root:
+From the repository root (example runner):
 
 ```bash
-python -m src.mainV2 -h
+python -m src.examples.mainV2 -h
 ```
 
 Run a simulation:
 
 ```bash
-python -m src.mainV2 simulate models/test.xml -t 120 -o results
+python -m src.examples.mainV2 simulate models/test.xml -t 120 -o results
 ```
 
 Inspect command-specific options:
 
 ```bash
-python -m src.mainV2 simulate -h
-python -m src.mainV2 importance_assessment -h
-python -m src.mainV2 sensitivity_analysis -h
+python -m src.examples.mainV2 simulate -h
+python -m src.examples.mainV2 importance_assessment -h
+python -m src.examples.mainV2 sensitivity_analysis -h
 ```
 
 ## Commands
 
+These commands use the example runner in `src/examples/mainV2.py`.
+
 General form:
 
 ```bash
-python -m src.mainV2 <command> [options]
+python -m src.examples.mainV2 <command> [options]
 ```
 
 Available commands:
 
 - `simulate`
+  Time-course model simulation with optional steady-state termination and plotting.
 - `importance_assessment`
+  Shapley-style influence analysis with knockout/knockin scenarios, optionally with perturbations.
 - `sensitivity_analysis`
+  Global Sobol sensitivity analysis for selected species/targets.
 - `knockout_species`
+  Build and save a model where one species is disabled.
 - `knockout_reaction`
+  Build and save a model where one reaction is disabled.
 - `knockin_species`
+  Build and save a model where one species is fixed to a computed reinforced value.
 - `knockin_reaction`
-- `create_network` (currently a placeholder in `mainV2.py`)
+  Build and save a model where one reaction is reinforced via reactant replacement strategy.
+- `create_network`
+  Build and save a reaction-network graph from the SBML model.
 
 ## Output structure
 
@@ -188,6 +276,7 @@ By default, outputs are written under `./results` in a model-specific folder:
 ```text
 <output>/<model_name>/
 ├── csv/
+├── dot/
 ├── images/
 └── reports/
 ```
@@ -197,7 +286,7 @@ By default, outputs are written under `./results` in a model-specific folder:
 ### 1) Simulate a model (static plot + CSV)
 
 ```bash
-python -m src.mainV2 simulate models/KnockinModelV2.xml \
+python -m src.examples.mainV2 simulate models/KnockinModelV2.xml \
   -t 120 \
   -i cvode \
   -o results
@@ -206,7 +295,7 @@ python -m src.mainV2 simulate models/KnockinModelV2.xml \
 ### 2) Simulate until steady state (interactive HTML plot)
 
 ```bash
-python -m src.mainV2 simulate models/KnockinModelV2.xml \
+python -m src.examples.mainV2 simulate models/KnockinModelV2.xml \
   --steady-state \
   --max-time 2000 \
   --sim-step 10 \
@@ -218,7 +307,7 @@ python -m src.mainV2 simulate models/KnockinModelV2.xml \
 ### 3) Importance assessment (knockout, no perturbations)
 
 ```bash
-python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
+python -m src.examples.mainV2 importance_assessment models/KnockinModelV2.xml \
   --operation knockout \
   --payoff-function last \
   -t 120 \
@@ -228,7 +317,7 @@ python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
 ### 4) Importance assessment with random perturbations
 
 ```bash
-python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
+python -m src.examples.mainV2 importance_assessment models/KnockinModelV2.xml \
   --operation knockout \
   --input-species S1 S2 \
   --use-perturbations \
@@ -243,7 +332,7 @@ python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
 ### 5) Importance assessment with fixed perturbations
 
 ```bash
-python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
+python -m src.examples.mainV2 importance_assessment models/KnockinModelV2.xml \
   --operation knockin \
   --input-species S1 S2 \
   --use-perturbations \
@@ -257,7 +346,7 @@ python -m src.mainV2 importance_assessment models/KnockinModelV2.xml \
 ### 6) Sensitivity analysis (Sobol)
 
 ```bash
-python -m src.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
+python -m src.examples.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
   --input-species S1 S2 \
   --base-samples 1024 \
   --perturbation-range 20 \
@@ -268,7 +357,7 @@ python -m src.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
 ### 7) Sensitivity analysis with convergence check
 
 ```bash
-python -m src.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
+python -m src.examples.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
   --input-species S1 S2 \
   --check-convergence \
   -o results
@@ -277,7 +366,7 @@ python -m src.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
 ### 8) Knock out one species and save edited model
 
 ```bash
-python -m src.mainV2 knockout_species models/KnockinModelV2.xml S1 \
+python -m src.examples.mainV2 knockout_species models/KnockinModelV2.xml S1 \
   --model-dir models \
   -o results
 ```
@@ -285,7 +374,7 @@ python -m src.mainV2 knockout_species models/KnockinModelV2.xml S1 \
 ### 9) Knock out one reaction and save edited model
 
 ```bash
-python -m src.mainV2 knockout_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
+python -m src.examples.mainV2 knockout_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
   --model-dir models \
   -o results
 ```
@@ -293,7 +382,7 @@ python -m src.mainV2 knockout_reaction models/KnockinModelV2.xml R1_MassAction_E
 ### 10) Knock in one species and save edited model
 
 ```bash
-python -m src.mainV2 knockin_species models/KnockinModelV2.xml S1 \
+python -m src.examples.mainV2 knockin_species models/KnockinModelV2.xml S1 \
   --model-dir models \
   -o results
 ```
@@ -301,7 +390,7 @@ python -m src.mainV2 knockin_species models/KnockinModelV2.xml S1 \
 ### 11) Knock in one reaction and save edited model
 
 ```bash
-python -m src.mainV2 knockin_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
+python -m src.examples.mainV2 knockin_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
   --model-dir models \
   -o results
 ```
@@ -316,7 +405,7 @@ python -m src.mainV2 knockin_reaction models/KnockinModelV2.xml R1_MassAction_Ex
 
 ## Project layout
 
-- `src/mainV2.py`: reference CLI example and pipeline orchestration
+- `src/examples/mainV2.py`: example CLI runner and pipeline orchestration (not an entry point)
 - `models/`: sample SBML models
 - `results/`: default output directory
 
