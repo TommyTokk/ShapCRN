@@ -1,9 +1,9 @@
 import os
 import libsbml
 
-from src.utils.utils import print_log
-from src.utils.sbml.helpers import get_sbml_as_xml
-from src.utils.sbml import reactions as sbml_react
+from shapcrn.utils.utils import print_log
+from shapcrn.utils.sbml.helpers import get_sbml_as_xml
+from shapcrn.utils.sbml import reactions as sbml_react
 
 
 def load_model(model_file_path: str) -> libsbml.SBMLDocument:

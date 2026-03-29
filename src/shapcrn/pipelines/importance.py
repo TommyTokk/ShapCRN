@@ -3,13 +3,13 @@ import pandas as pd
 import numpy as np
 import os
 
-from src.utils import utils as ut
-from src.utils.sbml import io as sbml_io
-from src.utils.sbml import utils as sbml_ut
-from src.utils import simulation as sim_ut
-from src.utils import plot as plt_ut
-from src.utils import species as species_ut
-import src.utils.sensitivity as sens_ut
+from shapcrn.utils import utils as ut
+from shapcrn.utils.sbml import io as sbml_io
+from shapcrn.utils.sbml import utils as sbml_ut
+from shapcrn.utils import simulation as sim_ut
+from shapcrn.utils import plot as plt_ut
+from shapcrn.utils import species as species_ut
+import shapcrn.utils.sensitivity as sens_ut
 
 
 payoff_functions = {

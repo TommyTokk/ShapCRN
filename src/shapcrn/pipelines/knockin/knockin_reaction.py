@@ -1,9 +1,9 @@
 import os
 
-from src.utils import utils as ut
-from src.utils.sbml import io as sbml_io
-from src.utils.sbml import knock as sbml_knock
-import src.utils.simulation as sim_ut
+from shapcrn.utils import utils as ut
+from shapcrn.utils.sbml import io as sbml_io
+from shapcrn.utils.sbml import knock as sbml_knock
+import shapcrn.utils.simulation as sim_ut
 
 def parse_args(args):
     

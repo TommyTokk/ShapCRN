@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 
-from src.utils.utils import print_log
+from shapcrn.utils.utils import print_log
 
 
 # KEEP
@@ -574,5 +574,4 @@ def plot_heatmap(data: pd.DataFrame, y_labels:list, x_labels:list, colnames_to_i
         print(f"Heatmap saved successfully to: {full_file_path}")
 
     return fig, ax
-
 

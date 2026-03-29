@@ -9,7 +9,7 @@ import roadrunner as rr
 from SALib.sample import sobol as sobol_sample
 from scipy import stats
 
-from src.utils.utils import print_log
+from shapcrn.utils.utils import print_log
 
 
 def _simulation_worker(args):

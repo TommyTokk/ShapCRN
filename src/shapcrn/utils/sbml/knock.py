@@ -1,9 +1,9 @@
 import libsbml
 import re
 
-from src.utils.utils import print_log
-from src.utils.sbml.reactions import get_kinetic_type
-from src import exceptions
+from shapcrn.utils.utils import print_log
+from shapcrn.utils.sbml.reactions import get_kinetic_type
+from shapcrn import exceptions
 
 
 def knockout_species(

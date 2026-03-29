@@ -17,12 +17,12 @@ import multiprocessing as mp
 from multiprocessing import Pool
 import datetime
 
-from src import exceptions
-from src.utils.utils import (
+from shapcrn import exceptions
+from shapcrn.utils.utils import (
     print_log,
 )
-from src.utils import plot as plt_ut
-from src.utils.sbml.utils import create_combinations
+from shapcrn.utils import plot as plt_ut
+from shapcrn.utils.sbml.utils import create_combinations
 
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 

@@ -1,5 +1,5 @@
-from src.utils import graph as graph_ut
-from src.utils.sbml import io as sbml_io
+from shapcrn.utils import graph as graph_ut
+from shapcrn.utils.sbml import io as sbml_io
 
 def parse_args(args):
     """
@@ -68,3 +68,8 @@ def create_model_netwrok(args, out_dirs):
         img_name = "network",
         save_dot_dir=dot_output_dir,
     )
+
+
+def create_model_network(args, out_dirs):
+    """Backward-compatible alias with corrected function name."""
+    return create_model_netwrok(args, out_dirs)

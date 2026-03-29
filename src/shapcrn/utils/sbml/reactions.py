@@ -1,10 +1,10 @@
 import libsbml
 import re
 
-from src import exceptions
-from src.utils.utils import print_log
+from shapcrn import exceptions
+from shapcrn.utils.utils import print_log
 
-from src.utils.sbml.helpers import get_nodes_iterator, get_list_of_reactions
+from shapcrn.utils.sbml.helpers import get_nodes_iterator, get_list_of_reactions
 
 
 

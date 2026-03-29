@@ -6,12 +6,12 @@ import libsbml
 import numpy as np
 import itertools
 
-from src import exceptions
-from src.utils.utils import print_log
-import src.utils.sbml.knock as sk
+from shapcrn import exceptions
+from shapcrn.utils.utils import print_log
+import shapcrn.utils.sbml.knock as sk
 
 # Re-exports from helpers for backward compatibility
-from src.utils.sbml.helpers import get_nodes_iterator, Op, get_sbml_as_xml, get_list_of_reactions  # noqa: F401
+from shapcrn.utils.sbml.helpers import get_nodes_iterator, Op, get_sbml_as_xml, get_list_of_reactions  # noqa: F401
 
 
 def create_ki_models(

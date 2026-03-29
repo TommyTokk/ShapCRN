@@ -14,7 +14,7 @@ import os
 
 import sys
 
-from src.exceptions import KOShapleyError
+from shapcrn.exceptions import KOShapleyError
 import roadrunner
 import libsbml
 import numpy as np
@@ -27,12 +27,12 @@ from SALib.analyze import sobol as sobol_analyze
 from SALib.util import ProblemSpec
 
 
-from src.utils.sbml import utils as sbml_ut
-from src.utils import simulation as sim_ut
-from src.utils import graph as nu
-from src.utils import utils as ut
-from src.utils import plot as plt_ut
-from src.utils import sensitivity as sens_ut
+from shapcrn.utils.sbml import utils as sbml_ut
+from shapcrn.utils import simulation as sim_ut
+from shapcrn.utils import graph as nu
+from shapcrn.utils import utils as ut
+from shapcrn.utils import plot as plt_ut
+from shapcrn.utils import sensitivity as sens_ut
 
 
 payoff_functions_map = {

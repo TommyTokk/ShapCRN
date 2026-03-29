@@ -1,7 +1,7 @@
 import networkx as nx
 import os
 
-from src.utils.utils import print_log
+from shapcrn.utils.utils import print_log
 
 
 # ============

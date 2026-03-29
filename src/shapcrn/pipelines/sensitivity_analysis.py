@@ -5,13 +5,13 @@ from SALib.analyze import sobol
 import libsbml
 import pandas as pd
 
-import src.utils.sensitivity as sens_ut
-from src.utils import utils as ut
-from src import exceptions as ex
-from src.utils.sbml import io as sbml_io
-from src.utils.sbml import utils as sbml_ut
-from src.utils import species as sbml_species
-from src.utils import simulation as sim_ut
+import shapcrn.utils.sensitivity as sens_ut
+from shapcrn.utils import utils as ut
+from shapcrn import exceptions as ex
+from shapcrn.utils.sbml import io as sbml_io
+from shapcrn.utils.sbml import utils as sbml_ut
+from shapcrn.utils import species as sbml_species
+from shapcrn.utils import simulation as sim_ut
 
 N_VALUES = [64, 128, 256, 512, 1024]
 
@@ -342,4 +342,3 @@ def sensitivity_analysis(args, out_dirs):
         results_df.to_csv(os.path.join(out_dirs["csv"], "sensitivity_comparison.csv"), index=False)
         ut.print_log(parsed_args["log_file"], f"[INFO] Sensitivity comparison results saved to: {out_dirs['csv']}")
             
-

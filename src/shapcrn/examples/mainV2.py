@@ -6,22 +6,22 @@ import libsbml
 import numpy as np
 import pandas as pd
 
-from src import exceptions as ex
+from shapcrn import exceptions as ex
 
-from src.utils.sbml import utils as sbml_ut
-from src.utils.sbml import io as sbml_io
-from src.utils import simulation as sim_ut
-from src.utils import plot as plt_ut
-from src.utils.sbml import reactions as sbml_reactions
-from src.utils import utils as ut
+from shapcrn.utils.sbml import utils as sbml_ut
+from shapcrn.utils.sbml import io as sbml_io
+from shapcrn.utils import simulation as sim_ut
+from shapcrn.utils import plot as plt_ut
+from shapcrn.utils.sbml import reactions as sbml_reactions
+from shapcrn.utils import utils as ut
 
-from src.pipelines import importance as imp
-from src.pipelines.knockout import knockout_species as ko_species
-from src.pipelines.knockout import knockout_reaction as ko_reaction
-from src.pipelines.knockin import knockin_species as ki_species
-from src.pipelines.knockin import knockin_reaction as ki_reaction
-from src.pipelines import sensitivity_analysis as sens
-from src.pipelines import network as net
+from shapcrn.pipelines import importance as imp
+from shapcrn.pipelines.knockout import knockout_species as ko_species
+from shapcrn.pipelines.knockout import knockout_reaction as ko_reaction
+from shapcrn.pipelines.knockin import knockin_species as ki_species
+from shapcrn.pipelines.knockin import knockin_reaction as ki_reaction
+from shapcrn.pipelines import sensitivity_analysis as sens
+from shapcrn.pipelines import network as net
 
 def main():
     # Parsing the arguments
@@ -128,7 +128,7 @@ def main():
         elif command == "sensitivity_analysis":
             sens.sensitivity_analysis(args, out_dirs)
         elif command == "create_network":
-            net.create_model_netwrok(args, out_dirs)
+            net.create_model_network(args, out_dirs)
         else:
             raise ex.InvalidCommandError(
                 f"Invalid command: '{command}'. Please choose a valid command."
@@ -141,5 +141,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
