@@ -128,6 +128,7 @@ def simulate(
     max_end_time: float = 1000,
     sim_step: int = 5,
     threshold: float = 1e-6,
+    return_df: bool = False,
     log_file=None,
 ) -> tuple:
     """
@@ -155,6 +156,9 @@ def simulate(
         Time step size for each simulation block during steady state detection, by default 5
     threshold : float, optional
         Convergence threshold for steady state detection (max relative change), by default 1e-6
+    return_df : bool, optional
+        If True, return simulation results as a pandas DataFrame (with `colnames` as columns).
+        If False (default), return numpy/roadrunner arrays as before.
     log_file : file, optional
         File object for logging simulation progress, by default None
 
@@ -214,6 +218,7 @@ def simulate(
             block_size=sim_step,
             points_per_block=points_per_block,
             threshold=threshold,
+            return_df=return_df,
         )
 
         if ss_time is not None:
@@ -228,8 +233,11 @@ def simulate(
     else:
         # Standard simulation
         res = rr_model.simulate(start_time, end_time, output_rows)
+        colnames = res.colnames
+        if return_df:
+            res = pd.DataFrame(res, columns=colnames)
 
-        return res, None, res.colnames
+        return res, None, colnames
 
 
 def simulate_with_steady_state(
@@ -241,6 +249,7 @@ def simulate_with_steady_state(
     threshold: float = 1e-12,
     consecutive_checks: int = 3,
     monitor_species: list = None,
+    return_df: bool = False,
     log_file=None,
 ) -> tuple:
     """
@@ -264,6 +273,9 @@ def simulate_with_steady_state(
         Number of consecutive blocks that must meet threshold for steady state, by default 3
     monitor_species : list of str, optional
         Species to monitor for steady state detection. If None, all floating species are monitored, by default None
+    return_df : bool, optional
+        If True, return simulation results as a pandas DataFrame.
+        If False (default), return numpy arrays.
     log_file : file, optional
         Optional log file for debugging output, by default None
 
@@ -392,6 +404,9 @@ def simulate_with_steady_state(
             all_results[i] = all_results[i][1:]
         full_results = np.vstack(all_results)
 
+    if return_df:
+        full_results = pd.DataFrame(full_results, columns=colnames)
+
     return full_results, steady_state_time, colnames
 
 
@@ -404,6 +419,7 @@ def simulate_samples(
     end_time: float = 1000,
     output_rows: int = 100,
     steady_state: bool = False,
+    return_df: bool = False,
 ) -> tuple:
     """
     Simulate a model with a specific input species concentration combination.
@@ -430,6 +446,9 @@ def simulate_samples(
         Number of output rows in the simulation results, by default 100
     steady_state : bool, optional
         If True, simulate until steady state is reached, by default False
+    return_df : bool, optional
+        If True, return simulation results as pandas DataFrame.
+        If False (default), return numpy arrays.
 
     Returns
     -------
@@ -471,6 +490,7 @@ def simulate_samples(
         output_rows,
         steady_state=steady_state,
         max_end_time=max_end_time,
+        return_df=return_df,
     )
 
     return res
@@ -507,6 +527,7 @@ def _simulate_combination_worker(args: tuple) -> tuple:
         end_time,
         max_end_time,
         steady_state,
+        return_df,
     ) = args
 
     rr_local = rr.RoadRunner(sbml_string)
@@ -521,6 +542,7 @@ def _simulate_combination_worker(args: tuple) -> tuple:
         end_time=end_time,
         steady_state=steady_state,
         max_end_time=max_end_time,
+        return_df=return_df,
     )
 
     return index, sim_res, ss_time, colnames
@@ -2220,6 +2242,7 @@ def simulate_combinations(
     end_time: float = 1000,
     max_end_time: float = 1000,
     steady_state: bool = False,
+    return_df: bool = False,
     log_file=None,
     n_processes: int = None,
     max_combinations: int | None = None,
@@ -2253,6 +2276,9 @@ def simulate_combinations(
     steady_state : bool, optional
         If True, simulate until steady state is reached for each combination,
         by default False
+    return_df : bool, optional
+        If True, each simulation result is returned as a pandas DataFrame.
+        If False (default), each result is returned as a numpy array.
     log_file : file, optional
         File object for logging progress and steady-state times, by default None
     n_processes : int, optional
@@ -2338,6 +2364,7 @@ def simulate_combinations(
                 end_time=end_time,
                 steady_state=steady_state,
                 max_end_time=max_end_time,
+                return_df=return_df,
             )
 
             min_ss_time = (
@@ -2375,6 +2402,7 @@ def simulate_combinations(
                     end_time,
                     max_end_time,
                     steady_state,
+                    return_df,
                 )
 
         print_log(
