@@ -23,6 +23,7 @@ from shapcrn.utils.utils import (
 )
 from shapcrn.utils import plot as plt_ut
 from shapcrn.utils.sbml.utils import create_combinations
+from shapcrn.utils import species as species_ut
 
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 
@@ -140,7 +141,7 @@ def get_species_peak_value(
     if sbml_model.getSpecies(species_id) is None:
         raise exceptions.InvalidSpeciesError(species_id, sbml_model.getId())
 
-    species_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+    species_ids = species_ut.get_list_of_species_ids(sbml_model)
 
     rr_model = load_roadrunner_model(sbml_model, log_file=log_file)
     _ensure_species_selections(rr_model, species_ids)
@@ -170,7 +171,7 @@ def get_reactants_peak_values(
         raise exceptions.InvalidReactionError("None", sbml_model.getId())
 
     reactants = [r.getSpecies() for r in reaction.getListOfReactants()]
-    species_ids = [s.getId() for s in sbml_model.getListOfSpecies()]
+    species_ids = species_ut.get_list_of_species_ids(sbml_model)
 
     rr_model = load_roadrunner_model(sbml_model, log_file=log_file)
     _ensure_species_selections(rr_model, species_ids)

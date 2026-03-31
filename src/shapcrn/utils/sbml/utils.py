@@ -9,6 +9,7 @@ import itertools
 from shapcrn import exceptions
 from shapcrn.utils.utils import print_log
 import shapcrn.utils.sbml.knock as sk
+from shapcrn.utils import species as species_ut
 
 # Re-exports from helpers for backward compatibility
 from shapcrn.utils.sbml.helpers import get_nodes_iterator, Op, get_sbml_as_xml, get_list_of_reactions  # noqa: F401
@@ -39,14 +40,16 @@ def create_ki_models(
         A dictionary with target IDs as keys and their corresponding knock-in SBML models as values.
     """
     model_dict = {}
+    species_ids = species_ut.get_list_of_species_ids(sbml_model)
+    reaction_ids = [r.getId() for r in sbml_model.getListOfReactions()]
     for ids in target_ids:
         doc_copy = libsbml.readSBMLFromString(sbml_str)  
         model_copy = doc_copy.getModel()
-        if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
+        if ids in species_ids:
             species_new_value = new_values[target_ids.index(ids)] if new_values else None
             modified_model = sk.knockin_species(model_copy, ids,species_new_value, log_file)
 
-        elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
+        elif ids in reaction_ids:
             modified_model = sk.knockin_reaction(model_copy, ids, log_file)
 
         else:
@@ -81,13 +84,15 @@ def create_ko_models(
         A dictionary with target IDs as keys and their corresponding knockout SBML models as values.
     """
     model_dict = {}
+    species_ids = species_ut.get_list_of_species_ids(sbml_model)
+    reaction_ids = [r.getId() for r in sbml_model.getListOfReactions()]
     for ids in target_ids:
         doc_copy = libsbml.readSBMLFromString(sbml_str)  # rebuild in memory
         model_copy = doc_copy.getModel()
-        if ids in [s.getId() for s in sbml_model.getListOfSpecies()]:
+        if ids in species_ids:
             modified_model = sk.knockout_species(model_copy, ids, log_file)
 
-        elif ids in [r.getId() for r in sbml_model.getListOfReactions()]:
+        elif ids in reaction_ids:
             modified_model = sk.knockout_reaction(model_copy, ids, log_file)
 
         else:
@@ -204,7 +209,7 @@ def generate_species_random_combinations(
     rng = np.random.default_rng(42)
 
     for ts in target_species:
-        species = sbml_model.getListOfSpecies().getElementBySId(ts)
+        species = species_ut.get_species_by_id(sbml_model, ts)
 
         if species is None:
             raise exceptions.ModelError(f"Species {ts} not found in the model.")
@@ -379,7 +384,7 @@ def get_fixed_combinations(
     samples = []
 
     for s_id in input_species:
-        species = sbml_model.getListOfSpecies().getElementBySId(s_id)
+        species = species_ut.get_species_by_id(sbml_model, s_id)
 
         # Get initial concentration/amount using the same logic as generate_species_samples
         if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
@@ -507,15 +512,15 @@ def get_selections(
 
     selections = rr_model.selections
 
+    species_ids = species_ut.get_list_of_species_ids(sbml_model)
+    reaction_ids = [r.getId() for r in sbml_model.getListOfReactions()]
+
     # Check if some target species are reaction
     for ts in target_ids:
         print_log(log_file, f"[GET SELECTIONS]{ts}")
-        if ts in [r.getId() for r in sbml_model.getListOfReactions()]:
+        if ts in reaction_ids:
             selections = selections + [f"{ts}"]
-        elif (
-            ts in [s.getId() for s in sbml_model.getListOfSpecies()]
-            and f"[{ts}]" not in selections
-        ):
+        elif ts in species_ids and f"[{ts}]" not in selections:
             selections = selections + [f"[{ts}]"]
 
     # print_log(log_file, f"[GET SELECTIONS]sel: {selections}")

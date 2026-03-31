@@ -186,7 +186,7 @@ def generate_samples(sbml_model, args):
 
 def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  args):
 
-    species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+    species_list = species_ut.get_list_of_species_ids(sbml_model)
 
     # Load the roadrunner model
     rr = sim_ut.load_roadrunner_model(

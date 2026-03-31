@@ -2,6 +2,7 @@ import networkx as nx
 import os
 
 from shapcrn.utils.utils import print_log
+from shapcrn.utils import species as species_ut
 
 
 # ============
@@ -32,7 +33,7 @@ def get_network_from_sbml(sbml_model, log_file=None):
     DG = nx.DiGraph()
 
     # Creates the species dict for nodes
-    for s in sbml_model.getListOfSpecies():
+    for s in species_ut.get_list_of_species(sbml_model):
         DG.add_node(s.getId(), species=s, label=s.getId(), type="species")
 
     # Creates the reaction dict for nodes

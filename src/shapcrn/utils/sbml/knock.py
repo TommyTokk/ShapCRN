@@ -4,6 +4,7 @@ import re
 from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml.reactions import get_kinetic_type
 from shapcrn import exceptions
+from shapcrn.utils import species as species_ut
 
 
 def knockout_species(
@@ -123,7 +124,7 @@ def knockout_species(
             sbml_model = knockout_reaction(sbml_model, reaction_id, log_file)
 
     # Set the initial concentration to 0.0 and make it constant
-    for species in sbml_model.getListOfSpecies():
+    for species in species_ut.get_list_of_species(sbml_model):
         if species.getId() == target_species_id:
             result = species.setInitialConcentration(0.0)
             result = species.setBoundaryCondition(True)

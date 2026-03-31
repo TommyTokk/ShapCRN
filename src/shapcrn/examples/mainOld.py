@@ -33,6 +33,7 @@ from shapcrn.utils import graph as nu
 from shapcrn.utils import utils as ut
 from shapcrn.utils import plot as plt_ut
 from shapcrn.utils import sensitivity as sens_ut
+from shapcrn.utils import species as species_ut
 
 
 payoff_functions_map = {
@@ -169,11 +170,11 @@ def main():
             # file_name = os.path.basename(args.input_path)
 
             # Get the list of species
-            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+            species_list = species_ut.get_list_of_species_ids(sbml_model)
 
             if args.knocked is None:
                 # If no input species are provided all nodes will be used
-                ids_to_ko = [s.getId() for s in sbml_model.getListOfSpecies()]
+                ids_to_ko = species_ut.get_list_of_species_ids(sbml_model)
             else:
                 # Else only the provided ones will be used
                 ids_to_ko = list(set(species_list).intersection(set(args.knocked)))
@@ -842,7 +843,7 @@ def main():
             input_ids = args.input_species
             all_species_ids = []
 
-            for s in sbml_model.getListOfSpecies():
+            for s in species_ut.get_list_of_species(sbml_model):
                 if not s.getConstant():
                     all_species_ids.append(s.getId())
                 else:
@@ -1057,7 +1058,7 @@ def main():
             # file_name = os.path.basename(args.input_path)
 
             # FOR DEBUG
-            # for specie in sbml_model.getListOfSpecies():
+            # for specie in species_ut.get_list_of_species(sbml_model):
             #     sbml_ut.check_presence(sbml_model, specie.getId(), log_file)
 
             ut.print_log(
@@ -1102,7 +1103,7 @@ def main():
             sbml_model = sbml_ut.split_all_reversible_reactions(sbml_model)
             target_species = args.target_species_id
 
-            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+            species_list = species_ut.get_list_of_species_ids(sbml_model)
 
             params = []
 
@@ -1186,7 +1187,7 @@ def main():
                 )
                 return sbml_model
 
-            species_list = [s.getId() for s in sbml_model.getListOfSpecies()]
+            species_list = species_ut.get_list_of_species_ids(sbml_model)
 
             model_reaction = sbml_model.getReaction(target_reaction_id)
 
