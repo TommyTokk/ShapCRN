@@ -310,35 +310,113 @@ def sensitivity_analysis(args, out_dirs):
                 FIXED_RES[i, j] = sim[-1, s_idx]
                 idx += 1
 
-        # Computing the means and standard deviations for the fixed perturbations (ignoring NaNs)
-        fixed_means = np.nanmean(FIXED_RES, axis=0)
-        fixed_stds = np.nanstd(FIXED_RES, axis=0)
+        # Per-species statistics using only final simulation values.
+        # Non-finite values are dropped so failed/invalid runs do not skew metrics.
+        species_labels = list(valid_idxs.keys())
+        eps = 1e-12
+        rows = []
+        distribution_plot_dir = os.path.join(out_dirs["images"], "distribution_transport")
+        plotted_species_count = 0
 
-        # Computing the means and standard deviations for the sampled perturbations (ignoring NaNs)
-        sampled_means = np.nanmean(RES, axis=0)
-        sampled_stds = np.nanstd(RES, axis=0)
+        for j, species in enumerate(species_labels):
+            fixed_vals = FIXED_RES[:, j]
+            sampled_vals = RES[:, j]
 
-        # Epsilon to prevent division by zero or log(0) for species that don't change
-        epsilon = 1e-10
+            # Keep only finite final values for robust comparisons.
+            fixed_vals = fixed_vals[np.isfinite(fixed_vals)]
+            sampled_vals = sampled_vals[np.isfinite(sampled_vals)]
 
-        # Computing the log ratios of means and standard deviations
-        mean_log_ratios = np.log2((sampled_means + epsilon) / (fixed_means + epsilon))
-        std_log_ratios = np.log2((sampled_stds + epsilon) / (fixed_stds + epsilon))
+            n_fixed = int(fixed_vals.size)
+            n_sampled = int(sampled_vals.size)
 
-        #asinh normalization to handle wide range of values and preserve sign
-        mean_log_ratios = np.arcsinh(mean_log_ratios)
-        std_log_ratios = np.arcsinh(std_log_ratios)
+            fixed_mean = np.mean(fixed_vals) if n_fixed > 0 else np.nan
+            sampled_mean = np.mean(sampled_vals) if n_sampled > 0 else np.nan
 
-        # Collapse to single MAE metrics (using nanmean just in case an entire column was NaN)
-        combined_mean_mae = np.nanmean(np.abs(mean_log_ratios))
-        combined_std_mae = np.nanmean(np.abs(std_log_ratios))
+            # Sample std (ddof=1) estimates spread better than population std for finite samples.
+            fixed_std = np.std(fixed_vals, ddof=1) if n_fixed > 1 else np.nan
+            sampled_std = np.std(sampled_vals, ddof=1) if n_sampled > 1 else np.nan
+
+            fixed_median = np.median(fixed_vals) if n_fixed > 0 else np.nan
+            sampled_median = np.median(sampled_vals) if n_sampled > 0 else np.nan
+
+            fixed_iqr = np.percentile(fixed_vals, 75) - np.percentile(fixed_vals, 25) if n_fixed > 0 else np.nan
+            sampled_iqr = np.percentile(sampled_vals, 75) - np.percentile(sampled_vals, 25) if n_sampled > 0 else np.nan
+
+            # Signed differences: positive means sampled > fixed.
+            delta_mean = sampled_mean - fixed_mean
+            delta_std = sampled_std - fixed_std
+            delta_median = sampled_median - fixed_median
+            delta_iqr = sampled_iqr - fixed_iqr
+
+            # Relative change in mean concentration (%), stabilized around zero baseline.
+            relative_mean_change_pct = (
+                (delta_mean / (abs(fixed_mean) + eps)) * 100.0
+                if np.isfinite(delta_mean)
+                else np.nan
+            )
+
+            # Standardized mean difference (Cohen's d) using pooled variance.
+            pooled_std = np.nan
+            if n_fixed > 1 and n_sampled > 1 and np.isfinite(fixed_std) and np.isfinite(sampled_std):
+                pooled_var = (
+                    ((n_fixed - 1) * (fixed_std ** 2)) + ((n_sampled - 1) * (sampled_std ** 2))
+                ) / (n_fixed + n_sampled - 2)
+                pooled_std = np.sqrt(pooled_var)
+
+            cohen_d = (
+                delta_mean / pooled_std
+                if np.isfinite(pooled_std) and pooled_std > eps
+                else np.nan
+            )
+
+            # Distribution-level shift: Earth Mover distance in original concentration units.
+            distribution_shift_w1 = (
+                ut.wasserstein_1d(fixed_vals, sampled_vals)
+                if n_fixed > 0 and n_sampled > 0
+                else np.nan
+            )
+
+            # Save a transport-style distribution visualization for this species.
+            # It shows fixed/sample marginals and one quantile-based coupling density.
+            plot_path = sens_ut.plot_distribution_transport_map(
+                fixed_vals,
+                sampled_vals,
+                species_name=species,
+                output_dir=distribution_plot_dir,
+                log_file=parsed_args["log_file"],
+            )
+            if plot_path is not None:
+                plotted_species_count += 1
+
+            rows.append(
+                {
+                    "Species": species,
+                    "N_Fixed": n_fixed,
+                    "N_Sampled": n_sampled,
+                    "Fixed_Final_Mean": fixed_mean,
+                    "Fixed_Final_Std": fixed_std,
+                    "Fixed_Final_Median": fixed_median,
+                    "Fixed_Final_IQR": fixed_iqr,
+                    "Sampled_Final_Mean": sampled_mean,
+                    "Sampled_Final_Std": sampled_std,
+                    "Sampled_Final_Median": sampled_median,
+                    "Sampled_Final_IQR": sampled_iqr,
+                    "Delta_Final_Mean": delta_mean,
+                    "Delta_Final_Std": delta_std,
+                    "Delta_Final_Median": delta_median,
+                    "Delta_Final_IQR": delta_iqr,
+                    "Relative_Mean_Change_Pct": relative_mean_change_pct,
+                    "Cohens_d": cohen_d,
+                    "Wasserstein_Distance": distribution_shift_w1,
+                }
+            )
 
         # Save the results to a CSV file
-        results_df = pd.DataFrame({
-            "Species": list(valid_idxs.keys()),
-            "Mean_Log2_Ratio": mean_log_ratios,
-            "Std_Log2_Ratio": std_log_ratios,
-        })
+        results_df = pd.DataFrame(rows)
         results_df.to_csv(os.path.join(out_dirs["csv"], "sensitivity_comparison.csv"), index=False)
         ut.print_log(parsed_args["log_file"], f"[INFO] Sensitivity comparison results saved to: {out_dirs['csv']}")
+        ut.print_log(
+            parsed_args["log_file"],
+            f"[INFO] Distribution transport plots saved for {plotted_species_count}/{len(species_labels)} species in: {distribution_plot_dir}",
+        )
             
