@@ -19,6 +19,8 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from shapcrn.utils.utils import print_log
 
+sns.set_theme(style="whitegrid", context="notebook")
+
 
 # KEEP
 def plot_results(
@@ -32,7 +34,7 @@ def plot_results(
     """
     Visualize simulation results and save as a static PNG image.
 
-    This function creates a matplotlib plot of time-series simulation data with automatic
+    This function creates a seaborn-enhanced time-series plot of simulation data with automatic
     legend layout optimization based on the number of species. The plot is saved to disk
     and the figure is closed to free memory.
 
@@ -108,55 +110,71 @@ def plot_results(
     # Combine directory path and filename
     img_file_path = os.path.join(img_dir_path, img_name)
 
-    time = simulation_data.iloc[:, 0]
+    time_column = simulation_data.columns[0]
 
     # Create figure with adjusted size to accommodate legend
-    plt.figure(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 8))
 
-    for species in species_names:
-        if species in simulation_data.columns:
-            plt.plot(time, simulation_data[species], label=species)
+    plotted_species = [species for species in species_names if species in simulation_data.columns]
+    if plotted_species:
+        plotting_data = simulation_data[[time_column, *plotted_species]].copy()
+        plotting_data = plotting_data.rename(columns={time_column: "Time"})
+        long_data = plotting_data.melt(
+            id_vars="Time", var_name="Species", value_name="Concentration"
+        )
+        sns.lineplot(
+            data=long_data,
+            x="Time",
+            y="Concentration",
+            hue="Species",
+            linewidth=2,
+            ax=ax,
+        )
 
-    plt.xlabel("Time")
-    plt.ylabel("Concentration")
-    plt.title("Model Simulation")
-    plt.grid(True)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Concentration")
+    ax.set_title("Model Simulation")
+    ax.grid(True)
 
     # Calculate the optimal number of columns for the legend
     # based on the number of species to display
-    num_species = len(species_names)
-    if num_species <= 3:
-        ncols = 1
-    elif num_species <= 8:
-        ncols = 2
-    elif num_species <= 15:
-        ncols = 3
-    elif num_species <= 24:
-        ncols = 4
-    else:
-        # For very large models, increase the number of columns
-        ncols = math.ceil(num_species / 10)
+    num_species = len(plotted_species)
+    if num_species > 0:
+        if num_species <= 3:
+            ncols = 1
+        elif num_species <= 8:
+            ncols = 2
+        elif num_species <= 15:
+            ncols = 3
+        elif num_species <= 24:
+            ncols = 4
+        else:
+            # For very large models, increase the number of columns
+            ncols = math.ceil(num_species / 10)
 
-    # Create a legend with multiple columns, positioned below the graph
-    legend = plt.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.15),
-        ncol=ncols,
-        fontsize="small",
-        frameon=True,
-        fancybox=True,
-        shadow=True,
-    )
+        # Create a legend with multiple columns, positioned below the graph
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=ncols,
+            fontsize="small",
+            frameon=True,
+            fancybox=True,
+            shadow=True,
+        )
+    else:
+        ncols = 1
 
     # Dynamically adjust spacing to provide more room for the legend
-    plt.tight_layout()
-    plt.subplots_adjust(bottom=0.2 + 0.02 * math.ceil(num_species / ncols))
+    fig.tight_layout()
+    if num_species > 0:
+        fig.subplots_adjust(bottom=0.2 + 0.02 * math.ceil(num_species / ncols))
 
     # Creating the arrows for the states
 
     # Save the figure with the complete path
-    plt.savefig(img_file_path, bbox_inches="tight")
-    plt.close()  # Close the figure to free memory
+    fig.savefig(img_file_path, bbox_inches="tight")
+    plt.close(fig)  # Close the figure to free memory
 
     print_log(log_file, f"Plot saved to: {img_file_path}")
 
@@ -574,4 +592,3 @@ def plot_heatmap(data: pd.DataFrame, y_labels:list, x_labels:list, colnames_to_i
         print(f"Heatmap saved successfully to: {full_file_path}")
 
     return fig, ax
-

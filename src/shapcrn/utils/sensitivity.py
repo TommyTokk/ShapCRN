@@ -6,10 +6,13 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 import numpy as np
 import roadrunner as rr
+import seaborn as sns
 from SALib.sample import sobol as sobol_sample
 from scipy import stats
 
 from shapcrn.utils.utils import print_log
+
+sns.set_theme(style="whitegrid", context="notebook")
 
 
 def _simulation_worker(args):
@@ -90,6 +93,178 @@ def benjamini_hochberg(pvals: np.ndarray, alpha: float = 0.05):
 
     rejected = adjusted_unsorted <= alpha
     return rejected, adjusted_unsorted
+
+
+def plot_distribution_transport_map(
+    fixed_values: np.ndarray,
+    sampled_values: np.ndarray,
+    species_name: str,
+    output_dir: str = "./results",
+    max_points: int = 500,
+    log_file=None,
+):
+    """
+    Plot a transport-style distribution comparison:
+    - top axis: KDE of fixed distribution (x-axis)
+    - right axis: KDE of sampled distribution (y-axis)
+    - center: joint density obtained from a quantile-based coupling
+
+    Notes
+    -----
+    The true transport plan between two marginals is not unique.
+    Here we use a monotone quantile coupling to build a stable, interpretable
+    2D point cloud that can be visualized as a joint density.
+    """
+    fixed = np.asarray(fixed_values, dtype=float)
+    sampled = np.asarray(sampled_values, dtype=float)
+
+    # Keep only finite values to avoid invalid KDE inputs.
+    fixed = fixed[np.isfinite(fixed)]
+    sampled = sampled[np.isfinite(sampled)]
+
+    if fixed.size < 2 or sampled.size < 2:
+        print_log(
+            log_file,
+            f"[WARNING] Not enough finite values to plot distribution map for {species_name}.",
+        )
+        return None
+
+    # Build equal-length paired samples through quantile matching.
+    # This is one valid coupling between the two marginals.
+    n_pairs = int(min(max_points, max(fixed.size, sampled.size)))
+    quantiles = np.linspace(0.0, 1.0, n_pairs)
+    x_vals = np.quantile(fixed, quantiles)
+    y_vals = np.quantile(sampled, quantiles)
+
+    fig = plt.figure(figsize=(8.2, 8.2))
+    grid = fig.add_gridspec(
+        nrows=4,
+        ncols=4,
+        left=0.10,
+        right=0.94,
+        bottom=0.10,
+        top=0.90,
+        wspace=0.05,
+        hspace=0.05,
+    )
+
+    ax_top = fig.add_subplot(grid[0, :3])
+    ax_joint = fig.add_subplot(grid[1:, :3], sharex=ax_top)
+    ax_right = fig.add_subplot(grid[1:, 3], sharey=ax_joint)
+
+    # Joint density (with fallback to 2D histogram if KDE becomes singular).
+    joint_plotted = False
+    try:
+        sns.kdeplot(
+            x=x_vals,
+            y=y_vals,
+            fill=True,
+            levels=12,
+            thresh=0.05,
+            cmap="Blues",
+            ax=ax_joint,
+        )
+        sns.kdeplot(
+            x=x_vals,
+            y=y_vals,
+            levels=12,
+            color="white",
+            linewidths=0.4,
+            alpha=0.55,
+            ax=ax_joint,
+        )
+        joint_plotted = True
+    except Exception:
+        pass
+
+    if not joint_plotted:
+        try:
+            sns.histplot(
+                x=x_vals,
+                y=y_vals,
+                bins="auto",
+                cmap="Blues",
+                cbar=False,
+                ax=ax_joint,
+            )
+        except Exception:
+            sns.scatterplot(
+                x=x_vals,
+                y=y_vals,
+                s=16,
+                alpha=0.35,
+                color="#2C7FB8",
+                legend=False,
+                ax=ax_joint,
+            )
+
+    # Top marginal (fixed distribution on x).
+    try:
+        sns.kdeplot(
+            x=fixed,
+            color="#2C7FB8",
+            linewidth=1.7,
+            fill=True,
+            alpha=0.28,
+            ax=ax_top,
+        )
+    except Exception:
+        try:
+            sns.histplot(
+                x=fixed,
+                bins="auto",
+                stat="density",
+                color="#2C7FB8",
+                alpha=0.35,
+                ax=ax_top,
+            )
+        except Exception:
+            sns.rugplot(x=fixed, color="#2C7FB8", height=0.2, ax=ax_top)
+
+    # Right marginal (sampled distribution on y).
+    try:
+        sns.kdeplot(
+            y=sampled,
+            color="#1D91C0",
+            linewidth=1.7,
+            fill=True,
+            alpha=0.28,
+            ax=ax_right,
+            warn_singular=False,
+        )
+    except Exception:
+        try:
+            sns.histplot(
+                y=sampled,
+                bins="auto",
+                stat="density",
+                color="#1D91C0",
+                alpha=0.35,
+                ax=ax_right,
+            )
+        except Exception:
+            sns.rugplot(y=sampled, color="#1D91C0", height=0.2, ax=ax_right)
+
+    ax_joint.set_xlabel("Fixed Final Value")
+    ax_joint.set_ylabel("Sampled Final Value")
+    ax_joint.grid(alpha=0.25)
+
+    ax_top.set_ylabel("Density")
+    ax_right.set_xlabel("Density")
+    ax_top.tick_params(axis="x", labelbottom=False)
+    ax_right.tick_params(axis="y", labelleft=False)
+
+    fig.suptitle(f"Distribution Coupling View - {species_name}", fontsize=12, y=0.97)
+
+    safe_species = "".join(
+        c if (c.isalnum() or c in ("-", "_")) else "_" for c in str(species_name).strip()
+    )
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"{safe_species}_distribution_transport.png")
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    return output_path
 
 
 def get_problem_parameters(
@@ -722,71 +897,92 @@ def plot_convergence_single_plot(
     """
     Plot both metrics on a single plot with different line styles and colors.
     """
-    plt.figure(figsize=(12, 8))  # Aumentata l'altezza per la legenda sotto
+    fig, ax = plt.subplots(figsize=(12, 8))
 
     # Color palette
-    colors = plt.cm.tab10(np.linspace(0, 1, len(convergence_informations)))
+    colors = sns.color_palette("tab10", n_colors=max(1, len(convergence_informations)))
 
     for i, (node, info) in enumerate(convergence_informations.items()):
         Ns = sorted(info["max_change"].keys())
         changes = [info["max_change"][N] for N in Ns]
         cis = [info["ci_half_width"][N] for N in Ns]
 
-        # Plot changes (solid line with circles)
-        plt.plot(
-            Ns,
-            changes,
-            "-o",
+        # Plot changes (solid line with circles).
+        sns.lineplot(
+            x=Ns,
+            y=changes,
+            marker="o",
+            linestyle="-",
             color=colors[i],
             label=f"{node} - Max Change",
             linewidth=2,
-            markersize=6,
+            markersize=7,
+            ax=ax,
         )
 
-        # Plot CIs (dashed line with squares)
-        plt.plot(
-            Ns,
-            cis,
-            "--s",
+        # Plot CIs (dashed line with squares).
+        sns.lineplot(
+            x=Ns,
+            y=cis,
+            marker="s",
+            linestyle="--",
             color=colors[i],
             alpha=0.7,
             label=f"{node} - CI Half-Width",
             linewidth=2,
-            markersize=5,
+            markersize=6,
+            ax=ax,
         )
 
-    # Add tolerance lines
-    plt.axhline(
-        tol_change,
+    all_sample_sizes = sorted(
+        {
+            sample_size
+            for info in convergence_informations.values()
+            for sample_size in info["max_change"].keys()
+        }
+    )
+
+    # Add tolerance lines.
+    sns.lineplot(
+        x=all_sample_sizes,
+        y=[tol_change] * len(all_sample_sizes),
         color="gray",
         linestyle="-",
         linewidth=2,
         label="Change Tolerance",
         alpha=0.8,
+        ax=ax,
     )
-    plt.axhline(
-        tol_ci, color="red", linestyle="-", linewidth=2, label="CI Tolerance", alpha=0.8
+    sns.lineplot(
+        x=all_sample_sizes,
+        y=[tol_ci] * len(all_sample_sizes),
+        color="red",
+        linestyle="-",
+        linewidth=2,
+        label="CI Tolerance",
+        alpha=0.8,
+        ax=ax,
     )
 
-    plt.title("Sobol Index Convergence Diagnostics")
-    plt.xlabel("Base sample size N")
-    plt.ylabel("Metric Value")
+    ax.set_title("Sobol Index Convergence Diagnostics")
+    ax.set_xlabel("Base sample size N")
+    ax.set_ylabel("Metric Value")
 
-    # Legenda sotto il grafico con più colonne per compattezza
-    plt.legend(bbox_to_anchor=(0.5, -0.15), loc="upper center", ncol=3)
+    # Compact legend below the plot.
+    ax.legend(bbox_to_anchor=(0.5, -0.15), loc="upper center", ncol=3)
 
-    plt.grid(True, alpha=0.3)
-    plt.yscale("log")
-    plt.tight_layout()
+    ax.grid(True, alpha=0.3)
+    ax.set_yscale("log")
+    fig.tight_layout()
 
     if file_name is None:
         os.makedirs(output_dir, exist_ok=True)
-        plt.savefig(os.path.join(output_dir, "Convergence_analysis.png"), dpi=300, bbox_inches="tight")
+        fig.savefig(os.path.join(output_dir, "Convergence_analysis.png"), dpi=300, bbox_inches="tight")
     else:
         path = os.path.join(output_dir, file_name)
         os.makedirs(path, exist_ok=True)
-        plt.savefig(os.path.join(path, "Convergence_analysis.png"), dpi=300, bbox_inches="tight")
-    plt.close()
+        fig.savefig(os.path.join(path, "Convergence_analysis.png"), dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 
 def statistical_tests(
