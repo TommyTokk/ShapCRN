@@ -221,8 +221,7 @@ def knockin_species(
 
     This function modifies the target species by:
     1. Setting its initial concentration or amount to the specified value
-    2. Renaming it by appending '_KI' suffix to the original ID
-    3. Making it constant (boundary condition = True, constant = True)
+    2. Making it constant (boundary condition = True, constant = True)
 
     The function automatically detects whether the species uses substance units (amounts)
     or concentration values and applies the new value accordingly.
@@ -271,8 +270,6 @@ def knockin_species(
             raise exceptions.InvalidSpeciesError(
                 species_id, sbml_model.getId(), "Cannot access species initial value"
             )
-
-        #species.setId(species_id + "_KI")
 
         # Make the species constant
         species.setBoundaryCondition(True)

@@ -140,8 +140,8 @@ How species knockin works:
 How reaction knockin works:
 
 - `get_reactants_peak_values(...)` collects max simulated values for each reactant of the target reaction.
-- `knockin_reaction(...)` creates constant reactant copies with `_KI` suffix, one per original reactant.
-- The target reaction is cloned, its reactants are replaced with these new constant species, and the kinetic law expression is rewritten to reference `_KI` species.
+- `knockin_reaction(...)` creates constant reactant copies, one per original reactant.
+- The target reaction is cloned, its reactants are replaced with these new constant species, and the kinetic law expression is rewritten to reference species.
 - The original reaction is removed and the modified cloned reaction is added back to the model.
 
 ## Additional functionalities
