@@ -1,6 +1,6 @@
 import datetime
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, wasserstein_distance
 
 import pandas as pd
 
@@ -9,6 +9,25 @@ import os
 
 import json
 import numpy as np
+
+
+def wasserstein_1d(u_values: np.ndarray, v_values: np.ndarray) -> float:
+    """
+    Compute the 1D Wasserstein-1 (Earth Mover) distance between two samples.
+
+    Parameters
+    ----------
+    u_values : numpy.ndarray
+        First sample array.
+    v_values : numpy.ndarray
+        Second sample array.
+
+    Returns
+    -------
+    float
+        Wasserstein-1 distance.
+    """
+    return float(wasserstein_distance(u_values, v_values))
 
 
 
