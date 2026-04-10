@@ -4,7 +4,7 @@ import re
 from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml.reactions import get_kinetic_type
 from shapcrn import exceptions
-from shapcrn.utils import species as species_ut
+from shapcrn.utils.sbml import species as species_ut
 
 
 def knockout_species(

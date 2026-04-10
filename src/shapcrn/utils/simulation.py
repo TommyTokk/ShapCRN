@@ -23,7 +23,7 @@ from shapcrn.utils.utils import (
 )
 from shapcrn.utils import plot as plt_ut
 from shapcrn.utils.sbml.utils import create_combinations
-from shapcrn.utils import species as species_ut
+from shapcrn.utils.sbml import species as species_ut
 
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 

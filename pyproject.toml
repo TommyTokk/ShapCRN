@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-shapcrn = "shapcrn.examples.mainV2:main"
+shapcrn = "shapcrn.examples.usage_example:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

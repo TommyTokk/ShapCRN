@@ -8,7 +8,8 @@ from shapcrn.utils.sbml import io as sbml_io
 from shapcrn.utils.sbml import utils as sbml_ut
 from shapcrn.utils import simulation as sim_ut
 from shapcrn.utils import plot as plt_ut
-from shapcrn.utils import species as species_ut
+from shapcrn.utils.sbml import species as species_ut
+from shapcrn.utils.sbml import reactions as reactions_ut
 import shapcrn.utils.sensitivity as sens_ut
 
 
@@ -203,7 +204,7 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
 
     # Add also the reactions in the selections if target
     for ts in knocked_ids:
-        if ts in sbml_model.getListOfReactions().getId():
+        if ts in reactions_ut.get_list_of_reactions_ids(sbml_model) and f"{ts}" not in selections:
             selections.append(f"{ts}")
 
     rr.timeCourseSelections = selections

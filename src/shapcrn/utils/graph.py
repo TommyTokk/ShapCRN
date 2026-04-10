@@ -2,7 +2,7 @@ import networkx as nx
 import os
 
 from shapcrn.utils.utils import print_log
-from shapcrn.utils import species as species_ut
+from shapcrn.utils.sbml import species as species_ut
 
 
 # ============

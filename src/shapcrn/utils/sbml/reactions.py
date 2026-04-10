@@ -7,7 +7,37 @@ from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml.helpers import get_nodes_iterator, get_list_of_reactions
 
 
+def get_list_of_reactions(sbml_model: libsbml.Model) -> list:
+    """
+    Retrieve a list of all reactions in the SBML model.
 
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model from which to retrieve reactions
+
+    Returns
+    -------
+    list of libsbml.Reaction
+        A list containing all reactions in the SBML model
+    """
+    return sbml_model.getListOfReactions()
+
+def get_list_of_reactions_ids(sbml_model: libsbml.Model) -> list:
+    """
+    Retrieve a list of all reaction IDs in the SBML model.
+
+    Parameters
+    ----------
+    sbml_model : libsbml.Model
+        The SBML model from which to retrieve reaction IDs
+
+    Returns
+    -------
+    list of str
+        A list containing the IDs of all reactions in the SBML model
+    """
+    return [r.getId() for r in sbml_model.getListOfReactions()]
 
 def get_kinetic_type(
     sbml_model: libsbml.Model, kl_math: libsbml.ASTNode, log_file=None

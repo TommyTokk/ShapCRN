@@ -167,6 +167,17 @@ class InvalidIntegratorError(SimulationError):
 # ANALYSIS-RELATED EXCEPTIONS
 # ============================================================================
 
+class InvalidArgumentError(KOShapleyError):
+    """Raised when an invalid argument is provided to a function."""
+
+    def __init__(self, argument_name, argument_value, reason=None):
+        self.argument_name = argument_name
+        self.argument_value = argument_value
+        self.reason = reason
+        message = f"Invalid argument '{argument_name}': {argument_value}"
+        if reason:
+            message += f" ({reason})"
+        super().__init__(message)
 
 class AnalysisError(KOShapleyError):
     """Base exception for analysis-related errors."""

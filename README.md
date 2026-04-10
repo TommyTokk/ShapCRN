@@ -15,7 +15,7 @@
 
 ShapCRN is a command-line application for studying SBML biochemical reaction-network models through simulation and controlled perturbations. It is designed to support both exploratory analysis and reproducible experiments: you can run model dynamics over time, inspect behavior near steady state, generate publication-friendly outputs (CSV and plots), and compare how system behavior changes when species or reactions are altered.
 
-Beyond plain simulation, the project provides analysis pipelines to quantify influence and robustness at network level. In practice, this includes knockout/knockin workflows, Shapley-style importance assessment (with optional random or fixed perturbation scenarios), and Sobol-based global sensitivity analysis for selected targets. The file `src/shapcrn/examples/mainV2.py` is the CLI runner used by both module execution and the `shapcrn` console command.
+Beyond plain simulation, the project provides analysis pipelines to quantify influence and robustness at network level. In practice, this includes knockout/knockin workflows, Shapley-style importance assessment (with optional random or fixed perturbation scenarios), and Sobol-based global sensitivity analysis for selected targets. The file `src/shapcrn/examples/usage_example.py` is the CLI runner used by both module execution and the `shapcrn` console command.
 
 ## Table of contents
 
@@ -59,7 +59,7 @@ In a typical run, the flow is:
 The codebase follows a layered structure:
 
 - Example runner layer:
-  `src/shapcrn/examples/mainV2.py` demonstrates how to wire commands to pipelines.
+  `src/shapcrn/examples/usage_example.py` demonstrates how to wire commands to pipelines.
   It is also the CLI entry implementation used by `python -m ...` and by the `shapcrn` console script.
 - Pipeline layer:
   `src/shapcrn/pipelines/*` contains command-oriented orchestration.
@@ -87,7 +87,7 @@ This section describes the core capabilities and maps them to the main functions
 
 Main execution path:
 
-- Example runner: `src/shapcrn/examples/mainV2.py` (command `simulate`)
+- Example runner: `src/shapcrn/examples/usage_example.py` (command `simulate`)
 - Model loading and normalization: `src/shapcrn/utils/sbml/io.py::load_and_prepare_model`
 - RoadRunner setup: `src/shapcrn/utils/simulation.py::load_roadrunner_model`
 - Simulation engine: `src/shapcrn/utils/simulation.py::simulate`
@@ -237,30 +237,30 @@ shapcrn -h
 You can also run the module entrypoint directly:
 
 ```bash
-python -m shapcrn.examples.mainV2 -h
+python -m shapcrn.examples.usage_example -h
 
 Run a simulation:
 
 ```bash
-python -m shapcrn.examples.mainV2 simulate models/test.xml -t 120 -o results
+python -m shapcrn.examples.usage_example simulate models/test.xml -t 120 -o results
 ```
 
 Inspect command-specific options:
 
 ```bash
-python -m shapcrn.examples.mainV2 simulate -h
-python -m shapcrn.examples.mainV2 importance_assessment -h
-python -m shapcrn.examples.mainV2 sensitivity_analysis -h
+python -m shapcrn.examples.usage_example simulate -h
+python -m shapcrn.examples.usage_example importance_assessment -h
+python -m shapcrn.examples.usage_example sensitivity_analysis -h
 ```
 
 ## Commands
 
-These commands use the example runner in `src/shapcrn/examples/mainV2.py`.
+These commands use the example runner in `src/shapcrn/examples/usage_example.py`.
 
 General form:
 
 ```bash
-python -m shapcrn.examples.mainV2 <command> [options]
+python -m shapcrn.examples.usage_example <command> [options]
 ```
 
 Equivalent console-script form after install:
@@ -321,7 +321,7 @@ By default, outputs are written under `./results` in a model-specific folder:
 ### 1) Simulate a model (static plot + CSV)
 
 ```bash
-python -m shapcrn.examples.mainV2 simulate models/KnockinModelV2.xml \
+python -m shapcrn.examples.usage_example simulate models/KnockinModelV2.xml \
   -t 120 \
   -i cvode \
   -o results
@@ -330,7 +330,7 @@ python -m shapcrn.examples.mainV2 simulate models/KnockinModelV2.xml \
 ### 2) Simulate until steady state (interactive HTML plot)
 
 ```bash
-python -m shapcrn.examples.mainV2 simulate models/KnockinModelV2.xml \
+python -m shapcrn.examples.usage_example simulate models/KnockinModelV2.xml \
   --steady-state \
   --max-time 2000 \
   --sim-step 10 \
@@ -342,7 +342,7 @@ python -m shapcrn.examples.mainV2 simulate models/KnockinModelV2.xml \
 ### 3) Importance assessment (knockout, no perturbations)
 
 ```bash
-python -m shapcrn.examples.mainV2 importance_assessment models/KnockinModelV2.xml \
+python -m shapcrn.examples.usage_example importance_assessment models/KnockinModelV2.xml \
   --operation knockout \
   --payoff-function last \
   -t 120 \
@@ -352,7 +352,7 @@ python -m shapcrn.examples.mainV2 importance_assessment models/KnockinModelV2.xm
 ### 4) Importance assessment with random perturbations
 
 ```bash
-python -m shapcrn.examples.mainV2 importance_assessment models/KnockinModelV2.xml \
+python -m shapcrn.examples.usage_example importance_assessment models/KnockinModelV2.xml \
   --operation knockout \
   --input-species S1 S2 \
   --use-perturbations \
@@ -367,7 +367,7 @@ python -m shapcrn.examples.mainV2 importance_assessment models/KnockinModelV2.xm
 ### 5) Importance assessment with fixed perturbations
 
 ```bash
-python -m shapcrn.examples.mainV2 importance_assessment models/KnockinModelV2.xml \
+python -m shapcrn.examples.usage_example importance_assessment models/KnockinModelV2.xml \
   --operation knockin \
   --input-species S1 S2 \
   --use-perturbations \
@@ -381,7 +381,7 @@ python -m shapcrn.examples.mainV2 importance_assessment models/KnockinModelV2.xm
 ### 6) Sensitivity analysis (Sobol)
 
 ```bash
-python -m shapcrn.examples.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
+python -m shapcrn.examples.usage_example sensitivity_analysis models/KnockinModelV2.xml \
   --input-species S1 S2 \
   --base-samples 1024 \
   --perturbation-range 20 \
@@ -392,7 +392,7 @@ python -m shapcrn.examples.mainV2 sensitivity_analysis models/KnockinModelV2.xml
 ### 7) Sensitivity analysis with convergence check
 
 ```bash
-python -m shapcrn.examples.mainV2 sensitivity_analysis models/KnockinModelV2.xml \
+python -m shapcrn.examples.usage_example sensitivity_analysis models/KnockinModelV2.xml \
   --input-species S1 S2 \
   --check-convergence \
   -o results
@@ -401,7 +401,7 @@ python -m shapcrn.examples.mainV2 sensitivity_analysis models/KnockinModelV2.xml
 ### 8) Knock out one species and save edited model
 
 ```bash
-python -m shapcrn.examples.mainV2 knockout_species models/KnockinModelV2.xml S1 \
+python -m shapcrn.examples.usage_example knockout_species models/KnockinModelV2.xml S1 \
   --model-dir models \
   -o results
 ```
@@ -409,7 +409,7 @@ python -m shapcrn.examples.mainV2 knockout_species models/KnockinModelV2.xml S1 
 ### 9) Knock out one reaction and save edited model
 
 ```bash
-python -m shapcrn.examples.mainV2 knockout_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
+python -m shapcrn.examples.usage_example knockout_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
   --model-dir models \
   -o results
 ```
@@ -417,7 +417,7 @@ python -m shapcrn.examples.mainV2 knockout_reaction models/KnockinModelV2.xml R1
 ### 10) Knock in one species and save edited model
 
 ```bash
-python -m shapcrn.examples.mainV2 knockin_species models/KnockinModelV2.xml S1 \
+python -m shapcrn.examples.usage_example knockin_species models/KnockinModelV2.xml S1 \
   --model-dir models \
   -o results
 ```
@@ -425,7 +425,7 @@ python -m shapcrn.examples.mainV2 knockin_species models/KnockinModelV2.xml S1 \
 ### 11) Knock in one reaction and save edited model
 
 ```bash
-python -m shapcrn.examples.mainV2 knockin_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
+python -m shapcrn.examples.usage_example knockin_reaction models/KnockinModelV2.xml R1_MassAction_Explicit \
   --model-dir models \
   -o results
 ```
@@ -443,7 +443,7 @@ python -m shapcrn.examples.mainV2 knockin_reaction models/KnockinModelV2.xml R1_
 
 - `pyproject.toml`: package metadata and console-script definition
 - `src/shapcrn/`: Python package root
-- `src/shapcrn/examples/mainV2.py`: CLI runner and pipeline orchestration
+- `src/shapcrn/examples/usage_example.py`: CLI runner and pipeline orchestration
 - `models/`: sample SBML models
 - `results/`: default output directory
 

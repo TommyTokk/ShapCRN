@@ -9,7 +9,7 @@ import itertools
 from shapcrn import exceptions
 from shapcrn.utils.utils import print_log
 import shapcrn.utils.sbml.knock as sk
-from shapcrn.utils import species as species_ut
+from shapcrn.utils.sbml import species as species_ut
 
 # Re-exports from helpers for backward compatibility
 from shapcrn.utils.sbml.helpers import get_nodes_iterator, Op, get_sbml_as_xml, get_list_of_reactions  # noqa: F401

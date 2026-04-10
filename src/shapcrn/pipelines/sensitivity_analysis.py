@@ -10,7 +10,7 @@ from shapcrn.utils import utils as ut
 from shapcrn import exceptions as ex
 from shapcrn.utils.sbml import io as sbml_io
 from shapcrn.utils.sbml import utils as sbml_ut
-from shapcrn.utils import species as sbml_species
+from shapcrn.utils.sbml import species as sbml_species
 from shapcrn.utils import simulation as sim_ut
 
 N_VALUES = [64, 128, 256, 512, 1024]
@@ -142,37 +142,37 @@ def prepare_new_values(sbml_model, valid_elements, log_file = None):
     pass
 
 
-def prompt_user_for_N(problem_specs, log_file=None):
-    """Prompt the user to choose or confirm the number of base samples (N)."""
-    default_N = max(N_VALUES)
-    num_evals = default_N * (2 * problem_specs["num_vars"] + 2)
+# def prompt_user_for_N(problem_specs, log_file=None):
+#     """Prompt the user to choose or confirm the number of base samples (N)."""
+#     default_N = max(N_VALUES)
+#     num_evals = default_N * (2 * problem_specs["num_vars"] + 2)
 
-    ut.print_log(log_file, f"[INFO] Convergence check disabled.")
-    ut.print_log(log_file, f"[INFO] Using default N: {default_N} ({num_evals} model evaluations)")
-    ut.print_log(log_file, f"[INFO] Do you want to use the default N [y/n]?")
+#     ut.print_log(log_file, f"[INFO] Convergence check disabled.")
+#     ut.print_log(log_file, f"[INFO] Using default N: {default_N} ({num_evals} model evaluations)")
+#     ut.print_log(log_file, f"[INFO] Do you want to use the default N [y/n]?")
 
-    if input().strip().lower() == "y":
-        ut.print_log(log_file, f"[INFO] Proceeding with default N: {default_N}")
-        return default_N
+#     if input().strip().lower() == "y":
+#         ut.print_log(log_file, f"[INFO] Proceeding with default N: {default_N}")
+#         return default_N
 
-    ut.print_log(log_file, f"[INFO] Please enter the desired N:")
-    while True:
-        try:
-            user_N = int(input().strip())
-        except ValueError:
-            ut.print_log(log_file, f"[ERROR] Invalid input. Please enter a valid integer.")
-            continue
+#     ut.print_log(log_file, f"[INFO] Please enter the desired N:")
+#     while True:
+#         try:
+#             user_N = int(input().strip())
+#         except ValueError:
+#             ut.print_log(log_file, f"[ERROR] Invalid input. Please enter a valid integer.")
+#             continue
 
-        if user_N <= max(N_VALUES):
-            ut.print_log(log_file, f"[INFO] Proceeding with N: {user_N} ({user_N * (2 * problem_specs['num_vars'] + 2)} model evaluations)")
-            return user_N
+#         if user_N <= max(N_VALUES):
+#             ut.print_log(log_file, f"[INFO] Proceeding with N: {user_N} ({user_N * (2 * problem_specs['num_vars'] + 2)} model evaluations)")
+#             return user_N
 
-        user_evals = user_N * (2 * problem_specs["num_vars"] + 2)
-        ut.print_log(log_file, f"[WARNING] Entered N is greater than the maximum recommended value.")
-        ut.print_log(log_file, f"[INFO] Proceeding with N: {user_N} ({user_evals} model evaluations) [y/n]?")
-        if input().strip().lower() == "y":
-            return user_N
-        ut.print_log(log_file, f"[INFO] Please enter a new N value:")
+#         user_evals = user_N * (2 * problem_specs["num_vars"] + 2)
+#         ut.print_log(log_file, f"[WARNING] Entered N is greater than the maximum recommended value.")
+#         ut.print_log(log_file, f"[INFO] Proceeding with N: {user_N} ({user_evals} model evaluations) [y/n]?")
+#         if input().strip().lower() == "y":
+#             return user_N
+#         ut.print_log(log_file, f"[INFO] Please enter a new N value:")
 
 
 def sensitivity_analysis(args, out_dirs):
@@ -263,7 +263,9 @@ def sensitivity_analysis(args, out_dirs):
             ut.print_log(parsed_args["log_file"], f"[ERROR] To evaluate the difference in sensitivity indices with fixed perturbations, the user must provide a set of fixed perturbations using the '--fixed_perturbations' argument.")
             raise ex.InvalidArgumentError("Fixed perturbations not provided.")
         
-        optimal_N = prompt_user_for_N(problem_specs, log_file=parsed_args["log_file"])
+        # Fall back to default N if convergence check is disabled
+        optimal_N = max(N_VALUES)
+        ut.print_log(parsed_args["log_file"], f"[WARNING] Convergence check disabled. Using default N: {optimal_N} ({optimal_N * (2 * problem_specs['num_vars'] + 2)} model evaluations)")
 
         params = saltelli.sample(problem_specs, optimal_N, calc_second_order=True)
 
