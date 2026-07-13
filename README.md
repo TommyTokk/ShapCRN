@@ -171,7 +171,7 @@ Main path:
 
 - Pipeline: `src/shapcrn/pipelines/sensitivity_analysis.py::sensitivity_analysis`
 - Problem specification: `src/shapcrn/utils/sensitivity.py::get_problem_parameters`
-- Sobol sampling/analysis: SALib (`saltelli.sample`, `sobol.analyze`)
+- Sobol sampling/analysis: SALib (`sobol.sample`, `sobol.analyze`)
 - Batch simulation backend: `src/shapcrn/utils/sensitivity.py::run_simulation_with_params`
 - Optional convergence workflow: `run_convergence_analysis(...)` + convergence plots
 
@@ -196,7 +196,7 @@ What it produces:
 
 ## Requirements
 
-Python 3.9+ is recommended.
+ShapCRN supports Python 3.10, 3.11, and 3.12.
 
 Core runtime dependencies:
 
@@ -210,27 +210,32 @@ Core runtime dependencies:
 - `matplotlib`
 - `seaborn`
 - `plotly`
+- `networkx`
 
-Install dependencies:
+Install the released package:
 
 ```bash
-python -m pip install \
-  numpy pandas scipy scikit-learn python-libsbml libroadrunner \
-  SALib matplotlib seaborn plotly
+python -m pip install shapcrn
 ```
 
-Install the package in editable mode from repo root:
+Network rendering uses PyGraphviz and the Graphviz system package. Install the
+optional Python dependency with:
 
 ```bash
-python -m pip install -e .
+python -m pip install "shapcrn[network]"
+```
+
+For development from a source checkout:
+
+```bash
+python -m pip install -e ".[dev,network]"
 ```
 
 ## Quickstart
 
-From the repository root, install the package and check CLI help:
+After installation, check the CLI:
 
 ```bash
-python -m pip install -e .
 shapcrn -h
 ```
 
@@ -238,11 +243,13 @@ You can also run the module entrypoint directly:
 
 ```bash
 python -m shapcrn.examples.usage_example -h
+```
 
-Run a simulation:
+The following command assumes a source checkout. For an installed package,
+replace the model path with your own SBML file:
 
 ```bash
-python -m shapcrn.examples.usage_example simulate models/test.xml -t 120 -o results
+shapcrn simulate models/KnockinModelV2.xml -t 120 -o results
 ```
 
 Inspect command-specific options:
@@ -255,7 +262,8 @@ python -m shapcrn.examples.usage_example sensitivity_analysis -h
 
 ## Commands
 
-These commands use the example runner in `src/shapcrn/examples/usage_example.py`.
+The `shapcrn` console command is canonical. The historical
+`shapcrn.examples.usage_example` module remains as a compatibility wrapper.
 
 General form:
 
@@ -290,18 +298,36 @@ Available commands:
 
 ## Python API
 
-Basic imports from the curated top-level API:
+The high-level API returns typed result objects and does not write files unless
+an output directory or output path is explicitly supplied:
+
+```python
+from shapcrn import analyze_sensitivity, assess_importance, simulate_model
+
+simulation = simulate_model("model.xml", end_time=120, points=500)
+print(simulation.data.tail())
+
+importance = assess_importance(
+    "model.xml",
+    operation="knockout",
+    input_species=["S1", "S2"],
+    use_perturbations=True,
+    seed=42,
+)
+
+sensitivity = analyze_sensitivity(
+    "model.xml",
+    input_species=["S1", "S2"],
+    base_samples=1024,
+    seed=42,
+)
+```
+
+In-memory SBML helpers and low-level simulation functions remain available:
 
 ```python
 from shapcrn import load_model, load_roadrunner_model, simulate
-from shapcrn import importance_assessment, sensitivity_analysis
-from shapcrn import sbml_io, simulation
-```
-
-For CLI argument parsing and standard output directories:
-
-```python
-from shapcrn import parse_args, setup_output_dirs
+from shapcrn import knockout_species, save_sbml_model
 ```
 
 ## Output structure
@@ -315,6 +341,10 @@ By default, outputs are written under `./results` in a model-specific folder:
 ├── images/
 └── reports/
 ```
+
+Simulation writes `simulation.csv` plus a PNG or HTML plot. Sensitivity writes
+`sobol_indices.csv`, `sobol_interactions.csv`, and a text report; convergence
+and fixed-perturbation artifacts are added only when requested.
 
 ## Examples
 
@@ -385,7 +415,7 @@ python -m shapcrn.examples.usage_example sensitivity_analysis models/KnockinMode
   --input-species S1 S2 \
   --base-samples 1024 \
   --perturbation-range 20 \
-  --operation knockout \
+  --seed 42 \
   -o results
 ```
 
@@ -433,7 +463,7 @@ python -m shapcrn.examples.usage_example knockin_reaction models/KnockinModelV2.
 ## Tips and troubleshooting
 
 - `models/KnockinModelV2.xml` works with the IDs used in these examples (`S1`, `S2`, `R1_MassAction_Explicit`).
-- Start with models in `models/` to validate your setup.
+- The files under `models/` are repository examples and are intentionally not included in PyPI artifacts.
 - Add logging to any command with `-l <log_file_path>`.
 - For large perturbation spaces, use `--max-combinations` to cap Cartesian-product runs and avoid RAM saturation.
 - If simulation fails immediately, first run `simulate -h` and verify required options and valid integrator/model values.
@@ -443,9 +473,15 @@ python -m shapcrn.examples.usage_example knockin_reaction models/KnockinModelV2.
 
 - `pyproject.toml`: package metadata and console-script definition
 - `src/shapcrn/`: Python package root
-- `src/shapcrn/examples/usage_example.py`: CLI runner and pipeline orchestration
+- `src/shapcrn/api.py`: stable programmatic API and result types
+- `src/shapcrn/cli.py`: console command adapter
+- `src/shapcrn/examples/usage_example.py`: compatibility entry point
 - `models/`: sample SBML models
 - `results/`: default output directory
+
+## License
+
+ShapCRN is distributed under the MIT License. See `LICENSE`.
 
 ## Acknowledgments
 <p align="right">

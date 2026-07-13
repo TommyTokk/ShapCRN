@@ -2,7 +2,6 @@ from decimal import *
 import sys
 
 import pandas as pd
-from pandas.io.html import pprint_thing
 from scipy.special import factorial
 from scipy.stats import variation
 
@@ -1018,20 +1017,17 @@ def process_species_multiprocessing(
             print_log(log_file, f"Warning: No knockout model found for species {ts}")
         i += 1
 
+    operation = process_species_samples if use_perturbations else process_species_no_samples
+
+    # Avoid process startup overhead and platform-specific spawn issues for one worker.
+    if max_workers == 1:
+        return [operation(arguments) for arguments in process_args]
+
     # Create and run the pool
     try:
-        # Implement the logic using Pool and imap
-        print_log(log_file, f" Starting pool")
+        print_log(log_file, "Starting pool")
         with Pool(max_workers) as pool:
-            if use_perturbations:
-                # If perturbations required
-                operation = process_species_samples
-            else:
-                # If perturbations not required
-                operation = process_species_no_samples
-
             print_log(log_file, f"[PROCESS] {operation}")
-            # Running the workers
             result = pool.map(operation, process_args)
     except Exception as e:
         raise exceptions.SimulationError(
@@ -1044,7 +1040,7 @@ def process_species_multiprocessing(
 def get_knockout_variation(
     original_model, ko_models: list, colnames: list, log_file=None
 ) -> dict:
-    """
+    r"""
     Calculate variation and relative variation of species with respect to internal species knockout.
 
     This version is used when perturbations are not required. It compares the final steady-state
@@ -2045,7 +2041,7 @@ def get_payoff_vals(
 def get_shapley_values(
     payoff_values: list, n_combinations: int, n_inputs: int, log_file=None
 ) -> pd.DataFrame:
-    """
+    r"""
     Calculate Shapley values from payoff differences across knocked species.
 
     This function computes Shapley values for each species and output metric by aggregating

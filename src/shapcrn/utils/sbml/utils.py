@@ -140,10 +140,11 @@ def reactions_to_dict(reaction_list: list) -> dict:
 # KEEP
 def generate_species_random_combinations(
     sbml_model: libsbml.Model,
-    target_species: list = [],
+    target_species: list | None = None,
     n_samples: int = 5,
-    variation: int = 20,
+    variation: float = 20,
     log_file=None,
+    seed: int | None = None,
 ) -> list:
     """
     Generate random concentration/amount samples for specified species with percentage variation.
@@ -186,7 +187,8 @@ def generate_species_random_combinations(
     The function automatically detects whether species use substance units (amounts)
     or concentration values.
 
-    Random number generation uses numpy's default_rng for reproducibility.
+    Random number generation uses NumPy's ``default_rng``. Pass ``seed`` for
+    reproducible samples.
 
     See Also
     --------
@@ -205,8 +207,9 @@ def generate_species_random_combinations(
     10
     """
     res = []
+    target_species = target_species or []
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(seed)
 
     for ts in target_species:
         species = species_ut.get_species_by_id(sbml_model, ts)

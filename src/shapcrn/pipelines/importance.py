@@ -72,8 +72,10 @@ def parse_args(args):
     num_samples = args.num_samples
     variation_percentage = args.variation
 
-    perturbations_importance = args.perturbations_importance
-    random_perturbations_importance = args.random_perturbations_importance
+    perturbations_importance = getattr(args, "perturbations_importance", False)
+    random_perturbations_importance = getattr(
+        args, "random_perturbations_importance", False
+    )
 
     # Shapley arguments
     payoff_function = args.payoff_function
@@ -159,7 +161,7 @@ def model_preparation(args):
     return {"sbml_model": sbml_model, "knocked_ids": knocked_ids}
 
 
-def generate_samples(sbml_model, args):
+def generate_samples(sbml_model, args, seed=None):
     samples = None
 
     use_perturbations = args["use_perturbations"]
@@ -179,6 +181,7 @@ def generate_samples(sbml_model, args):
                 target_species=args["input_species_ids"],
                 n_samples=args["num_samples"],
                 variation=args["variation_percentage"],
+                seed=seed,
             )
     return samples
 
@@ -215,8 +218,11 @@ def simulate_original_model(sbml_model: libsbml.Model, knocked_ids, samples, arg
         rr,
         end_time=args["sim_time"],
         start_time=0,
+        output_rows=args["ss_sim_points"],
         steady_state=args["use_steady_state"],
         max_end_time=args["ss_max_time"],
+        sim_step=args["ss_sim_steps"],
+        threshold=args["ss_threshold"],
         log_file=args["log_file"],
     )
 

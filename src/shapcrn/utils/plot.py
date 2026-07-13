@@ -8,8 +8,6 @@ import pandas as pd
 
 import os
 
-from pandas.core.generic import pprint_thing  # needed for saving
-
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
@@ -578,17 +576,12 @@ def plot_heatmap(data: pd.DataFrame, y_labels:list, x_labels:list, colnames_to_i
         # Construct full file path
         full_file_path = os.path.join(params["save_path"], params["img_name"])
 
-        # Debug logging
-        print(f"Saving to directory: {params['save_path']}")
-        print(f"File name: {params['img_name']}")
-        print(f"Full file path: {full_file_path}")
-
-        # Verify that the directory exists and the full path is not a directory
-        # if os.path.isdir(full_file_path):
-        #     raise ValueError(f"Cannot save file: '{full_file_path}' is a directory, not a file path")
-
         # Save the figure
-        plt.savefig(full_file_path, bbox_inches="tight", dpi=300)
-        print(f"Heatmap saved successfully to: {full_file_path}")
+        fig.savefig(full_file_path, bbox_inches="tight", dpi=300)
+        print_log(
+            params.get("log_file"), f"Heatmap saved successfully to: {full_file_path}"
+        )
+
+    plt.close(fig)
 
     return fig, ax

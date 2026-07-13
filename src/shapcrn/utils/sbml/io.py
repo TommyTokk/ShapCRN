@@ -1,6 +1,7 @@
 import os
 import libsbml
 
+from shapcrn.exceptions import InvalidModelFormatError
 from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml.helpers import get_sbml_as_xml
 from shapcrn.utils.sbml import reactions as sbml_react
@@ -20,9 +21,19 @@ def load_model(model_file_path: str) -> libsbml.SBMLDocument:
     libsbml.SBMLDocument
         The loaded SBML document.
     """
+    if not os.path.isfile(model_file_path):
+        raise FileNotFoundError(f"SBML model does not exist: {model_file_path}")
+
     reader = libsbml.SBMLReader()
 
     document = reader.readSBMLFromFile(model_file_path)
+
+    if document.getModel() is None:
+        details = "; ".join(
+            document.getError(index).getMessage()
+            for index in range(document.getNumErrors())
+        )
+        raise InvalidModelFormatError(model_file_path, details or None)
 
     return document
 

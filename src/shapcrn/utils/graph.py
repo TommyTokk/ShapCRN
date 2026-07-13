@@ -1,6 +1,7 @@
 import networkx as nx
 import os
 
+from shapcrn.exceptions import NetworkVisualizationError
 from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml import species as species_ut
 
@@ -101,7 +102,7 @@ def all_simple_paths_from_target(G: nx.DiGraph, target, cutoff=None):
         else:
             # Find all simple paths from target to this node
             for path in nx.all_simple_paths(
-                G, source=node, target=target, cutoff=cutoff
+                G, source=target, target=node, cutoff=cutoff
             ):
                 yield path
 
@@ -174,7 +175,14 @@ def plot_network(
     dot_path = os.path.join(save_dot_dir, f"{img_name}.gv")
     try:
         # Convert to Graphviz AGraph
-        A = nx.nx_agraph.to_agraph(graph)
+        try:
+            A = nx.nx_agraph.to_agraph(graph)
+        except ImportError as error:
+            raise NetworkVisualizationError(
+                "Graphviz rendering requires the optional network dependencies. "
+                "Install them with 'pip install shapcrn[network]' and install the "
+                "Graphviz system package."
+            ) from error
 
         # Default node style
         A.node_attr.update(
@@ -230,10 +238,8 @@ def plot_network(
 
     except Exception as e:
         err_msg = f"[ERROR] Failed to plot network: {e}\n"
-        if log_file:
-            log_file.write(err_msg)
-        else:
-            print(err_msg)
+        print_log(log_file, err_msg.rstrip())
+        raise
 
 
 

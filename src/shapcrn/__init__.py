@@ -1,13 +1,19 @@
-"""Public API for the shapcrn package."""
+"""Public API for the ShapCRN package."""
 
 from shapcrn import exceptions
-from shapcrn.pipelines.importance import importance_assessment
-from shapcrn.pipelines.knockin.knockin_reaction import knockin_reaction
-from shapcrn.pipelines.knockin.knockin_species import knockin_species
-from shapcrn.pipelines.knockout.knockout_reaction import knockout_reaction
-from shapcrn.pipelines.knockout.knockout_species import knockout_species
+from shapcrn.api import (
+    ImportanceResult,
+    SensitivityResult,
+    SimulationResult,
+    analyze_sensitivity,
+    assess_importance,
+    knockin_reaction,
+    knockin_species,
+    knockout_reaction,
+    knockout_species,
+    simulate_model,
+)
 from shapcrn.pipelines.network import create_model_network
-from shapcrn.pipelines.sensitivity_analysis import sensitivity_analysis
 from shapcrn.utils import graph, plot, sensitivity, simulation
 from shapcrn.utils.sbml import io as sbml_io
 from shapcrn.utils.sbml import knock as sbml_knock
@@ -21,7 +27,17 @@ from shapcrn.utils.simulation import (
 )
 from shapcrn.utils.utils import parse_args, setup_output_dirs
 
+# Compatibility aliases retained for code written against the pre-release API.
+importance_assessment = assess_importance
+sensitivity_analysis = analyze_sensitivity
+
 __all__ = [
+    "SimulationResult",
+    "ImportanceResult",
+    "SensitivityResult",
+    "simulate_model",
+    "assess_importance",
+    "analyze_sensitivity",
     "importance_assessment",
     "sensitivity_analysis",
     "knockout_species",
