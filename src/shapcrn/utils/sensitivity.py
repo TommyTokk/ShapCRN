@@ -10,6 +10,7 @@ import seaborn as sns
 from SALib.sample import sobol as sobol_sample
 from scipy import stats
 
+from shapcrn.exceptions import InvalidSpeciesError, ModelError
 from shapcrn.utils.utils import print_log
 
 sns.set_theme(style="whitegrid", context="notebook")
@@ -358,7 +359,17 @@ def get_problem_parameters(
     tmp = []
 
     for ins in input_species_ids:
-        conc = sbml_model.getSpecies(ins).getInitialConcentration()
+        species = sbml_model.getSpecies(ins)
+        if species is None:
+            raise InvalidSpeciesError(ins, sbml_model.getId())
+        if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
+            conc = species.getInitialAmount()
+        elif species.isSetInitialConcentration():
+            conc = species.getInitialConcentration()
+        else:
+            raise ModelError(
+                f"Species '{ins}' has neither an initial amount nor concentration"
+            )
 
         # Check for consistency of the initial concentration value
         if conc == 0.0:
@@ -487,19 +498,24 @@ def run_simulation_with_params(
     # Initialize result array
     RES = np.zeros([params.shape[0], len(valid_elements)])
     
-    # Run simulations in parallel
-    with Pool(processes=n_processes) as pool:
-        # Use imap_unordered for better progress tracking
-        results = []
-        for result in pool.imap_unordered(_simulation_worker, args_list, chunksize=10):
-            results.append(result)
-            sys.stdout.write("\r" + " " * 50)  # Clear the line
-            sys.stdout.write(f"\rProcessed {len(results)}/{len(params)} samples")
-            sys.stdout.flush()
-        
-        # Assemble results in correct order
-        for i, result in results:
-            RES[i, :] = result
+    # Run simulations sequentially when requested; this also makes library use safe
+    # in notebooks and other environments where process spawning is restricted.
+    if n_processes == 1:
+        results = [_simulation_worker(arguments) for arguments in args_list]
+    else:
+        with Pool(processes=n_processes) as pool:
+            results = []
+            for result in pool.imap_unordered(
+                _simulation_worker, args_list, chunksize=10
+            ):
+                results.append(result)
+                sys.stdout.write("\r" + " " * 50)
+                sys.stdout.write(f"\rProcessed {len(results)}/{len(params)} samples")
+                sys.stdout.flush()
+
+    # Assemble results in the original Sobol sample order.
+    for i, result in results:
+        RES[i, :] = result
     
     print()  # New line after progress
     return RES

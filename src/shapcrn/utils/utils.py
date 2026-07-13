@@ -220,13 +220,8 @@ def _build_importance_assessment_parser(subparsers):
              "(WARNING: The number of samples will be equal to the number of parameters)",
     )
     perturbation_group.add_argument(
-        "--perturbations-importance", action="store_true", default=False,
-        help="Run the analysis on the importance of using perturbations for the model",
-    )
-    perturbation_group.add_argument(
-        "--random-perturbations-importance", action="store_true", default=False,
-        help="Run fixed-vs-random perturbation comparison. "
-             "Uses values passed in --fixed-perturbations.",
+        "--seed", type=int, default=None,
+        help="Optional random seed for reproducible perturbation samples",
     )
 
     # -- Shapley value --
@@ -241,7 +236,7 @@ def _build_importance_assessment_parser(subparsers):
     _add_simulation_args(sim_group)
     _add_steady_state_args(sim_group)
     sim_group.add_argument(
-        "--n_jobs", type=int, default=-1,
+        "--n-jobs", "--n_jobs", dest="n_jobs", type=int, default=-1,
         help=(
             "Number of parallel jobs for sample simulations. "
             "Use -1 to use all available CPU cores (default: -1)."
@@ -260,15 +255,18 @@ def _build_sensitivity_analysis_parser(subparsers):
     """Build the 'sensitivity_analysis' subcommand parser."""
     parser = subparsers.add_parser(
         "sensitivity_analysis",
-        help="Run sensitivity analysis between fixed and random perturbations",
+        help="Run Sobol global sensitivity analysis",
     )
     parser.add_argument("input_path", help="Path to the SBML model file")
     _add_input_species_args(parser)
     parser.add_argument(
-        "--base-samples", type=float, default=4096,
-        help="Base samples size used to run SOBOL analysis with SALib",
+        "--base-samples", type=int, default=1024,
+        help="Base sample size used to run Sobol analysis with SALib (default: 1024)",
     )
-    _add_perturbation_args(parser)
+    parser.add_argument(
+        "--fixed-perturbations", nargs="+", type=float,
+        help="Optional percentages for an additional fixed-vs-Sobol comparison",
+    )
     parser.add_argument(
         "--perturbation-range", type=float, default=20,
         help="Percentage perturbation range around the nominal value (default: 20)",
@@ -278,12 +276,13 @@ def _build_sensitivity_analysis_parser(subparsers):
         help="Subset of species IDs to analyse (if None, all species are used)",
     )
     parser.add_argument(
-        "--operation", choices=["knockout", "knockin"], default="knockout",
-        help="Type of operation to perform on species (default: knockout)",
-    )
-    parser.add_argument(
         "--check-convergence", action="store_true", default=False,
-        help="Check convergence with increasing samples (MAX: 4096)",
+        help="Check convergence with increasing samples up to --base-samples",
+    )
+    parser.add_argument("--seed", type=int, default=None, help="Optional Sobol seed")
+    parser.add_argument(
+        "--n-jobs", type=int, default=None,
+        help="Number of worker processes (default: CPU count minus one)",
     )
     _add_output_arg(parser)
     parser.add_argument("-l", "--log", help="Path to log file")
@@ -370,7 +369,7 @@ def _build_create_network_parser(subparsers):
     return parser
 
 
-def parse_args():
+def parse_args(argv=None):
     """
     Parse command line arguments for SBML model analysis tool.
 
@@ -402,7 +401,7 @@ def parse_args():
     _build_knockin_reaction_parser(subparsers)
     _build_create_network_parser(subparsers)
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def print_log(log_file: str | None, string):
@@ -551,11 +550,11 @@ def z_score_normalize(heatmap_data, log_file=None):
 
     stds_safe = np.where(stds == 0, 1, stds)
 
-    z_scores = (heatmap_data - means) / 3 * stds_safe
+    z_scores = (heatmap_data - means) / stds_safe
 
     if log_file:
-        log_file.write(f"Column means: {means}\n")
-        log_file.write(f"Column stds: {stds}\n")
+        print_log(log_file, f"Column means: {means}")
+        print_log(log_file, f"Column stds: {stds}")
 
     return z_scores
 

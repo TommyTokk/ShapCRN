@@ -30,6 +30,9 @@ def knockout_species(
     libsbml.Model
         The modified SBML model
     """
+    if sbml_model.getSpecies(target_species_id) is None:
+        raise exceptions.InvalidSpeciesError(target_species_id, sbml_model.getId())
+
     in_rules = False
 
     # Set the math of the target_species constant to 0
@@ -49,7 +52,7 @@ def knockout_species(
         for ea in eas:
             if ea.getVariable() == target_species_id:
                 print_log(log_file, f"Event assigment for {target_species_id} set to 0")
-                eas.setMath(zero_ast)
+                ea.setMath(zero_ast)
 
     # Removing every initial assigments for the target species
     for ias in sbml_model.getListOfInitialAssignments():
@@ -123,10 +126,13 @@ def knockout_species(
             print_log(log_file, f"Calling knockout_reaction for {reaction_id}")
             sbml_model = knockout_reaction(sbml_model, reaction_id, log_file)
 
-    # Set the initial concentration to 0.0 and make it constant
+    # Set the initial value to 0.0 and make it constant
     for species in species_ut.get_list_of_species(sbml_model):
         if species.getId() == target_species_id:
-            result = species.setInitialConcentration(0.0)
+            if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
+                result = species.setInitialAmount(0.0)
+            else:
+                result = species.setInitialConcentration(0.0)
             result = species.setBoundaryCondition(True)
             if result == libsbml.LIBSBML_OPERATION_FAILED:
                 print_log(
@@ -340,10 +346,7 @@ def knockout_reaction(
         else:
             raise exceptions.InvalidKineticLawError(reaction.getId())
     else:
-        print_log(
-            log_file,
-            f"[WARNING] Reaction not found in the model, no modification applied.",
-        )
+        raise exceptions.InvalidReactionError(target_reaction_id, sbml_model.getId())
 
     return sbml_model
 
@@ -430,7 +433,7 @@ def knockin_reaction(
 
         # Check if has Amounts or Concentrations
         if (
-            original_species.isSetHasOnlySubstanceUnits()
+            original_species.getHasOnlySubstanceUnits()
             or original_species.isSetInitialAmount()
         ):
             # The species has Amounts
@@ -458,7 +461,7 @@ def knockin_reaction(
     kl = target_reaction.getKineticLaw()
 
     if kl is None:
-        exceptions.InvalidKineticLawError(target_reaction.getId())
+        raise exceptions.InvalidKineticLawError(target_reaction.getId())
 
     kl_math = kl.getMath()
     kl_string = libsbml.formulaToL3String(kl_math).replace(" ", "")

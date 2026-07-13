@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,28 @@ name = "shapcrn"
 version = "0.1.0"
 description = "SBML reaction-network analysis with simulation, perturbation, and Shapley-style workflows."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10,<3.13"
+authors = [
+  { name = "Tommaso Tocchini" },
+]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = [
+  "SBML",
+  "chemical reaction networks",
+  "Shapley values",
+  "sensitivity analysis",
+  "systems biology",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = [
   "numpy",
   "pandas",
@@ -19,13 +40,42 @@ dependencies = [
   "matplotlib",
   "seaborn",
   "plotly",
+  "networkx",
 ]
 
+[project.optional-dependencies]
+network = [
+  "pygraphviz",
+]
+dev = [
+  "build",
+  "pytest",
+  "pytest-cov",
+  "ruff",
+  "twine",
+]
+
+[project.urls]
+Homepage = "https://github.com/TommyTokk/KOShapleyValueForCRNs"
+Repository = "https://github.com/TommyTokk/KOShapleyValueForCRNs"
+Issues = "https://github.com/TommyTokk/KOShapleyValueForCRNs/issues"
+
 [project.scripts]
-shapcrn = "shapcrn.examples.usage_example:main"
+shapcrn = "shapcrn.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+markers = [
+  "network: requires PyGraphviz and the Graphviz system package",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
