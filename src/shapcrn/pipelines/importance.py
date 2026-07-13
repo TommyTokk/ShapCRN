@@ -14,9 +14,9 @@ import shapcrn.utils.sensitivity as sens_ut
 
 
 payoff_functions = {
-    'max': ut.payoff_max,
-    'min': ut.payoff_min,
-    'last': ut.payoff_last,
+    "max": ut.payoff_max,
+    "min": ut.payoff_min,
+    "last": ut.payoff_last,
 }
 
 
@@ -39,7 +39,6 @@ def _parse_float_list(value):
         return [float(v) for v in value]
 
     return [float(value)]
-
 
 
 def parse_args(args):
@@ -93,7 +92,7 @@ def parse_args(args):
     output_dir = args.output
     log_file = args.log
 
-    #Pack args and return
+    # Pack args and return
     parsed_args = {
         "input_path": input_path,
         "operation": operation,
@@ -119,7 +118,7 @@ def parse_args(args):
         "ss_threshold": ss_threshold,
         "n_jobs": n_jobs,
         "output_dir": output_dir,
-        "log_file": log_file
+        "log_file": log_file,
     }
 
     return parsed_args
@@ -130,7 +129,6 @@ def model_preparation(args):
     Prepares the model for importance assessment by loading it and selecting the species to analyze.
     """
 
-
     log_file = args["log_file"]
 
     _, sbml_model = sbml_io.load_and_prepare_model(
@@ -140,9 +138,11 @@ def model_preparation(args):
     species_list = [s.getId() for s in species_ut.get_list_of_species(sbml_model)]
 
     # Validate the knocked list
-    if args["knocked_species_ids"] is None:# If no knocked species are provided, all will be used
+    if (
+        args["knocked_species_ids"] is None
+    ):  # If no knocked species are provided, all will be used
         knocked_ids = species_list
-    else:# Otherwise only the ones passed
+    else:  # Otherwise only the ones passed
         knocked_ids = args["knocked_species_ids"]
 
     # Check for the input preservation
@@ -156,13 +156,10 @@ def model_preparation(args):
 
     knocked_ids.sort(key=lambda x: id_to_idx[x])
 
-    return {
-        'sbml_model': sbml_model,
-        'knocked_ids': knocked_ids
-    }
+    return {"sbml_model": sbml_model, "knocked_ids": knocked_ids}
+
 
 def generate_samples(sbml_model, args):
-
     samples = None
 
     use_perturbations = args["use_perturbations"]
@@ -174,26 +171,26 @@ def generate_samples(sbml_model, args):
                 sbml_model,
                 args["input_species_ids"],
                 args["fixed_perturbations"],
-                args["log_file"]
+                args["log_file"],
             )
         else:
             samples = sbml_ut.generate_species_random_combinations(
                 sbml_model,
                 target_species=args["input_species_ids"],
                 n_samples=args["num_samples"],
-                variation = args["variation_percentage"]
+                variation=args["variation_percentage"],
             )
     return samples
 
-def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  args):
 
+def simulate_original_model(sbml_model: libsbml.Model, knocked_ids, samples, args):
     species_list = species_ut.get_list_of_species_ids(sbml_model)
 
     # Load the roadrunner model
     rr = sim_ut.load_roadrunner_model(
         sbml_model=sbml_model,
         integrator=args["sim_integrator"],
-        log_file=args["log_file"]
+        log_file=args["log_file"],
     )
 
     # fix the selections
@@ -204,12 +201,15 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
 
     # Add also the reactions in the selections if target
     for ts in knocked_ids:
-        if ts in reactions_ut.get_list_of_reactions_ids(sbml_model) and f"{ts}" not in selections:
+        if (
+            ts in reactions_ut.get_list_of_reactions_ids(sbml_model)
+            and f"{ts}" not in selections
+        ):
             selections.append(f"{ts}")
 
     rr.timeCourseSelections = selections
 
-    # Simulate 
+    # Simulate
 
     original_results, ss_time, colnames = sim_ut.simulate(
         rr,
@@ -217,7 +217,7 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
         start_time=0,
         steady_state=args["use_steady_state"],
         max_end_time=args["ss_max_time"],
-        log_file=args["log_file"]
+        log_file=args["log_file"],
     )
 
     original_df = pd.DataFrame(original_results[:, 1:], columns=colnames[1:])
@@ -242,7 +242,9 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
         if args["use_fixed_perturbations"]:
             ut.print_log(args["log_file"], "[INFO] Simulating with fixed perturbations")
         else:
-            ut.print_log(args["log_file"], "[INFO] Simulating with random perturbations")
+            ut.print_log(
+                args["log_file"], "[INFO] Simulating with random perturbations"
+            )
 
         samples_simulations_results, _ = sim_ut.simulate_combinations(
             rr,
@@ -263,14 +265,20 @@ def simulate_original_model(sbml_model:libsbml.Model, knocked_ids, samples,  arg
     if args["use_perturbations"]:
         for i in range(len(samples_simulations_results)):
             sim_res_i = samples_simulations_results[i]
-            original_data.append(
-                pd.DataFrame(sim_res_i[:, 1:], columns=colnames[1:])
-            )
+            original_data.append(pd.DataFrame(sim_res_i[:, 1:], columns=colnames[1:]))
 
     return original_data, selections, min_ss_time
 
-def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, selections, ss_min_time, args, new_values: list=None):
-    
+
+def simulate_knocked_data(
+    sbml_model: libsbml.Model,
+    knocked_ids,
+    samples,
+    selections,
+    ss_min_time,
+    args,
+    new_values: list = None,
+):
     operation = args["operation"]
 
     ut.print_log(args["log_file"], f"Operation: {operation}")
@@ -282,11 +290,15 @@ def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, selec
     sbml_str = libsbml.writeSBMLToString(sbml_model.getSBMLDocument())
 
     if operation == "knockin":
-        models_dict = sbml_ut.create_ki_models(knocked_ids, sbml_model, sbml_str, new_values, args["log_file"])
+        models_dict = sbml_ut.create_ki_models(
+            knocked_ids, sbml_model, sbml_str, new_values, args["log_file"]
+        )
     elif operation == "knockout":
-        models_dict = sbml_ut.create_ko_models(knocked_ids, sbml_model, sbml_str, args["log_file"])
+        models_dict = sbml_ut.create_ko_models(
+            knocked_ids, sbml_model, sbml_str, args["log_file"]
+        )
 
-    # TODO: Complete the knockout 
+    # TODO: Complete the knockout
     knocked_data = sim_ut.process_species_multiprocessing(
         knocked_ids,
         models_dict,
@@ -295,7 +307,7 @@ def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, selec
         selections,
         args["sim_integrator"],
         start_time=0,
-        end_time = args["sim_time"],
+        end_time=args["sim_time"],
         steady_state=args["use_steady_state"],
         max_end_time=args["ss_max_time"],
         min_ss_time=ss_min_time,
@@ -309,23 +321,23 @@ def simulate_knocked_data(sbml_model: libsbml.Model, knocked_ids, samples, selec
     return knocked_data
 
 
-def run_shap_analysis(original_data, knocked_data, n_combinations, n_input_ids, payoff = "last", log_file=None):
-
+def run_shap_analysis(
+    original_data,
+    knocked_data,
+    n_combinations,
+    n_input_ids,
+    payoff="last",
+    log_file=None,
+):
     payoff = payoff_functions[payoff]
-    
-    #Get the dictionary of payoffs
+
+    # Get the dictionary of payoffs
     payoff_dict = sim_ut.get_payoff_vals(
-        original_data,
-        knocked_data,
-        payoff,
-        log_file=log_file
+        original_data, knocked_data, payoff, log_file=log_file
     )
 
     shap_values = sim_ut.get_shapley_values(
-        payoff_dict,
-        n_combinations,
-        n_input_ids,
-        log_file=log_file
+        payoff_dict, n_combinations, n_input_ids, log_file=log_file
     )
 
     return shap_values
@@ -440,7 +452,9 @@ def assess_perturbation_importance(
 
     # ── input validation ────────────────────────────────────────────────
     if original_data is None or len(original_data) == 0:
-        raise ValueError("original_data must contain at least one simulation DataFrame.")
+        raise ValueError(
+            "original_data must contain at least one simulation DataFrame."
+        )
     if knocked_data is None or len(knocked_data) == 0:
         raise ValueError("knocked_data must contain at least one knocked simulation.")
     if len(original_data) < 2:
@@ -491,9 +505,7 @@ def assess_perturbation_importance(
             lr = np.log2(ko_pert_ss.to_numpy() / orig_pert_ss.to_numpy()).flatten()
             lrs.append(lr)
 
-        perturbation_log_ratios[knocked_species] = pd.DataFrame(
-            lrs, columns=columns
-        )
+        perturbation_log_ratios[knocked_species] = pd.DataFrame(lrs, columns=columns)
 
     # ── 3. Perturbation-median signed effect matrix ─────────────────────
     pert_median_rows = []
@@ -531,7 +543,7 @@ def assess_perturbation_importance(
     raw_pval_matrix = pd.DataFrame(
         np.nan, index=baseline_effects.index, columns=columns
     )
-    pval_coords = []   # list of (row_label, col_label) for tests that ran
+    pval_coords = []  # list of (row_label, col_label) for tests that ran
     raw_pvals_list = []
 
     for sp in baseline_effects.index:
@@ -565,9 +577,7 @@ def assess_perturbation_importance(
     ut.print_log(log_file, f"[INFO] Wilcoxon tests performed: {n_tests}")
 
     # Second pass: BH correction across all tests
-    bh_pval_matrix = pd.DataFrame(
-        np.nan, index=baseline_effects.index, columns=columns
-    )
+    bh_pval_matrix = pd.DataFrame(np.nan, index=baseline_effects.index, columns=columns)
 
     if n_tests > 0:
         raw_pvals_arr = np.array(raw_pvals_list)
@@ -640,11 +650,12 @@ def _mask_diagonal(df: pd.DataFrame) -> None:
 
 
 def generate_importance_report(
-        importance_results: dict, 
-        variations_df: pd.DataFrame, 
-        shapley_values_df: pd.DataFrame, 
-        out_dirs: dict, 
-        log_file=None):
+    importance_results: dict,
+    variations_df: pd.DataFrame,
+    shapley_values_df: pd.DataFrame,
+    out_dirs: dict,
+    log_file=None,
+):
     """
     Generate a plain-text report summarising the perturbation-importance
     assessment, Shapley values and variation statistics.
@@ -699,8 +710,12 @@ def generate_importance_report(
         w("   Significant (BH)     : N/A (no tests run)")
         w("   Significant (raw)    : N/A")
     else:
-        w(f"   Significant (BH)     : {frac_bh:.2%}  ({int(round(frac_bh * n_tests))}/{n_tests})")
-        w(f"   Significant (raw)    : {frac_raw:.2%}  ({int(round(frac_raw * n_tests))}/{n_tests})")
+        w(
+            f"   Significant (BH)     : {frac_bh:.2%}  ({int(round(frac_bh * n_tests))}/{n_tests})"
+        )
+        w(
+            f"   Significant (raw)    : {frac_raw:.2%}  ({int(round(frac_raw * n_tests))}/{n_tests})"
+        )
     w("")
 
     # ── 3. Ranking stability ────────────────────────────────────────
@@ -718,9 +733,11 @@ def generate_importance_report(
     # ── 4. Top-5 most variable knocked species (by median CV) ──────
     w("4. Per-species variability (top-5 by median CV)")
     w(sub_sep)
-    per_sp_cv = importance_results["per_species_cv"].dropna().sort_values(ascending=False)
+    per_sp_cv = (
+        importance_results["per_species_cv"].dropna().sort_values(ascending=False)
+    )
     for i, (sp, cv_val) in enumerate(per_sp_cv.head(5).items()):
-        w(f"   {i+1}. {sp:30s}  CV = {cv_val:.4f}")
+        w(f"   {i + 1}. {sp:30s}  CV = {cv_val:.4f}")
     w("")
 
     # ── 5. Shapley-value summary ────────────────────────────────────
@@ -730,7 +747,7 @@ def generate_importance_report(
     median_shap = abs_shap.median(axis=1, skipna=True).sort_values(ascending=False)
     w("   Top-5 knocked species by median |Shapley|:")
     for i, (sp, val) in enumerate(median_shap.head(5).items()):
-        w(f"   {i+1}. {sp:30s}  median |SV| = {val:.6f}")
+        w(f"   {i + 1}. {sp:30s}  median |SV| = {val:.6f}")
     w("")
 
     # ── 6. Variation summary ────────────────────────────────────────
@@ -740,7 +757,7 @@ def generate_importance_report(
     median_var = abs_var.median(axis=1, skipna=True).sort_values(ascending=False)
     w("   Top-5 knocked species by median |variation|:")
     for i, (sp, val) in enumerate(median_var.head(5).items()):
-        w(f"   {i+1}. {sp:30s}  median |var| = {val:.6f}")
+        w(f"   {i + 1}. {sp:30s}  median |var| = {val:.6f}")
     w("")
 
     w(sep)
@@ -830,21 +847,28 @@ def run_random_vs_fixed_perturbations_importance(
     )
     random_vs_fixed_diff_df = random_aligned - fixed_aligned
 
-    fixed_variations_path = os.path.join(out_dirs["csv"], "variations_fixed_perturbations.csv")
-    diff_path = os.path.join(out_dirs["csv"], "variations_random_vs_fixed_difference.csv")
+    fixed_variations_path = os.path.join(
+        out_dirs["csv"], "variations_fixed_perturbations.csv"
+    )
+    diff_path = os.path.join(
+        out_dirs["csv"], "variations_random_vs_fixed_difference.csv"
+    )
 
     fixed_variations_df.to_csv(fixed_variations_path)
     random_vs_fixed_diff_df.to_csv(diff_path)
 
-    ut.print_log(args["log_file"], f"[INFO] Saved fixed perturbations variations to {fixed_variations_path}")
-    ut.print_log(args["log_file"], f"[INFO] Saved random-vs-fixed difference to {diff_path}")
+    ut.print_log(
+        args["log_file"],
+        f"[INFO] Saved fixed perturbations variations to {fixed_variations_path}",
+    )
+    ut.print_log(
+        args["log_file"], f"[INFO] Saved random-vs-fixed difference to {diff_path}"
+    )
 
     return {
         "fixed_variations_df": fixed_variations_df,
         "random_vs_fixed_diff_df": random_vs_fixed_diff_df,
     }
-
-
 
 
 def importance_assessment(args, out_dirs):
@@ -860,7 +884,10 @@ def importance_assessment(args, out_dirs):
     sbml_model = prep_res["sbml_model"]
     knocked_ids = prep_res["knocked_ids"]
 
-    ut.print_log(parsed_args["log_file"], f"Model loaded and prepared. Knocked species: {knocked_ids}")
+    ut.print_log(
+        parsed_args["log_file"],
+        f"Model loaded and prepared. Knocked species: {knocked_ids}",
+    )
 
     # Handle the samples
     samples = generate_samples(sbml_model, parsed_args)
@@ -868,49 +895,54 @@ def importance_assessment(args, out_dirs):
     ut.print_log(parsed_args["log_file"], f"{samples}")
 
     # Simulate original model
-    original_simulation_data, selections, min_ss_time = simulate_original_model(sbml_model, knocked_ids, samples, parsed_args)
+    original_simulation_data, selections, min_ss_time = simulate_original_model(
+        sbml_model, knocked_ids, samples, parsed_args
+    )
 
     if parsed_args["operation"] == "knockin":
         # Calculating the new values (max_values), avoid first column with time
         max_values = list(original_simulation_data[0][selections[1:]].max())
-        knocked_data = simulate_knocked_data(sbml_model, knocked_ids, samples, selections, min_ss_time, parsed_args, new_values=max_values)
+        knocked_data = simulate_knocked_data(
+            sbml_model,
+            knocked_ids,
+            samples,
+            selections,
+            min_ss_time,
+            parsed_args,
+            new_values=max_values,
+        )
     else:
-        knocked_data = simulate_knocked_data(sbml_model, knocked_ids, samples, selections, min_ss_time, parsed_args)
-
-    
+        knocked_data = simulate_knocked_data(
+            sbml_model, knocked_ids, samples, selections, min_ss_time, parsed_args
+        )
 
     # Analyse the results
     if parsed_args["use_perturbations"]:
-
-
         # Calculate the Shapley value
         n_combinations = len(original_simulation_data)
         shapley_df = run_shap_analysis(
-            original_simulation_data, 
-            knocked_data, 
-            n_combinations, 
+            original_simulation_data,
+            knocked_data,
+            n_combinations,
             len(parsed_args["input_species_ids"]),
-            payoff=parsed_args["payoff_function"], 
-            log_file=parsed_args["log_file"]
-            )
-        
+            payoff=parsed_args["payoff_function"],
+            log_file=parsed_args["log_file"],
+        )
+
         # Calculate the variations
         variations_df = sim_ut.get_relative_variations_log_ratio(
             original_simulation_data,
             knocked_data,
             aggregation="median",
-            return_signed=False
+            return_signed=False,
         )
 
-        
         # Plot the variations heatmap
         colnames_to_index = {}
         for i, el in enumerate(original_simulation_data[0].columns):
             if el == "time":
                 continue
             colnames_to_index[el] = i
-
-        
 
         # Plot the Shapley values heatmap
 
@@ -929,14 +961,15 @@ def importance_assessment(args, out_dirs):
             variations_df = variations_df[resolved_cols]
             shapley_df = shapley_df[resolved_cols]
 
-
         if parsed_args["perturbations_importance"]:
-            ut.print_log(parsed_args["log_file"], "[INFO] Assessing perturbation importance")
+            ut.print_log(
+                parsed_args["log_file"], "[INFO] Assessing perturbation importance"
+            )
             importance_assessment_results = assess_perturbation_importance(
                 original_simulation_data,
-                knocked_data,                
+                knocked_data,
                 alpha=0.05,
-                log_file=parsed_args["log_file"]
+                log_file=parsed_args["log_file"],
             )
 
             generate_importance_report(
@@ -944,11 +977,14 @@ def importance_assessment(args, out_dirs):
                 variations_df,
                 shapley_df,
                 out_dirs,
-                log_file=parsed_args["log_file"]
+                log_file=parsed_args["log_file"],
             )
 
         if parsed_args["random_perturbations_importance"]:
-            ut.print_log(parsed_args["log_file"], "[INFO] Running random-vs-fixed perturbations importance analysis")
+            ut.print_log(
+                parsed_args["log_file"],
+                "[INFO] Running random-vs-fixed perturbations importance analysis",
+            )
             _ = run_random_vs_fixed_perturbations_importance(
                 sbml_model=sbml_model,
                 knocked_ids=knocked_ids,
@@ -958,16 +994,15 @@ def importance_assessment(args, out_dirs):
                 args=parsed_args,
                 out_dirs=out_dirs,
             )
-            
 
         # Normalize with asinh to better visualize the differences
         shapley_df_normal, s = ut.normalize_asinh(shapley_df)
 
-        
-
         # Save the CSVs
-        variations_df.to_csv(os.path.join(out_dirs['csv'], "variations_across_perturbations.csv"))
-        shapley_df.to_csv(os.path.join(out_dirs['csv'], "shapley_values.csv"))
+        variations_df.to_csv(
+            os.path.join(out_dirs["csv"], "variations_across_perturbations.csv")
+        )
+        shapley_df.to_csv(os.path.join(out_dirs["csv"], "shapley_values.csv"))
 
         # Plots the heamaps
         plt_ut.plot_heatmap(
@@ -977,8 +1012,8 @@ def importance_assessment(args, out_dirs):
             y_labels=variations_df.index,
             title="Relative variations (log ratio) across perturbations",
             img_name="log_ratio_variations_heatmap.png",
-            save_path=out_dirs['images'],
-            log_file=parsed_args["log_file"]
+            save_path=out_dirs["images"],
+            log_file=parsed_args["log_file"],
         )
 
         plt_ut.plot_heatmap(
@@ -988,27 +1023,30 @@ def importance_assessment(args, out_dirs):
             y_labels=shapley_df.index,
             title="Shapley values across perturbations (asinh normalized)",
             img_name="shapley_values_heatmap_normal.png",
-            save_path=out_dirs['images'],
-            log_file=parsed_args["log_file"]
+            save_path=out_dirs["images"],
+            log_file=parsed_args["log_file"],
         )
 
-
         pass
-    else:# No perturbations required
+    else:  # No perturbations required
         # Analyse just original and knocked data
         # Calculate the Shapley value
-        ut.print_log(parsed_args["log_file"], "[INFO] Calculating without perturbations")
-        ut.print_log(parsed_args["log_file"], f"Original data: \n{original_simulation_data}")
+        ut.print_log(
+            parsed_args["log_file"], "[INFO] Calculating without perturbations"
+        )
+        ut.print_log(
+            parsed_args["log_file"], f"Original data: \n{original_simulation_data}"
+        )
         ut.print_log(parsed_args["log_file"], f"Knocked data: \n{knocked_data}")
 
         variations = sim_ut.get_relative_variations_log_ratio_no_samples(
-            original_simulation_data[0],
-            knocked_data,
-            return_signed=True
+            original_simulation_data[0], knocked_data, return_signed=True
         )
 
         # Save the CSV
-        variations.to_csv(os.path.join(out_dirs['csv'], "variations_no_perturbations.csv"))
+        variations.to_csv(
+            os.path.join(out_dirs["csv"], "variations_no_perturbations.csv")
+        )
 
         # Plot the heatmap
         colnames_to_index = {}
@@ -1024,6 +1062,6 @@ def importance_assessment(args, out_dirs):
             y_labels=variations.index,
             title="Relative variations (log ratio) without perturbations",
             img_name="log_ratio_variations_no_perturbations_heatmap.png",
-            save_path=out_dirs['images'],
-            log_file=parsed_args["log_file"]
+            save_path=out_dirs["images"],
+            log_file=parsed_args["log_file"],
         )
