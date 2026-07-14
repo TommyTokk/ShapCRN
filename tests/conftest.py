@@ -2,6 +2,11 @@ from pathlib import Path
 
 import pytest
 
+import os
+
+
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 
 @pytest.fixture
 def model_path() -> Path:
