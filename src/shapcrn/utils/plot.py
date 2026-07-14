@@ -538,7 +538,7 @@ def plot_heatmap(data: pd.DataFrame, y_labels:list, x_labels:list, colnames_to_i
 
     # Set NaN values to be displayed as black
     if isinstance(cmap, str):
-        cmap = plt.cm.get_cmap(cmap).copy()
+        cmap = plt.get_cmap(cmap).copy()
     else:
         cmap = cmap.copy()
     cmap.set_bad(color="black")

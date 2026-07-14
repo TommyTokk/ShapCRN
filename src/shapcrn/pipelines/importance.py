@@ -649,10 +649,7 @@ def assess_perturbation_importance(
 
 def _mask_diagonal(df: pd.DataFrame) -> None:
     """Set self-comparison entries (knocked species vs itself) to NaN in-place."""
-    col_names = df.columns.astype(str).str.strip("[]")
-    idx = df.index.get_indexer(col_names)
-    valid = idx != -1
-    df.values[idx[valid], np.arange(len(df.columns))[valid]] = np.nan
+    sim_ut.mask_self_comparisons(df)
 
 
 def generate_importance_report(

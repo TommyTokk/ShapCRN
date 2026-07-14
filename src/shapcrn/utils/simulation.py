@@ -27,6 +27,21 @@ from shapcrn.utils.sbml import species as species_ut
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 
 
+def mask_self_comparisons(df: pd.DataFrame) -> None:
+    """Set matching row/column self-comparisons to NaN in place."""
+    column_names = pd.Index(df.columns).astype(str).str.strip("[]")
+    row_positions = df.index.get_indexer(column_names)
+    valid = row_positions != -1
+    column_positions = np.flatnonzero(valid)
+
+    for row_position, column_position in zip(
+        row_positions[valid],
+        column_positions,
+        strict=True,
+    ):
+        df.iat[int(row_position), int(column_position)] = np.nan
+
+
 # KEEP
 def load_roadrunner_model(
     sbml_model: libsbml.Model,
@@ -1269,10 +1284,7 @@ def get_absolute_variations_samples(
 
     # Applying the mas for inf values
     res_df = res_df.mask(np.isinf(res_df), np.nan)
-    col_names = res_df.columns.str.strip("[]")
-    rows = res_df.index.get_indexer(col_names)
-    valid = rows != -1
-    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+    mask_self_comparisons(res_df)
 
     return res_df
 
@@ -1374,10 +1386,7 @@ def get_absolute_variations_no_samples(
 
     # Applying the mas for inf values
     res_df = res_df.mask(np.isinf(res_df), np.nan)
-    col_names = res_df.columns.str.strip("[]")
-    rows = res_df.index.get_indexer(col_names)
-    valid = rows != -1
-    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+    mask_self_comparisons(res_df)
 
     return res_df
 
@@ -1488,10 +1497,7 @@ def get_relative_variations_samples(
 
     # Applying the mas for inf values
     res_df = res_df.mask(np.isinf(res_df), np.nan)
-    col_names = res_df.columns.str.strip("[]")
-    rows = res_df.index.get_indexer(col_names)
-    valid = rows != -1
-    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+    mask_self_comparisons(res_df)
 
     return res_df
 
@@ -1600,10 +1606,7 @@ def get_relative_variations_no_samples(
 
     # Applying the mas for inf values
     res_df = res_df.mask(np.isinf(res_df), np.nan)
-    col_names = res_df.columns.str.strip("[]")
-    rows = res_df.index.get_indexer(col_names)
-    valid = rows != -1
-    res_df.values[rows[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+    mask_self_comparisons(res_df)
 
     return res_df
 
@@ -1799,10 +1802,7 @@ def get_relative_variations_log_ratio(
     res_df = pd.DataFrame(rows)
     res_df = res_df.mask(np.isinf(res_df), np.nan)
 
-    col_names = pd.Index(res_df.columns).astype(str).str.strip("[]")
-    idx = res_df.index.get_indexer(col_names)
-    valid = idx != -1
-    res_df.values[idx[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+    mask_self_comparisons(res_df)
 
     return res_df
 
@@ -1919,10 +1919,7 @@ def get_relative_variations_log_ratio_no_samples(
     res_df = pd.DataFrame(rows)
     res_df = res_df.mask(np.isinf(res_df), np.nan)
 
-    col_names = pd.Index(res_df.columns).astype(str).str.strip("[]")
-    idx = res_df.index.get_indexer(col_names)
-    valid = idx != -1
-    res_df.values[idx[valid], np.arange(len(res_df.columns))[valid]] = np.nan
+    mask_self_comparisons(res_df)
 
     return res_df
 
@@ -2137,10 +2134,7 @@ def get_shapley_values(
     shap_df = pd.DataFrame(shap_vals)
 
     # Set self-comparison entries (knocked species vs itself) to NaN
-    col_names = pd.Index(shap_df.columns).astype(str).str.strip("[]")
-    idx = shap_df.index.get_indexer(col_names)
-    valid = idx != -1
-    shap_df.values[idx[valid], np.arange(len(shap_df.columns))[valid]] = np.nan
+    mask_self_comparisons(shap_df)
 
     return shap_df
 
