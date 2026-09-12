@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
-from typing import Literal, Sequence, TypeAlias
+from typing import Literal, TypeAlias
 
 import libsbml
 import numpy as np
