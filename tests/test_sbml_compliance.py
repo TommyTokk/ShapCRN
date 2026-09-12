@@ -8,21 +8,20 @@ import pytest
 import roadrunner
 
 from shapcrn.exceptions import (
+    InvalidKineticLawError,
     InvalidModelFormatError,
     ModelError,
     ModelModificationError,
-    InvalidKineticLawError,
 )
 from shapcrn.utils.sbml import io, knock, reactions, species
 from shapcrn.utils.sbml.helpers import get_sbml_as_xml
-from shapcrn.utils.sbml.validation import validate
-from shapcrn.utils.simulation import get_species_peak_value, simulate_samples
 from shapcrn.utils.sbml.utils import (
-    get_fixed_combinations,
     generate_species_random_combinations,
+    get_fixed_combinations,
 )
+from shapcrn.utils.sbml.validation import validate
 from shapcrn.utils.sensitivity import get_problem_parameters
-
+from shapcrn.utils.simulation import get_species_peak_value, simulate_samples
 
 LEVELS = [(2, 1), (2, 4), (3, 1), (3, 2)]
 
