@@ -5,6 +5,7 @@ from shapcrn.exceptions import InvalidModelFormatError
 from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml.helpers import get_sbml_as_xml
 from shapcrn.utils.sbml import reactions as sbml_react
+from shapcrn.utils.sbml.validation import validate
 
 
 def load_model(model_file_path: str) -> libsbml.SBMLDocument:
@@ -35,6 +36,7 @@ def load_model(model_file_path: str) -> libsbml.SBMLDocument:
         )
         raise InvalidModelFormatError(model_file_path, details or None)
 
+    validate(document, model_file_path)
     return document
 
 
@@ -64,6 +66,7 @@ def load_and_prepare_model(
     if split_reversible:
         sbml_model = sbml_react.split_all_reversible_reactions(sbml_model, log_file)
 
+    validate(sbml_doc, model_file_path, log_file)
     return sbml_doc, sbml_model
 
 
@@ -165,29 +168,8 @@ def save_sbml_model(
     >>> xml_str = "<sbml>...</sbml>"
     >>> success = save_sbml_model(xml_str, "output/model.xml")
     """
-    # Check the type of the model and convert to SBMLDocument if necessary
-    if isinstance(model, libsbml.Model):
-        # If it's a Model, get the associated document
-        doc = model.getSBMLDocument()
-        if doc is None:
-            # If there's no associated document, create a new one
-            doc = libsbml.SBMLDocument(model.getLevel(), model.getVersion())
-            doc.setModel(model)
-        success = libsbml.writeSBMLToFile(doc, file_path)
-    elif isinstance(model, str):
-        # If it's an XML string
-        reader = libsbml.SBMLReader()
-        doc = reader.readSBMLFromString(model)
-        success = libsbml.writeSBMLToFile(doc, file_path)
-    else:
-        # Otherwise, try directly
-        success = libsbml.writeSBMLToFile(model, file_path)
-
-    if success:
-        print_log(log_file, f"Successfully saved SBML to: {file_path}")
-    else:
-        raise IOError(
-            f"Failed to save SBML model to {file_path}. Check log for details."
-        )
-
-    return success
+    xml = get_sbml_as_xml(model, log_file)
+    with open(file_path, "w", encoding="utf-8") as stream:
+        stream.write(xml)
+    print_log(log_file, f"Successfully saved SBML to: {file_path}")
+    return True

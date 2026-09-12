@@ -217,16 +217,7 @@ def generate_species_random_combinations(
         if species is None:
             raise exceptions.ModelError(f"Species {ts} not found in the model.")
 
-        if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
-            print_log(log_file, f"Using amounts for {ts}")
-            t0_val = species.getInitialAmount()
-        elif species.isSetInitialConcentration():
-            print_log(log_file, f"Using concentration for {ts}")
-            t0_val = species.getInitialConcentration()
-        else:
-            raise exceptions.ModelError(
-                f"Species {ts} must have either initial amount or initial concentration set."
-            )
+        t0_val = species_ut.initial_symbol_value(sbml_model, ts)
         tmp = []
 
         for i in range(n_samples):
@@ -387,19 +378,7 @@ def get_fixed_combinations(
     samples = []
 
     for s_id in input_species:
-        species = species_ut.get_species_by_id(sbml_model, s_id)
-
-        # Get initial concentration/amount using the same logic as generate_species_samples
-        if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
-            print_log(log_file, f"Using amounts for {s_id}")
-            t0_conc = species.getInitialAmount()
-        elif species.isSetInitialConcentration():
-            print_log(log_file, f"Using concentration for {s_id}")
-            t0_conc = species.getInitialConcentration()
-        else:
-            raise exceptions.ModelError(
-                f"Species {s_id} must have either initial amount or initial concentration set."
-            )
+        t0_conc = species_ut.initial_symbol_value(sbml_model, s_id)
 
         tmp = []
 

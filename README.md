@@ -54,6 +54,72 @@ In a typical run, the flow is:
 5. Save artifacts (CSV, plots, reports, edited SBML).
 6. Return logs and outputs under the selected output folder.
 
+## SBML compatibility and preparation
+
+Models keep their original SBML level/version. Core transformations are tested
+with Level 2 Versions 1 and 4 and Level 3 Versions 1 and 2. Loading, preparation,
+and saving reject libSBML errors with validation codes and details. Warnings,
+such as unspecified units, remain nonfatal and are written when a log path is
+provided. Invalid output is rejected before an existing output file is opened.
+
+Reaction splitting retains the project's kinetic-inference policy, independently
+of the `reversible` flag. Expressions containing division retain the historical
+Michaelis–Menten exclusion. Supported candidates are a binary difference such as
+`kf*A - kr*B`, optionally multiplied by common factors, or an equivalent function
+body. AST decomposition preserves the original expression: `cell*kf*A - kr*B`
+becomes forward `cell*kf*A` and reverse `kr*B`; it does not add a compartment
+factor to the reverse rate. Function arguments retain their order and scope,
+and original function definitions remain available to other callers.
+
+Splitting preserves local parameter units, modifiers and fixed stoichiometry.
+Generated L3V1 reactions have `fast=false`; L3V2 reactions omit `fast`. The
+`constant` attribute on a species reference describes fixed stoichiometry,
+independently of the referenced species' `constant` flag. The low-level
+`create_sbml_reaction_LMA` helper accepts `(species_id, stoichiometry, constant)`
+triples for reactants/products and species IDs for modifiers. Creation and split
+helpers return objects already attached to the model; callers must not add them
+again. Legacy splitting retains its `_forward`/`_reverse` suffixes.
+
+An unsupported inferred candidate raises an error identifying the reaction.
+Dynamic or assignment-defined stoichiometry, dependencies on replaced reaction
+or species-reference IDs, `fast=true` transformations, and populated SBML
+packages are rejected before modifying the input. Empty legacy Layout plugins
+attached by libSBML to ordinary Level 2 files are allowed. A failed transformation
+leaves the input model unchanged. SBML permits missing kinetics, but preparation
+and rate-based analysis require them. This support is not a general-purpose
+splitter for every mathematically valid SBML kinetic law.
+
+Sampling, sensitivity inputs, peak detection and knock-in values use the units
+of the SBML species symbol: amounts when `hasOnlySubstanceUnits=true`, and
+concentrations otherwise. This is independent of whether the XML stores
+`initialAmount` or `initialConcentration`; conversion uses compartment size.
+For example, `initialAmount=12` in a compartment of size 4 corresponds to a
+sample value of 3 when `hasOnlySubstanceUnits=false`. Unresolved initialization
+or an unavailable conversion is reported instead of supplying a numeric default.
+Existing callers that supplied stored amounts for concentration-valued symbols
+must now supply concentrations. Explicit simulation output selections remain
+under the caller's control.
+
+Reaction knock-in creates fixed species copies and replaces all applicable
+kinetic-law occurrences while respecting local parameter shadowing. Repeated
+references to one species share a copy and require identical input values.
+Species knock-in rejects conflicting rules, events and initial assignments;
+species knockout instead sets its existing updates to zero. Knockout retains
+valid participants and modifier declarations when removing product references.
+The deactivation helper creates a rapid ordinary sink, with concentration/amount
+and conversion-factor handling; it does not assert SBML's instantaneous `fast`
+approximation.
+
+Specification references: [SBML L3V1 Core](https://sbml.org/documents/specifications/level-3/version-1/),
+§3.3 (identifiers), §4.3 (functions), §4.6 (species quantities), and §4.11
+(reactions, stoichiometry, modifiers and local parameters).
+
+Regression tests can be run with:
+
+```bash
+conda run -n shapcrn-dev python -m pytest -q
+```
+
 ## Architecture and code map
 
 The codebase follows a layered structure:
@@ -134,8 +200,8 @@ Main execution path:
 
 How species knockin works:
 
-- `get_species_peak_value(...)` runs a short simulation (`end_time=60`) and uses the target species maximum simulated value as the knock-in value.
-- `knockin_species(...)` then sets that value as initial concentration/amount (depending on species representation) and marks the species as fixed (`boundaryCondition=True`, `constant=True`).
+- `get_species_peak_value(...)` runs a short simulation (`end_time=60`) and uses the maximum value in the species symbol's amount/concentration units as the knock-in value.
+- `knockin_species(...)` then sets that value according to `hasOnlySubstanceUnits` and marks the species as fixed (`boundaryCondition=True`, `constant=True`).
 
 How reaction knockin works:
 

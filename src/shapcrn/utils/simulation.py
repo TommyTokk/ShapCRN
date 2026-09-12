@@ -110,14 +110,13 @@ def load_roadrunner_model(
     """
 
     try:
-        writer = libsbml.SBMLWriter()
-        # Check if input is a libSBML model or a string
-        if isinstance(sbml_model, libsbml.Model):
-            sbml_doc = writer.writeSBMLToString(sbml_model.getSBMLDocument())
-            rr_model = rr.RoadRunner(sbml_doc)
-        else:
-            # Assume it's a string representation or file path
-            rr_model = rr.RoadRunner(sbml_model)
+        from shapcrn.utils.sbml.helpers import get_sbml_as_xml
+        from shapcrn.utils.sbml.io import load_model
+
+        if isinstance(sbml_model, (str, os.PathLike)) and not str(sbml_model).lstrip().startswith("<"):
+            sbml_model = load_model(os.fspath(sbml_model))
+        sbml_doc = get_sbml_as_xml(sbml_model, log_file)
+        rr_model = rr.RoadRunner(sbml_doc)
     except Exception as e:
         raise exceptions.ModelError(f"Failed to load SBML model: {str(e)}")
 
@@ -134,10 +133,12 @@ def load_roadrunner_model(
 
 
 def _ensure_species_selections(rr_model: rr.RoadRunner, species_ids: list[str]) -> None:
-    """Ensure all species concentrations are present in RoadRunner selections."""
+    """Ensure species symbol quantities are present in RoadRunner selections."""
+    doc = libsbml.readSBMLFromString(rr_model.getSBML())
+    model = doc.getModel()
     selections = rr_model.timeCourseSelections
     for species_id in species_ids:
-        selection = f"[{species_id}]"
+        selection = species_ut.symbol_selection(model.getSpecies(species_id))
         if selection not in selections:
             selections.append(selection)
     rr_model.timeCourseSelections = selections
@@ -163,7 +164,7 @@ def get_species_peak_value(
     results, _, colnames = simulate(rr_model, end_time=sim_end_time, log_file=log_file)
     results_df = pd.DataFrame(results, columns=colnames)
 
-    species_col = f"[{species_id}]"
+    species_col = species_ut.symbol_selection(sbml_model.getSpecies(species_id))
     if species_col not in results_df.columns:
         raise exceptions.ModelError(
             f"Species selection '{species_col}' not found in simulation results."
@@ -195,7 +196,7 @@ def get_reactants_peak_values(
 
     reactant_values = []
     for reactant_id in reactants:
-        reactant_col = f"[{reactant_id}]"
+        reactant_col = species_ut.symbol_selection(sbml_model.getSpecies(reactant_id))
         if reactant_col not in results_df.columns:
             raise exceptions.ModelError(
                 f"Reactant selection '{reactant_col}' not found in simulation results."
@@ -549,7 +550,7 @@ def simulate_samples(
     -----
     - The function preserves the original timeCourseSelections of the model
     - For Gillespie integrator, nonnegative is automatically set to True
-    - Initial concentrations are set via `setInitConcentration()` before simulation
+    - Initial values use SBML symbol units: amounts or concentrations as declared
     - The model is reset before applying new concentrations
     """
 
@@ -561,8 +562,7 @@ def simulate_samples(
     if rr_model.getIntegrator().getName() == "gillespie":
         rr_model.getIntegrator().nonnegative = True
 
-    for i in range(len(input_species_id)):
-        rr_model.setInitConcentration(input_species_id[i], combination[i])
+    species_ut.set_roadrunner_initial_values(rr_model, input_species_id, combination)
 
     # rr_model.regenerateModel()
 

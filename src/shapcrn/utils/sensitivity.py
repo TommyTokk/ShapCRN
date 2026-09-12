@@ -12,6 +12,7 @@ from scipy import stats
 
 from shapcrn.exceptions import InvalidSpeciesError, ModelError
 from shapcrn.utils.utils import print_log
+from shapcrn.utils.sbml import species as species_ut
 
 sns.set_theme(style="whitegrid", context="notebook")
 
@@ -37,8 +38,7 @@ def _simulation_worker(args):
     rr_local.timeCourseSelections = current_selections
     rr_local.reset()
 
-    for j, sp_id in enumerate(input_ids):
-        rr_local.setInitConcentration(sp_id, param[j])
+    species_ut.set_roadrunner_initial_values(rr_local, input_ids, param)
 
     rr_local.timeCourseSelections = current_selections
 
@@ -362,14 +362,7 @@ def get_problem_parameters(
         species = sbml_model.getSpecies(ins)
         if species is None:
             raise InvalidSpeciesError(ins, sbml_model.getId())
-        if species.getHasOnlySubstanceUnits() or species.isSetInitialAmount():
-            conc = species.getInitialAmount()
-        elif species.isSetInitialConcentration():
-            conc = species.getInitialConcentration()
-        else:
-            raise ModelError(
-                f"Species '{ins}' has neither an initial amount nor concentration"
-            )
+        conc = species_ut.initial_symbol_value(sbml_model, ins)
 
         # Check for consistency of the initial concentration value
         if conc == 0.0:

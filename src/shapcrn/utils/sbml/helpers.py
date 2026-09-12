@@ -102,7 +102,7 @@ def get_sbml_as_xml(model, log_file=None) -> str:
     If the model is a libsbml.Model without an associated SBMLDocument, a new
     SBMLDocument is created using the model's SBML level and version.
 
-    If the input is already a string, it is returned unchanged without validation.
+    All inputs are validated before serialization, including XML strings.
 
     Examples
     --------
@@ -115,27 +115,7 @@ def get_sbml_as_xml(model, log_file=None) -> str:
     >>> result = get_sbml_as_xml(xml_str)
     >>> assert result == xml_str
     """
-    # Check the type of the model and convert to SBMLDocument if necessary
-    if isinstance(model, libsbml.Model):
-        # If it's a Model, get the associated document
-        doc = model.getSBMLDocument()
-        if doc is None:
-            # If there's no associated document, create a new one
-            doc = libsbml.SBMLDocument(model.getLevel(), model.getVersion())
-            doc.setModel(model)
-        xml_string = libsbml.writeSBMLToString(doc)
-    elif isinstance(model, str):
-        # If it's already an XML string, return it
-        return model
-    else:
-        # Otherwise, try to write it directly to string
-        xml_string = libsbml.writeSBMLToString(model)
+    from shapcrn.utils.sbml.validation import validate
 
-    if xml_string:
-        return xml_string
-    else:
-        raise ValueError(
-            "Failed to convert SBML model to XML string. Check log for details."
-        )
-    
-
+    doc = validate(model, "SBML serialization", log_file)
+    return libsbml.writeSBMLToString(doc)

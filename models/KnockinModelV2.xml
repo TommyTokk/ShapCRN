@@ -114,7 +114,7 @@
 
     <listOfReactions>
       
-      <reaction id="R1_MassAction_Explicit" reversible="false" fast="false">
+      <reaction id="R1_MassAction_Explicit" reversible="false">
         <listOfReactants>
           <speciesReference species="S1" stoichiometry="1" constant="true"/>
         </listOfReactants>
@@ -136,7 +136,7 @@
         </kineticLaw>
       </reaction>
 
-      <reaction id="R2_MassAction_Function" reversible="true" fast="false">
+      <reaction id="R2_MassAction_Function" reversible="true">
         <listOfReactants>
           <speciesReference species="S2" stoichiometry="1" constant="true"/>
         </listOfReactants>
@@ -164,7 +164,7 @@
         </kineticLaw>
       </reaction>
 
-      <reaction id="R3_MM_Explicit" reversible="false" fast="false">
+      <reaction id="R3_MM_Explicit" reversible="false">
         <listOfReactants>
           <speciesReference species="S3" stoichiometry="1" constant="true"/>
         </listOfReactants>
@@ -198,7 +198,7 @@
         </kineticLaw>
       </reaction>
 
-      <reaction id="R4_MM_Function" reversible="false" fast="false">
+      <reaction id="R4_MM_Function" reversible="false">
         <listOfReactants>
           <speciesReference species="S4" stoichiometry="1" constant="true"/>
         </listOfReactants>
@@ -222,7 +222,7 @@
         </kineticLaw>
       </reaction>
 
-      <reaction id="R5_New_Structure" reversible="true" fast="false">
+      <reaction id="R5_New_Structure" reversible="true">
         <listOfReactants>
           <speciesReference species="S5" stoichiometry="1" constant="true"/>
         </listOfReactants>
@@ -247,7 +247,7 @@
         </kineticLaw>
       </reaction>
 
-      <reaction id="R6_MassAction_Reversible_Explicit" reversible="true" fast="false">
+      <reaction id="R6_MassAction_Reversible_Explicit" reversible="true">
         <listOfReactants>
           <speciesReference species="S6" stoichiometry="1" constant="true"/>
         </listOfReactants>

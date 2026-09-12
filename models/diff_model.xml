@@ -30,11 +30,11 @@
             <!-- r1: A + 9 B → Out1 -->
             <reaction id="r1" reversible="false">
                 <listOfReactants>
-                    <speciesReference species="A" stoichiometry="1" />
-                    <speciesReference species="B" stoichiometry="9" />
+                    <speciesReference species="A" stoichiometry="1" constant="true" />
+                    <speciesReference species="B" stoichiometry="9" constant="true" />
                 </listOfReactants>
                 <listOfProducts>
-                    <speciesReference species="Out1" stoichiometry="1" />
+                    <speciesReference species="Out1" stoichiometry="1" constant="true" />
                 </listOfProducts>
                 <kineticLaw>
                     <math xmlns="http://www.w3.org/1998/Math/MathML">
@@ -55,10 +55,10 @@
             <!-- r2: 5 D -> C -->
             <reaction id="r2" reversible="false">
                 <listOfReactants>
-                    <speciesReference species="D" stoichiometry="5" />
+                    <speciesReference species="D" stoichiometry="5" constant="true" />
                 </listOfReactants>
                 <listOfProducts>
-                    <speciesReference species="C" stoichiometry="1" />
+                    <speciesReference species="C" stoichiometry="1" constant="true" />
                 </listOfProducts>
                 <kineticLaw>
                     <math xmlns="http://www.w3.org/1998/Math/MathML">
@@ -78,11 +78,11 @@
             <!-- r3: B + C → Out2 -->
             <reaction id="r3" reversible="false">
                 <listOfReactants>
-                    <speciesReference species="B" stoichiometry="1" />
-                    <speciesReference species="C" stoichiometry="1" />
+                    <speciesReference species="B" stoichiometry="1" constant="true" />
+                    <speciesReference species="C" stoichiometry="1" constant="true" />
                 </listOfReactants>
                 <listOfProducts>
-                    <speciesReference species="Out2" stoichiometry="1" />
+                    <speciesReference species="Out2" stoichiometry="1" constant="true" />
                 </listOfProducts>
                 <kineticLaw>
                     <math xmlns="http://www.w3.org/1998/Math/MathML">
