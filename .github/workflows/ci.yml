@@ -2,58 +2,106 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+
+      - run: python -m ruff check src/shapcrn/api.py src/shapcrn/cli.py tests
+
   test:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.10", "3.11", "3.12"]
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        python:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
           cache: pip
+
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
+
       - run: python -m pytest -m "not network"
-      - run: ruff check src/shapcrn/api.py src/shapcrn/cli.py tests
 
   network:
+    name: Network tests
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
-      - run: sudo apt-get update && sudo apt-get install -y graphviz graphviz-dev
+
+      - run: sudo apt-get update
+      - run: sudo apt-get install -y graphviz graphviz-dev
+
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev,network]"
+
       - run: python -m pytest -m network
 
   distribution:
+    name: Distribution
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+
       - run: python -m pip install --upgrade pip build twine
+
       - run: python -m build
       - run: python -m twine check dist/*
       - run: python scripts/check_dist_contents.py dist/*
-      - run: python -m venv .venv-wheel
-      - run: .venv-wheel/bin/python -m pip install dist/*.whl
-      - run: .venv-wheel/bin/shapcrn --help
-      - run: python -m venv .venv-sdist
-      - run: .venv-sdist/bin/python -m pip install dist/*.tar.gz
-      - run: .venv-sdist/bin/shapcrn --help
+
+      - name: Test wheel installation
+        run: |
+          python -m venv .venv-wheel
+          .venv-wheel/bin/python -m pip install dist/*.whl
+          .venv-wheel/bin/shapcrn --help
+
+      - name: Test source distribution installation
+        run: |
+          python -m venv .venv-sdist
+          .venv-sdist/bin/python -m pip install dist/*.tar.gz
+          .venv-sdist/bin/shapcrn --help
+
       - uses: actions/upload-artifact@v4
         with:
           name: python-distributions
