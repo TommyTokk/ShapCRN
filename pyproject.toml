@@ -8,9 +8,7 @@ version = "0.1.2"
 description = "SBML reaction-network analysis with simulation, perturbation, and Shapley-style workflows."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
-authors = [
-  { name = "Tommaso Tocchini" },
-]
+authors = [{ name = "Tommaso Tocchini" }]
 license = "MIT"
 license-files = ["LICENSE"]
 keywords = [
@@ -44,16 +42,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-network = [
-  "pygraphviz",
-]
-dev = [
-  "build",
-  "pytest",
-  "pytest-cov",
-  "ruff",
-  "twine",
-]
+network = ["pygraphviz"]
+dev = ["build", "pytest", "pytest-cov", "ruff==0.16.7", "twine"]
 
 [project.urls]
 Homepage = "https://github.com/TommyTokk/KOShapleyValueForCRNs"
@@ -64,7 +54,7 @@ Issues = "https://github.com/TommyTokk/KOShapleyValueForCRNs/issues"
 shapcrn = "shapcrn.cli:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -72,9 +62,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
-markers = [
-  "network: requires PyGraphviz and the Graphviz system package",
-]
+markers = ["network: requires PyGraphviz and the Graphviz system package"]
 
 [tool.ruff]
 target-version = "py310"

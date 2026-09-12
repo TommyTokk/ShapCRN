@@ -3,12 +3,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from shapcrn import api
 from shapcrn import (
     ImportanceResult,
     SimulationResult,
-    knockin_species,
+    api,
     knockin_reaction,
+    knockin_species,
     knockout_reaction,
     knockout_species,
     simulate_model,
