@@ -1,17 +1,17 @@
-import libsbml
-import pandas as pd
-import numpy as np
 import os
 
+import libsbml
+import numpy as np
+import pandas as pd
+
+import shapcrn.utils.sensitivity as sens_ut
+from shapcrn.utils import plot as plt_ut
+from shapcrn.utils import simulation as sim_ut
 from shapcrn.utils import utils as ut
 from shapcrn.utils.sbml import io as sbml_io
-from shapcrn.utils.sbml import utils as sbml_ut
-from shapcrn.utils import simulation as sim_ut
-from shapcrn.utils import plot as plt_ut
-from shapcrn.utils.sbml import species as species_ut
 from shapcrn.utils.sbml import reactions as reactions_ut
-import shapcrn.utils.sensitivity as sens_ut
-
+from shapcrn.utils.sbml import species as species_ut
+from shapcrn.utils.sbml import utils as sbml_ut
 
 payoff_functions = {
     "max": ut.payoff_max,
@@ -1030,7 +1030,6 @@ def importance_assessment(args, out_dirs):
             log_file=parsed_args["log_file"],
         )
 
-        pass
     else:  # No perturbations required
         # Analyse just original and knocked data
         # Calculate the Shapley value

@@ -1,18 +1,21 @@
-from typing import Generator
-
+import itertools
+from collections.abc import Generator
 
 import libsbml
-
 import numpy as np
-import itertools
 
-from shapcrn import exceptions
-from shapcrn.utils.utils import print_log
 import shapcrn.utils.sbml.knock as sk
+from shapcrn import exceptions
 from shapcrn.utils.sbml import species as species_ut
 
 # Re-exports from helpers for backward compatibility
-from shapcrn.utils.sbml.helpers import get_nodes_iterator, Op, get_sbml_as_xml, get_list_of_reactions  # noqa: F401
+from shapcrn.utils.sbml.helpers import (  # noqa: F401
+    Op,
+    get_list_of_reactions,
+    get_nodes_iterator,
+    get_sbml_as_xml,
+)
+from shapcrn.utils.utils import print_log
 
 
 def create_ki_models(

@@ -1,11 +1,12 @@
 import os
+
 import libsbml
 
 from shapcrn.exceptions import InvalidModelFormatError
-from shapcrn.utils.utils import print_log
-from shapcrn.utils.sbml.helpers import get_sbml_as_xml
 from shapcrn.utils.sbml import reactions as sbml_react
+from shapcrn.utils.sbml.helpers import get_sbml_as_xml
 from shapcrn.utils.sbml.validation import validate
+from shapcrn.utils.utils import print_log
 
 
 def load_model(model_file_path: str) -> libsbml.SBMLDocument:
@@ -38,6 +39,125 @@ def load_model(model_file_path: str) -> libsbml.SBMLDocument:
 
     validate(document, model_file_path)
     return document
+
+
+def load_model_from_string(
+    xml_string: str, context: str = "<in-memory string>"
+) -> libsbml.SBMLDocument:
+    """
+    Load and validate an SBML model directly from an XML string.
+
+    Parameters
+    ----------
+    xml_string : str
+        The XML string representation of the SBML model.
+    context : str, optional
+        Context label used for error reporting, by default "<in-memory string>".
+
+    Returns
+    -------
+    libsbml.SBMLDocument
+        The loaded and validated SBML document.
+
+    Raises
+    ------
+    InvalidModelFormatError
+        If the XML string cannot be parsed into a valid SBML model or fails validation.
+    """
+    reader = libsbml.SBMLReader()  # Initialize the libSBML reader instance
+    document = reader.readSBMLFromString(
+        xml_string
+    )  # Parse XML directly from RAM string
+
+    # Ensure a valid SBML model object was parsed successfully
+    if document.getModel() is None:
+        # Collect and format error messages reported by libSBML
+        details = "; ".join(
+            document.getError(index).getMessage()
+            for index in range(document.getNumErrors())
+        )
+        raise InvalidModelFormatError(
+            context, details or None
+        )  # Raise error with string context
+
+    validate(
+        document, context=context
+    )  # Perform round-trip consistency and error validation
+    return document  # Return fully loaded SBMLDocument object
+
+
+def load_model_from_bytes(
+    sbml_bytes: bytes,
+    encoding: str = "utf-8",
+    context: str = "<in-memory bytes>",
+) -> libsbml.SBMLDocument:
+    """
+    Load and validate an SBML model directly from raw bytes.
+
+    Parameters
+    ----------
+    sbml_bytes : bytes
+        The raw byte content of the SBML model.
+    encoding : str, optional
+        The character encoding used to decode the bytes, by default "utf-8".
+    context : str, optional
+        Context label used for error reporting, by default "<in-memory bytes>".
+
+    Returns
+    -------
+    libsbml.SBMLDocument
+        The loaded and validated SBML document.
+
+    Raises
+    ------
+    InvalidModelFormatError
+        If the byte stream cannot be decoded or parsed into a valid SBML model.
+    """
+    xml_string = sbml_bytes.decode(encoding)  # Decode raw byte stream into XML string
+    return load_model_from_string(
+        xml_string, context=context
+    )  # Delegate parsing to string handler
+
+
+def load_and_prepare_model_from_bytes(
+    sbml_bytes: bytes,
+    split_reversible: bool = True,
+    log_file=None,
+    encoding: str = "utf-8",
+) -> tuple[libsbml.SBMLDocument, libsbml.Model]:
+    """
+    Load an SBML model from bytes and optionally split reversible reactions.
+
+    Parameters
+    ----------
+    sbml_bytes : bytes
+        The raw byte content of the SBML model.
+    split_reversible : bool, optional
+        If True, split all reversible reactions into forward/reverse reactions.
+    log_file : file-like, optional
+        Optional log handle.
+    encoding : str, optional
+        Character encoding used to decode bytes, by default "utf-8".
+
+    Returns
+    -------
+    tuple
+        (sbml_document, prepared_model)
+    """
+    context = "<in-memory bytes>"  # Define label for in-memory byte execution context
+    sbml_doc = load_model_from_bytes(
+        sbml_bytes, encoding=encoding, context=context
+    )  # Parse SBML bytes
+    sbml_model = sbml_doc.getModel()  # Extract model instance from document
+
+    # Split reversible reactions into forward and backward steps if requested
+    if split_reversible:
+        sbml_model = sbml_react.split_all_reversible_reactions(sbml_model, log_file)
+
+    validate(
+        sbml_doc, context=context, log_file=log_file
+    )  # Validate document post-processing
+    return sbml_doc, sbml_model  # Return document and modified model tuple
 
 
 def load_and_prepare_model(

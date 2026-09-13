@@ -7,12 +7,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import roadrunner as rr
 import seaborn as sns
-from SALib.sample import sobol as sobol_sample
 from scipy import stats
 
-from shapcrn.exceptions import InvalidSpeciesError, ModelError
-from shapcrn.utils.utils import print_log
+from shapcrn.exceptions import InvalidSpeciesError
 from shapcrn.utils.sbml import species as species_ut
+from shapcrn.utils.utils import print_log
 
 sns.set_theme(style="whitegrid", context="notebook")
 
@@ -709,7 +708,7 @@ def check_convergence(
             except (TypeError, ValueError, KeyError) as exc:
                 # Narrow exception catch: real bugs in unrelated code will still
                 # surface.  Record the failure for this N and reset state.
-                print_log(log_file, f"[DEBUG CONVERGENCE ERROR] Node {node} at N={N} failed because: {repr(exc)}")
+                print_log(log_file, f"[DEBUG CONVERGENCE ERROR] Node {node} at N={N} failed because: {exc!r}")
 
                 max_change[N] = np.nan
                 ci_half_width[N] = np.nan
@@ -1051,8 +1050,8 @@ def statistical_tests(
     lines.append("=" * 60)
     lines.append("STATISTICAL COMPARISON: RANDOM vs FIXED PERTURBATIONS")
     lines.append("=" * 60)
-    lines.append(f"H0: No difference between random and fixed perturbation outputs")
-    lines.append(f"H1: Distributions differ (random perturbations are informative)")
+    lines.append("H0: No difference between random and fixed perturbation outputs")
+    lines.append("H1: Distributions differ (random perturbations are informative)")
     lines.append(f"Significance level (alpha): {alpha}")
     lines.append(f"Bonferroni-corrected alpha ({num_nodes} nodes): {corrected_alpha:.2e}")
     lines.append("")

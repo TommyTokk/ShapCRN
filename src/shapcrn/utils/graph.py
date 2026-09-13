@@ -1,9 +1,10 @@
-import networkx as nx
 import os
 
+import networkx as nx
+
 from shapcrn.exceptions import NetworkVisualizationError
-from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml import species as species_ut
+from shapcrn.utils.utils import print_log
 
 
 # ============

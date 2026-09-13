@@ -1,14 +1,10 @@
 import datetime
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from scipy.stats import pearsonr, wasserstein_distance
-
-import pandas as pd
-
+import json
 import os
 
-
-import json
 import numpy as np
+import pandas as pd
+from scipy.stats import wasserstein_distance
 
 
 def wasserstein_1d(u_values: np.ndarray, v_values: np.ndarray) -> float:

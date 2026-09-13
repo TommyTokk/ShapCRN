@@ -7,11 +7,10 @@ libraries (libsbml, etc.) — never on other local src modules.
 This keeps the module free of circular-import risks.
 """
 
-from typing import Generator
+from collections.abc import Generator
 from enum import Enum
 
 import libsbml
-
 
 # ---------------------------------------------------------------------------
 # AST helpers
