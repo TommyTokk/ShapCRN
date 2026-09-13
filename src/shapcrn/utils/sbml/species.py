@@ -1,5 +1,5 @@
+
 import libsbml
-from typing import Optional
 
 
 def get_list_of_species(sbml_model: libsbml.Model):
@@ -44,7 +44,7 @@ def get_list_of_species_names(sbml_model: libsbml.Model) -> list:
 
 def get_species_by_id(
     sbml_model: libsbml.Model, species_id: str
-) -> Optional[libsbml.Species]:
+) -> libsbml.Species | None:
     """
     Retrieve a species from the SBML model by its ID.
 
@@ -101,6 +101,7 @@ def initial_symbol_value(model, identifier):
     unsupported here. Stored amount/concentration is independent of symbol units.
     """
     import math
+
     from shapcrn.exceptions import InvalidSpeciesError, ModelError
     from shapcrn.utils.sbml.validation import math_names
 
@@ -147,6 +148,7 @@ def initial_symbol_value(model, identifier):
 def set_symbol_value(species, value):
     """Set the initial value directly in the species symbol's units."""
     import math
+
     from shapcrn.exceptions import ModelError
     from shapcrn.utils.sbml.validation import check
 
@@ -162,7 +164,7 @@ def set_symbol_value(species, value):
 
 def set_roadrunner_initial_values(runner, identifiers, values):
     """Apply sample values with explicit amount/concentration selections."""
-    from shapcrn.exceptions import ModelError, InvalidSpeciesError
+    from shapcrn.exceptions import InvalidSpeciesError, ModelError
     from shapcrn.utils.sbml.validation import reject_species_assignments
 
     if len(identifiers) != len(values):

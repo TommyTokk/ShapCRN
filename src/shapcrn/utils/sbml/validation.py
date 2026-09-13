@@ -3,8 +3,8 @@
 import libsbml
 
 from shapcrn.exceptions import InvalidModelFormatError, ModelModificationError
-from shapcrn.utils.utils import print_log
 from shapcrn.utils.sbml.helpers import get_nodes_iterator
+from shapcrn.utils.utils import print_log
 
 
 def check(status, context):

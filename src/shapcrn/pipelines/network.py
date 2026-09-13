@@ -1,6 +1,7 @@
 from shapcrn.utils import graph as graph_ut
 from shapcrn.utils.sbml import io as sbml_io
 
+
 def parse_args(args):
     """
     Parses the command-line arguments for the network pipeline.

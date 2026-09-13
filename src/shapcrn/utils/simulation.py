@@ -1,28 +1,21 @@
-from decimal import *
-import sys
-
-import pandas as pd
-from scipy.special import factorial
-from scipy.stats import variation
-
-import roadrunner as rr
-import libsbml
-import numpy as np
-import matplotlib.pyplot as plt
+import multiprocessing as mp
 import os
 import re
-from collections import defaultdict
-import multiprocessing as mp
+from decimal import *
 from multiprocessing import Pool
-import datetime
+
+import libsbml
+import numpy as np
+import pandas as pd
+import roadrunner as rr
+from scipy.special import factorial
 
 from shapcrn import exceptions
+from shapcrn.utils.sbml import species as species_ut
+from shapcrn.utils.sbml.utils import create_combinations
 from shapcrn.utils.utils import (
     print_log,
 )
-from shapcrn.utils import plot as plt_ut
-from shapcrn.utils.sbml.utils import create_combinations
-from shapcrn.utils.sbml import species as species_ut
 
 # from utils.sbml_utils import create_samples_combination, generate_species_samples
 
@@ -118,7 +111,7 @@ def load_roadrunner_model(
         sbml_doc = get_sbml_as_xml(sbml_model, log_file)
         rr_model = rr.RoadRunner(sbml_doc)
     except Exception as e:
-        raise exceptions.ModelError(f"Failed to load SBML model: {str(e)}")
+        raise exceptions.ModelError(f"Failed to load SBML model: {e!s}")
 
     # Configure integrator settings
     # Setting the relative and absolute tolerance of the model
@@ -1010,7 +1003,7 @@ def process_species_multiprocessing(
     i = 0
 
     for ts in target_ids:
-        if ts in modified_models_dict.keys():
+        if ts in modified_models_dict:
             args = (
                 ts,
                 modified_models_dict[ts],
@@ -1046,7 +1039,7 @@ def process_species_multiprocessing(
             result = pool.map(operation, process_args)
     except Exception as e:
         raise exceptions.SimulationError(
-            f"Error during multiprocessing execution: {str(e)}"
+            f"Error during multiprocessing execution: {e!s}"
         )
 
     return result
@@ -1136,7 +1129,7 @@ def get_knockout_variation(
         # Init variations dictionary
         variations_dict[ko_species] = {}
 
-        for species in species_idxs.keys():
+        for species in species_idxs:
             if species == ko_species:  # Skipping the species if compared with itself
                 variation = np.nan
                 relative_variation = np.nan

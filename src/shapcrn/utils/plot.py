@@ -1,17 +1,10 @@
-import matplotlib.pyplot as plt
-
 import math
-
-import numpy as np
-
-import pandas as pd
-
 import os
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
-
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 
@@ -397,14 +390,14 @@ def plot_results_interactive(
         fig.write_html(html_file_path)
         success = True
     except Exception as e:
-        raise IOError(f"Failed to save interactive plot to {html_file_path}: {str(e)}")
+        raise OSError(f"Failed to save interactive plot to {html_file_path}: {e!s}")
 
     # Display the plot if requested and save was successful
     if show_plot and success:
         try:
             fig.show()
         except Exception as e:
-            error_msg = f"Failed to display plot: {str(e)}"
+            error_msg = f"Failed to display plot: {e!s}"
             try:
                 print_log(log_file, error_msg)
             except NameError:

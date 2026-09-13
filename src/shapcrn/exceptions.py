@@ -9,7 +9,6 @@
 class KOShapleyError(Exception):
     """Base exception for KO Shapley Value analysis."""
 
-    pass
 
 
 # ============================================================================
@@ -20,14 +19,13 @@ class KOShapleyError(Exception):
 class InvalidCommandError(KOShapleyError):
     def __init__(self, message=None):
         if message is None:
-            message = f"Command not found"
+            message = "Command not found"
         super().__init__(message)
 
 
 class ModelError(KOShapleyError):
     """Base exception for SBML model-related errors."""
 
-    pass
 
 
 class ModelNotFoundError(ModelError):
@@ -120,7 +118,6 @@ class ModelModificationError(ModelError):
 class SimulationError(KOShapleyError):
     """Base exception for simulation-related errors."""
 
-    pass
 
 
 class SimulationFailedError(SimulationError):
@@ -182,7 +179,6 @@ class InvalidArgumentError(KOShapleyError):
 class AnalysisError(KOShapleyError):
     """Base exception for analysis-related errors."""
 
-    pass
 
 
 class ConvergenceError(AnalysisError):
@@ -245,7 +241,6 @@ class ShapleyValueComputationError(AnalysisError):
 class NetworkError(KOShapleyError):
     """Base exception for network-related errors."""
 
-    pass
 
 
 class NetworkConstructionError(NetworkError):
@@ -372,7 +367,6 @@ class ValidationError(KOShapleyError):
 class FileIOError(KOShapleyError):
     """Base exception for file input/output errors."""
 
-    pass
 
 
 class ReportGenerationError(FileIOError):

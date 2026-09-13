@@ -1,11 +1,12 @@
 import os
+
 import libsbml
 
 from shapcrn.exceptions import InvalidModelFormatError
-from shapcrn.utils.utils import print_log
-from shapcrn.utils.sbml.helpers import get_sbml_as_xml
 from shapcrn.utils.sbml import reactions as sbml_react
+from shapcrn.utils.sbml.helpers import get_sbml_as_xml
 from shapcrn.utils.sbml.validation import validate
+from shapcrn.utils.utils import print_log
 
 
 def load_model(model_file_path: str) -> libsbml.SBMLDocument:

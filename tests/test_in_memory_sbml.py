@@ -1,10 +1,11 @@
-import pytest
 import libsbml
+import pytest
+
 from shapcrn.exceptions import InvalidModelFormatError
 from shapcrn.utils.sbml.io import (
-    load_model_from_string,
-    load_model_from_bytes,
     load_and_prepare_model_from_bytes,
+    load_model_from_bytes,
+    load_model_from_string,
 )
 
 # Minimal valid SBML Level 3 Version 2 XML string for testing
